@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  google-gpx-converter:
+    build: 
+      context: ./google-gpx-converter
+    container_name: google-gpx-converter
+    ports:
+      - "6010:80"
+    restart: unless-stopped
+    networks:
+      - mytools-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.google-gpx-converter.rule=Host(`gpx-converter.local`)"
+      - "traefik.http.services.google-gpx-converter.loadbalancer.server.port=80"
+
+  extract-gpx-parts:
+    build:
+      context: ./extract-gpx-parts
+    container_name: extract-gpx-parts
+    ports:
+      - "6020:80"
+    restart: unless-stopped
+    volumes:
+      # Persistent storage under app directory
+      - ./extract-gpx-parts/data/uploads:/app/web/uploads
+      - ./extract-gpx-parts/data/processed:/app/web/processed
+    environment:
+      - FLASK_ENV=production
+      - PORT=80
+    networks:
+      - mytools-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.extract-gpx-parts.rule=Host(`gpx-extractor.local`)"
+      - "traefik.http.services.extract-gpx-parts.loadbalancer.server.port=5000"
+
+# Network for inter-service communication
+networks:
+  mytools-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16

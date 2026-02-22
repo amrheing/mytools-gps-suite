@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Maps to GPX Converter</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Google Maps to GPX Converter</h1>
+            <p class="subtitle">Convert Google Maps URLs to GPX files for your GPS device</p>
+        </div>
+
+        <div class="main-content">
+            <div class="input-section">
+                <h2>Input Google Maps URLs</h2>
+                <div class="url-input-container">
+                    <textarea 
+                        id="urlInput" 
+                        placeholder="Paste one or more Google Maps URLs here (one per line)&#10;&#10;💡 For best results, use URLs with coordinates:&#10;https://www.google.com/maps/@40.7128,-74.0060,15z&#10;&#10;⚠️ Place name URLs may need coordinates:&#10;❌ https://maps.google.com/maps?q=New+York&#10;✅ Right-click location → 'What's here?' → Copy coordinates URL"
+                        rows="8"
+                    ></textarea>
+                </div>
+                
+                <div class="options-section">
+                    <h3>Options</h3>
+                    <div class="option-group">
+                        <label>
+                            <input type="text" id="routeName" placeholder="Route name (optional)">
+                            <span>Route Name</span>
+                        </label>
+                    </div>
+                    <div class="option-group">
+                        <label>
+                            <input type="checkbox" id="includeTime" checked>
+                            <span>Include timestamps</span>
+                        </label>
+                    </div>
+                    <div class="option-group">
+                        <label>
+                            <input type="number" id="intervalMinutes" value="5" min="1" max="60">
+                            <span>Time interval between points (minutes)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <button id="convertBtn" class="convert-btn">Convert to GPX</button>
+            </div>
+
+            <div class="output-section">
+                <h2>Results</h2>
+                <div id="statusContainer" class="status-container">
+                    <div id="statusMessage" class="status-message"></div>
+                    <div id="progressContainer" class="progress-container" style="display: none;">
+                        <div class="progress-bar">
+                            <div id="progressFill" class="progress-fill"></div>
+                        </div>
+                        <div id="progressText" class="progress-text"></div>
+                    </div>
+                </div>
+                
+                <div id="resultsContainer" class="results-container" style="display: none;">
+                    <div class="results-info">
+                        <span id="pointCount" class="point-count"></span>
+                        <button id="downloadBtn" class="download-btn">Download GPX File</button>
+                    </div>
+                    <div class="preview-section">
+                        <h3>GPX Preview</h3>
+                        <pre id="gpxPreview" class="gpx-preview"></pre>
+                    </div>
+                </div>
+
+                <div id="errorContainer" class="error-container" style="display: none;">
+                    <h3>Errors</h3>
+                    <ul id="errorList" class="error-list"></ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <div class="help-section">
+                <h3>Supported URL Formats</h3>
+                <ul class="url-examples">
+                    <li><strong>Short URLs:</strong> https://maps.app.goo.gl/xyz123</li>
+                    <li><strong>Coordinates:</strong> https://www.google.com/maps/@40.7128,-74.0060,15z</li>
+                    <li><strong>Place queries:</strong> https://maps.google.com/maps?q=New+York</li>
+                    <li><strong>Directions:</strong> https://www.google.com/maps/dir/Start/End</li>
+                </ul>
+                
+                <div class="short-url-guide">
+                    <h4>📎 Short URL Help</h4>
+                    <p>If you have a short URL like <code>maps.app.goo.gl/xyz123</code>:</p>
+                    <ol>
+                        <li>Open the short URL in your browser</li>
+                        <li>Wait for it to redirect to the full Google Maps page</li>
+                        <li>Copy the full URL from your browser's address bar</li>
+                        <li>Paste that expanded URL here instead</li>
+                    </ol>
+                    <button id="expandUrlBtn" class="expand-url-btn">Try Auto-Expand URLs</button>
+                    
+                    <h4 style="margin-top: 15px;">🎯 Getting Coordinate URLs</h4>
+                    <p>For place names, get coordinate URLs by:</p>
+                    <ol>
+                        <li>Find the location on Google Maps</li>
+                        <li>Right-click on the exact spot</li>
+                        <li>Select "What's here?" from the menu</li>
+                        <li>Copy the URL - it will contain @lat,lng coordinates</li>
+                    </ol>
+                </div>
+            </div>
+            <div class="about-section">
+                <p><strong>About GPX:</strong> GPX (GPS Exchange Format) is a data format for exchanging GPS data between applications and devices.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="url-expander.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
