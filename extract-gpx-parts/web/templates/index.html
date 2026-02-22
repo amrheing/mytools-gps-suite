@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPX Parts Extractor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-route"></i> GPX Parts Extractor</h1>
+                <p class="subtitle">Extract waypoints, tracks, and routes from your GPX files</p>
+            </div>
+        </header>
+
+        <main class="main-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-messages">
+                        {% for category, message in messages %}
+                            <div class="flash-message flash-{{ category }}">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <div class="upload-card">
+                <div class="upload-header">
+                    <h2><i class="fas fa-cloud-upload-alt"></i> Upload GPX File</h2>
+                    <p>Select your GPX file to extract its components</p>
+                </div>
+
+                <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" class="upload-form">
+                    <div class="file-input-container">
+                        <input type="file" id="file" name="file" accept=".gpx" required>
+                        <label for="file" class="file-input-label">
+                            <i class="fas fa-plus-circle"></i>
+                            <span class="file-input-text">Choose GPX File</span>
+                        </label>
+                        <div class="file-info" style="display: none;">
+                            <i class="fas fa-file"></i>
+                            <span class="file-name"></span>
+                            <span class="file-size"></span>
+                        </div>
+                    </div>
+
+                    <div class="upload-progress" style="display: none;">
+                        <div class="progress-bar">
+                            <div class="progress-fill"></div>
+                        </div>
+                        <div class="progress-text">Processing...</div>
+                    </div>
+
+                    <button type="submit" class="upload-button">
+                        <i class="fas fa-magic"></i>
+                        Extract Components
+                    </button>
+                </form>
+
+                <div class="upload-help">
+                    <h3><i class="fas fa-info-circle"></i> How it works</h3>
+                    <div class="help-steps">
+                        <div class="help-step">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <strong>Upload</strong> your GPX file containing waypoints, tracks, and routes
+                            </div>
+                        </div>
+                        <div class="help-step">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <strong>Extract</strong> components into separate, organized files
+                            </div>
+                        </div>
+                        <div class="help-step">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <strong>Download</strong> individual files or select multiple for batch download
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="file-requirements">
+                    <h4><i class="fas fa-check-circle"></i> Requirements</h4>
+                    <ul>
+                        <li><i class="fas fa-file"></i> Valid GPX format files only</li>
+                        <li><i class="fas fa-weight"></i> Maximum file size: 100MB</li>
+                        <li><i class="fas fa-shield-alt"></i> Files are automatically deleted after 1 hour</li>
+                        <li><i class="fas fa-lock"></i> No data is permanently stored</li>
+                    </ul>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2026 GPX Parts Extractor | 
+               <a href="https://github.com" target="_blank"><i class="fab fa-github"></i> Source Code</a> |
+               <a href="#" onclick="showAbout()"><i class="fas fa-question-circle"></i> About</a>
+            </p>
+        </footer>
+    </div>
+
+    <!-- About Modal -->
+    <div id="aboutModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close" onclick="hideAbout()">&times;</span>
+            <h3><i class="fas fa-info-circle"></i> About GPX Parts Extractor</h3>
+            <p>This tool helps you extract and organize different components from your GPX files:</p>
+            <ul>
+                <li><strong>Waypoints:</strong> All waypoints extracted into a single file</li>
+                <li><strong>Tracks:</strong> Each track separated into individual files</li>
+                <li><strong>Routes:</strong> Each route separated into individual files</li>
+            </ul>
+            <p>Perfect for organizing GPS data, sharing specific routes, or importing into different mapping applications.</p>
+            <div class="modal-footer">
+                <p><strong>Version:</strong> 1.0 | <strong>Created:</strong> February 2026</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

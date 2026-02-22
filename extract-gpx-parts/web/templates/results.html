@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extraction Results - GPX Parts Extractor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-route"></i> GPX Parts Extractor</h1>
+                <p class="subtitle">Extraction Results for: <strong>{{ original_filename }}</strong></p>
+            </div>
+            <div class="header-actions">
+                <a href="{{ url_for('index') }}" class="button button-secondary">
+                    <i class="fas fa-plus"></i> Extract Another File
+                </a>
+            </div>
+        </header>
+
+        <main class="main-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-messages">
+                        {% for category, message in messages %}
+                            <div class="flash-message flash-{{ category }}">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <div class="results-summary">
+                <div class="summary-stats">
+                    <div class="stat-item">
+                        <i class="fas fa-file-alt"></i>
+                        <span class="stat-number">{{ extracted_files|length }}</span>
+                        <span class="stat-label">Files Extracted</span>
+                    </div>
+                    <div class="stat-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span class="stat-number">{{ extracted_files|selectattr('type', 'equalto', 'waypoints')|list|length }}</span>
+                        <span class="stat-label">Waypoint Files</span>
+                    </div>
+                    <div class="stat-item">
+                        <i class="fas fa-route"></i>
+                        <span class="stat-number">{{ extracted_files|selectattr('type', 'equalto', 'track')|list|length }}</span>
+                        <span class="stat-label">Track Files</span>
+                    </div>
+                    <div class="stat-item">
+                        <i class="fas fa-directions"></i>
+                        <span class="stat-number">{{ extracted_files|selectattr('type', 'equalto', 'route')|list|length }}</span>
+                        <span class="stat-label">Route Files</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="file-actions">
+                <div class="action-group">
+                    <button onclick="selectAll()" class="button button-outline">
+                        <i class="fas fa-check-square"></i> Select All
+                    </button>
+                    <button onclick="selectNone()" class="button button-outline">
+                        <i class="fas fa-square"></i> Select None
+                    </button>
+                    <button onclick="selectByType('waypoints')" class="button button-outline">
+                        <i class="fas fa-map-marker-alt"></i> Waypoints Only
+                    </button>
+                    <button onclick="selectByType('track')" class="button button-outline">
+                        <i class="fas fa-route"></i> Tracks Only
+                    </button>
+                </div>
+                <div class="download-group">
+                    <button onclick="downloadSelected()" class="button button-primary" id="downloadSelectedBtn" disabled>
+                        <i class="fas fa-download"></i> Download Selected (<span id="selectedCount">0</span>)
+                    </button>
+                    <a href="{{ url_for('download_all', directory=output_directory) }}" class="button button-success">
+                        <i class="fas fa-download"></i> Download All Files
+                    </a>
+                </div>
+            </div>
+
+            <div class="file-list">
+                <div class="file-list-header">
+                    <div class="file-header-select">
+                        <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()">
+                    </div>
+                    <div class="file-header-icon"></div>
+                    <div class="file-header-name">Filename</div>
+                    <div class="file-header-type">Type</div>
+                    <div class="file-header-size">Size</div>
+                    <div class="file-header-actions">Actions</div>
+                </div>
+
+                {% for file in extracted_files %}
+                <div class="file-item" data-type="{{ file.type }}">
+                    <div class="file-select">
+                        <input type="checkbox" class="file-checkbox" 
+                               data-filename="{{ file.name }}" 
+                               onchange="updateSelectedCount()">
+                    </div>
+                    <div class="file-icon">
+                        {% if file.type == 'waypoints' %}
+                            <i class="fas fa-map-marker-alt"></i>
+                        {% elif file.type == 'track' %}
+                            <i class="fas fa-route"></i>
+                        {% elif file.type == 'route' %}
+                            <i class="fas fa-directions"></i>
+                        {% else %}
+                            <i class="fas fa-file"></i>
+                        {% endif %}
+                    </div>
+                    <div class="file-name">
+                        <span class="filename">{{ file.name }}</span>
+                        {% if file.type == 'track' %}
+                            <span class="file-description">GPS Track Data</span>
+                        {% elif file.type == 'waypoints' %}
+                            <span class="file-description">Points of Interest</span>
+                        {% elif file.type == 'route' %}
+                            <span class="file-description">Planned Route</span>
+                        {% endif %}
+                    </div>
+                    <div class="file-type">
+                        <span class="type-badge type-{{ file.type }}">
+                            {% if file.type == 'waypoints' %}
+                                Waypoints
+                            {% elif file.type == 'track' %}
+                                Track
+                            {% elif file.type == 'route' %}
+                                Route
+                            {% else %}
+                                {{ file.type|title }}
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="file-size">
+                        {{ file.size|format_file_size }}
+                    </div>
+                    <div class="file-actions-cell">
+                        <a href="{{ url_for('download_file', directory=output_directory, filename=file.name) }}" 
+                           class="button-icon" title="Download {{ file.name }}">
+                            <i class="fas fa-download"></i>
+                        </a>
+                        <button onclick="previewFile('{{ file.name }}')" 
+                                class="button-icon" title="Preview {{ file.name }}">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if summary %}
+            <div class="summary-section">
+                <h3><i class="fas fa-chart-bar"></i> Extraction Summary</h3>
+                <pre class="summary-content">{{ summary }}</pre>
+            </div>
+            {% endif %}
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2026 GPX Parts Extractor | 
+               <a href="{{ url_for('index') }}"><i class="fas fa-home"></i> Home</a> |
+               <span class="footer-info">Files will be automatically deleted after 1 hour</span>
+            </p>
+        </footer>
+    </div>
+
+    <!-- File Preview Modal -->
+    <div id="previewModal" class="modal" style="display: none;">
+        <div class="modal-content modal-large">
+            <span class="close" onclick="hidePreview()">&times;</span>
+            <h3 id="previewTitle"><i class="fas fa-eye"></i> File Preview</h3>
+            <div id="previewContent">
+                <div class="loading">
+                    <i class="fas fa-spinner fa-spin"></i> Loading preview...
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="hidePreview()" class="button button-secondary">Close</button>
+                <button id="downloadPreviewBtn" class="button button-primary">
+                    <i class="fas fa-download"></i> Download This File
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading overlay for downloads -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-content">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Preparing download...</p>
+        </div>
+    </div>
+
+    <!-- Data for JavaScript -->
+    <div id="extraction-data" 
+         data-output-directory="{{ output_directory }}" 
+         data-files="{{ extracted_files|tojson|e }}" 
+         style="display: none;"></div>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script src="{{ url_for('static', filename='results.js') }}"></script>
+</body>
+</html>
