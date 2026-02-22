@@ -2,9 +2,44 @@
 
 This guide covers deployment of the MyTools GPS Suite in various environments.
 
-## Quick Deployment
+## Deployment Options
 
-### Standard Docker Deployment
+### Option 1: Quick Deployment (Recommended)
+
+```bash
+# Clone repository
+git clone https://github.com/your-username/mytools-gps-suite.git
+cd mytools-gps-suite
+
+# Deploy containers
+chmod +x deploy.sh
+./deploy.sh
+```
+
+**Access URLs:**
+- Google GPX Converter: http://localhost:6010
+- Extract GPX Parts: http://localhost:6020
+
+### Option 2: Subdomain Deployment
+
+For production deployment with subdomain support, see the [`deployment/`](./deployment/) directory which includes:
+
+- **Standalone nginx setup** - `nginx-tools.conf`
+- **MailCow integration** - `mailcow-tools.conf` 
+- **Standalone Docker Compose** - `docker-compose-tools.yml`
+- **Deployment guide** - [`deployment/README.md`](./deployment/README.md)
+
+Example subdomain setup:
+```bash
+# Set up subdomain (e.g., tools.yourdomain.com)
+cd deployment
+docker compose -f docker-compose-tools.yml up -d
+
+# Configure nginx for subdomain proxy
+# See deployment/README.md for detailed instructions
+```
+
+## Standard Docker Deployment
 
 ```bash
 # Clone repository
