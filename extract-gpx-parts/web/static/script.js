@@ -1,10 +1,23 @@
 // GPX Extractor Web Interface - Main JavaScript
 
+// Build API URLs from the current page path so reverse-proxy prefixes are handled correctly
+const _basePath = (function() {
+    const p = window.location.pathname;
+    return p.endsWith('/') ? p : p + '/';
+})();
+const API_URLS = {
+    selectFile: _basePath + 'select-file',
+    deleteFile: _basePath + 'delete-file',
+    updateDescription: _basePath + 'update-description'
+};
+
 // Global state
 window.gpxExtractor = {
     selectedFiles: new Set(),
     allFiles: [],
-    outputDirectory: ''
+    outputDirectory: '',
+    currentDeleteId: null,
+    currentDeleteName: null
 };
 
 // DOM Ready
@@ -36,6 +49,172 @@ function initializeApp() {
     }
 }
 
+// File Processing Functions
+function processFile(uniqueId) {
+    showLoading('Starting file processing...');
+    
+    fetch(API_URLS.selectFile, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            unique_id: uniqueId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        
+        if (data.redirect && data.url) {
+            // Already processed — go straight to existing results
+            window.location.href = data.url;
+        } else if (data.job_id) {
+            // Redirect to processing page with job ID
+            window.location.href = `/processing/${data.job_id}`;
+        } else {
+            throw new Error(data.error || 'Failed to start processing');
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showToast(error.message || 'Error starting file processing', 'error');
+        console.error('Error:', error);
+    });
+}
+
+// Delete Functions
+function showDeleteDialog(uniqueId, displayName) {
+    window.gpxExtractor.currentDeleteId = uniqueId;
+    window.gpxExtractor.currentDeleteName = displayName;
+    
+    const modal = document.getElementById('deleteModal');
+    const fileNameElement = document.getElementById('deleteFileName');
+    const tokenInput = document.getElementById('deleteToken');
+    
+    if (modal && fileNameElement && tokenInput) {
+        fileNameElement.textContent = displayName;
+        tokenInput.value = '';
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        
+        // Focus on token input
+        setTimeout(() => tokenInput.focus(), 100);
+    }
+}
+
+function hideDeleteDialog() {
+    const modal = document.getElementById('deleteModal');
+    const tokenInput = document.getElementById('deleteToken');
+    
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+    
+    if (tokenInput) {
+        tokenInput.value = '';
+    }
+    
+    window.gpxExtractor.currentDeleteId = null;
+    window.gpxExtractor.currentDeleteName = null;
+}
+
+function confirmDelete() {
+    const tokenInput = document.getElementById('deleteToken');
+    const token = tokenInput ? tokenInput.value.trim() : '';
+    const uniqueId = window.gpxExtractor.currentDeleteId;
+    const displayName = window.gpxExtractor.currentDeleteName;
+    
+    if (!token) {
+        showToast('Please enter the delete token', 'warning');
+        return;
+    }
+    
+    if (!uniqueId) {
+        showToast('No file selected for deletion', 'error');
+        return;
+    }
+    
+    showLoading('Deleting file...');
+    
+    fetch(API_URLS.deleteFile, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            unique_id: uniqueId,
+            token: token
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        hideDeleteDialog();
+        
+        if (data.success) {
+            showToast(`Deleted: ${displayName}`, 'success');
+            
+            // Remove file item from DOM
+            const fileItem = document.querySelector(`[data-unique-id="${uniqueId}"]`);
+            if (fileItem) {
+                fileItem.style.transition = 'all 0.3s ease';
+                fileItem.style.opacity = '0';
+                fileItem.style.transform = 'translateX(-100%)';
+                
+                setTimeout(() => {
+                    fileItem.remove();
+                    
+                    // Check if list is empty now
+                    const filesList = document.getElementById('filesList');
+                    const remainingItems = filesList.querySelectorAll('.file-item');
+                    
+                    if (remainingItems.length === 0) {
+                        filesList.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fas fa-folder-open"></i>
+                                <p>No uploaded files available</p>
+                                <small>Upload a GPX file to get started</small>
+                            </div>
+                        `;
+                    }
+                }, 300);
+            }
+        } else {
+            showToast(data.error || 'Failed to delete file', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        hideDeleteDialog();
+        showToast('Error deleting file', 'error');
+        console.error('Error:', error);
+    });
+}
+
+// Loading Functions
+function showLoading(message = 'Processing...') {
+    const overlay = document.getElementById('loadingOverlay');
+    const text = document.getElementById('loadingText');
+    
+    if (overlay) {
+        if (text) text.textContent = message;
+        overlay.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function hideLoading() {
+    const overlay = document.getElementById('loadingOverlay');
+    
+    if (overlay) {
+        overlay.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+}
+
+// File Input Setup
 function setupFileInput() {
     const fileInput = document.getElementById('file');
     const fileLabel = document.querySelector('.file-input-label');
@@ -50,12 +229,12 @@ function setupFileInput() {
         
         if (file) {
             // Update file info display
-            fileName.textContent = file.name;
-            fileSize.textContent = formatFileSize(file.size);
+            if (fileName) fileName.textContent = file.name;
+            if (fileSize) fileSize.textContent = formatFileSize(file.size);
             
             // Show file info, hide label
-            fileLabel.style.display = 'none';
-            fileInfo.style.display = 'flex';
+            if (fileLabel) fileLabel.style.display = 'none';
+            if (fileInfo) fileInfo.style.display = 'flex';
             
             // Validate file
             if (!file.name.toLowerCase().endsWith('.gpx')) {
@@ -148,6 +327,7 @@ function simulateProgress() {
     }, 200);
 }
 
+// Utility Functions
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -222,6 +402,28 @@ document.addEventListener('keydown', function(e) {
         });
         document.body.style.overflow = 'auto';
     }
+    
+    // Handle delete dialog specific shortcuts
+    if (e.key === 'Enter') {
+        const deleteModal = document.getElementById('deleteModal');
+        if (deleteModal && deleteModal.style.display === 'flex') {
+            e.preventDefault();
+            confirmDelete();
+        }
+    }
+});
+
+// Add Enter key support for delete token input
+document.addEventListener('DOMContentLoaded', function() {
+    const tokenInput = document.getElementById('deleteToken');
+    if (tokenInput) {
+        tokenInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                confirmDelete();
+            }
+        });
+    }
 });
 
 // Add toast styles dynamically
@@ -288,5 +490,11 @@ window.gpxUtils = {
     formatFileSize,
     showToast,
     hideAbout,
-    showAbout
+    showAbout,
+    showLoading,
+    hideLoading,
+    processFile,
+    showDeleteDialog,
+    hideDeleteDialog,
+    confirmDelete
 };
