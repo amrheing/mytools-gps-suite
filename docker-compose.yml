@@ -26,14 +26,21 @@ services:
       # Persistent storage under app directory
       - ./extract-gpx-parts/data/uploads:/app/web/uploads
       - ./extract-gpx-parts/data/processed:/app/web/processed
+      - ./extract-gpx-parts/data/metadata:/app/web/metadata
+      # Live-reload for static files and templates
+      - ./extract-gpx-parts/web/static:/app/web/static
+      - ./extract-gpx-parts/web/templates:/app/web/templates
     environment:
       - FLASK_ENV=production
       - PORT=80
+      - MAX_CONTENT_LENGTH_MB=1024
     networks:
       - mytools-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.extract-gpx-parts.rule=Host(`gpx-extractor.local`)"
+      - "traefik.http.routers.extract-gpx-parts.rule=Host(`gpx-extractor.local`,`tools.amrhein.info`)"
+      - "traefik.http.routers.extract-gpx-parts.middlewares=extract-gpx-parts-buffering"
+      - "traefik.http.middlewares.extract-gpx-parts-buffering.buffering.maxRequestBodyBytes=1073741824"
       - "traefik.http.services.extract-gpx-parts.loadbalancer.server.port=5000"
 
 # Network for inter-service communication

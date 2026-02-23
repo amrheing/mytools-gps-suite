@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processing GPX File - GPX Parts Extractor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .processing-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 60vh;
+            text-align: center;
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 3rem;
+            box-shadow: var(--shadow);
+            margin: 2rem auto;
+            max-width: 600px;
+        }
+        
+        .processing-icon {
+            font-size: 4rem;
+            color: var(--secondary-color);
+            margin-bottom: 2rem;
+            animation: spin-pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes spin-pulse {
+            0%, 100% { transform: rotate(0deg) scale(1); opacity: 1; }
+            25% { transform: rotate(90deg) scale(1.1); opacity: 0.8; }
+            50% { transform: rotate(180deg) scale(1); opacity: 1; }
+            75% { transform: rotate(270deg) scale(1.1); opacity: 0.8; }
+        }
+        
+        .processing-title {
+            font-size: 2rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+        
+        .processing-filename {
+            font-size: 1.1rem;
+            color: var(--text-light);
+            margin-bottom: 2rem;
+            font-family: 'Courier New', monospace;
+            background: var(--light-bg);
+            padding: 0.5rem 1rem;
+            border-radius: var(--border-radius);
+        }
+        
+        .progress-container {
+            width: 100%;
+            margin-bottom: 2rem;
+        }
+        
+        .progress-bar-bg {
+            width: 100%;
+            height: 12px;
+            background: var(--light-bg);
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+        }
+        
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--secondary-color), var(--success-color));
+            width: 0%;
+            transition: width 0.5s ease;
+            animation: progress-shimmer 2s ease-in-out infinite;
+        }
+        
+        @keyframes progress-shimmer {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .progress-text {
+            color: var(--text-color);
+            font-weight: 500;
+            font-size: 1.1rem;
+        }
+        
+        .progress-percentage {
+            font-weight: bold;
+            color: var(--secondary-color);
+        }
+        
+        .processing-steps {
+            display: grid;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            text-align: left;
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .processing-step {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 1rem;
+            background: var(--light-bg);
+            border-radius: var(--border-radius);
+            transition: all 0.3s ease;
+        }
+        
+        .processing-step.active {
+            background: #e8f4fd;
+            border-left: 4px solid var(--secondary-color);
+        }
+        
+        .processing-step.completed {
+            background: #e8f5e8;
+            border-left: 4px solid var(--success-color);
+        }
+        
+        .step-icon {
+            width: 20px;
+            text-align: center;
+            color: var(--text-light);
+        }
+        
+        .processing-step.active .step-icon {
+            color: var(--secondary-color);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        .processing-step.completed .step-icon {
+            color: var(--success-color);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .error-container {
+            background: #fadbd8;
+            border: 2px solid var(--error-color);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            margin: 2rem 0;
+            text-align: center;
+            display: none;
+        }
+        
+        .error-icon {
+            font-size: 3rem;
+            color: var(--error-color);
+            margin-bottom: 1rem;
+        }
+        
+        .error-title {
+            font-size: 1.5rem;
+            color: var(--error-color);
+            margin-bottom: 1rem;
+        }
+        
+        .error-message {
+            color: var(--text-color);
+            margin-bottom: 2rem;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: var(--border-radius);
+            font-weight: 500;
+            text-decoration: none;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        
+        .button-primary {
+            background: var(--secondary-color);
+            color: white;
+        }
+        
+        .button-primary:hover {
+            background: #2980b9;
+        }
+        
+        .button-secondary {
+            background: var(--light-bg);
+            color: var(--text-color);
+        }
+        
+        .button-secondary:hover {
+            background: #d5dbdb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-route"></i> GPX Parts Extractor</h1>
+                <p class="subtitle">Processing your GPX file</p>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="processing-container" id="processingContainer">
+                <div class="processing-icon">
+                    <i class="fas fa-cog"></i>
+                </div>
+                
+                <h2 class="processing-title">Processing GPX File</h2>
+                
+                <div class="processing-filename">{{ filename }}</div>
+                
+                <div class="progress-container">
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text">
+                        <span id="progressMessage">Starting processing...</span>
+                        <span class="progress-percentage">(<span id="progressPercent">0</span>%)</span>
+                    </div>
+                </div>
+                
+                <div class="processing-steps">
+                    <div class="processing-step" id="step-1">
+                        <i class="step-icon fas fa-upload"></i>
+                        <span>Loading GPX file</span>
+                    </div>
+                    <div class="processing-step" id="step-2">
+                        <i class="step-icon fas fa-search"></i>
+                        <span>Analyzing structure</span>
+                    </div>
+                    <div class="processing-step" id="step-3">
+                        <i class="step-icon fas fa-magic"></i>
+                        <span>Extracting components</span>
+                    </div>
+                    <div class="processing-step" id="step-4">
+                        <i class="step-icon fas fa-file-alt"></i>
+                        <span>Creating summary</span>
+                    </div>
+                    <div class="processing-step" id="step-5">
+                        <i class="step-icon fas fa-check"></i>
+                        <span>Finalizing results</span>
+                    </div>
+                </div>
+                
+                <div class="action-buttons">
+                    <a href="{{ url_for('index') }}" class="button button-secondary">
+                        <i class="fas fa-arrow-left"></i>
+                        Back to Upload
+                    </a>
+                </div>
+            </div>
+            
+            <div class="error-container" id="errorContainer">
+                <div class="error-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <h3 class="error-title">Processing Failed</h3>
+                <p class="error-message" id="errorMessage">An error occurred while processing your GPX file.</p>
+                <div class="action-buttons">
+                    <a href="{{ url_for('index') }}" class="button button-primary">
+                        <i class="fas fa-upload"></i>
+                        Try Another File
+                    </a>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2026 GPX Parts Extractor | Processing in background</p>
+        </footer>
+    </div>
+
+    <script>
+        // Job processing configuration
+        const jobId = '{{ job_id }}';
+        const pollInterval = 1000; // Poll every second
+        let pollTimer;
+        let pollCount = 0;
+        const maxPollAttempts = 300; // 5 minutes max
+        
+        // Step mapping for visual progress
+        const stepMap = {
+            0: 1,    // Loading
+            20: 2,   // Analyzing
+            40: 2,   // Analyzing
+            50: 3,   // Extracting
+            70: 3,   // Extracting
+            85: 3,   // Extracting
+            95: 4,   // Summary
+            100: 5   // Complete
+        };
+        
+        // Start polling for job status
+        function startPolling() {
+            console.log('Starting to poll job:', jobId);
+            pollTimer = setInterval(checkJobStatus, pollInterval);
+            checkJobStatus(); // Check immediately
+        }
+        
+        // Check job status
+        function checkJobStatus() {
+            pollCount++;
+            
+            if (pollCount > maxPollAttempts) {
+                clearInterval(pollTimer);
+                showError('Processing timed out after 5 minutes. Please try again.');
+                return;
+            }
+            
+            fetch(`/job-status/${jobId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Job status:', data);
+                    updateProgress(data);
+                    
+                    if (data.status === 'completed') {
+                        clearInterval(pollTimer);
+                        console.log('Processing complete, redirecting to results');
+                        redirectToResults();
+                    } else if (data.status === 'error') {
+                        clearInterval(pollTimer);
+                        showError(data.error || data.message || 'Processing failed');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking job status:', error);
+                    // Don't stop polling on network errors, keep retrying
+                });
+        }
+        
+        // Update progress display
+        function updateProgress(data) {
+            const progressFill = document.getElementById('progressFill');
+            const progressMessage = document.getElementById('progressMessage');
+            const progressPercent = document.getElementById('progressPercent');
+            
+            if (progressFill) {
+                progressFill.style.width = `${data.progress}%`;
+            }
+            
+            if (progressMessage) {
+                progressMessage.textContent = data.message;
+            }
+            
+            if (progressPercent) {
+                progressPercent.textContent = data.progress;
+            }
+            
+            // Update step indicators
+            updateSteps(data.progress);
+        }
+        
+        // Update step visual indicators
+        function updateSteps(progress) {
+            const currentStep = stepMap[Object.keys(stepMap).reverse().find(p => progress >= p)] || 1;
+            
+            for (let i = 1; i <= 5; i++) {
+                const stepElement = document.getElementById(`step-${i}`);
+                
+                if (stepElement) {
+                    stepElement.classList.remove('active', 'completed');
+                    
+                    if (i < currentStep) {
+                        stepElement.classList.add('completed');
+                    } else if (i === currentStep) {
+                        stepElement.classList.add('active');
+                    }
+                }
+            }
+        }
+        
+        // Show error state
+        function showError(errorMessage) {
+            console.error('Error:', errorMessage);
+            const processingContainer = document.getElementById('processingContainer');
+            const errorContainer = document.getElementById('errorContainer');
+            const errorMessageElement = document.getElementById('errorMessage');
+            
+            if (processingContainer) {
+                processingContainer.style.display = 'none';
+            }
+            
+            if (errorContainer) {
+                errorContainer.style.display = 'block';
+            }
+            
+            if (errorMessageElement && errorMessage) {
+                errorMessageElement.textContent = errorMessage;
+            }
+        }
+        
+        // Redirect to results page
+        function redirectToResults() {
+            console.log('Redirecting to /job-result/' + jobId);
+            window.location.href = `/job-result/${jobId}`;
+        }
+        
+        // Start polling when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Processing page loaded');
+            startPolling();
+        });
+        
+        // Clean up polling when page unloads
+        window.addEventListener('beforeunload', function() {
+            if (pollTimer) {
+                clearInterval(pollTimer);
+            }
+        });
+    </script>
+</body>
+</html>

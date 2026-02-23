@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Extraction Results - GPX Parts Extractor</title>
+    <link rel="icon" type="image/x-icon" href="/extract-gpx-parts/static/favicon.ico">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -15,8 +16,8 @@
                 <p class="subtitle">Extraction Results for: <strong>{{ original_filename }}</strong></p>
             </div>
             <div class="header-actions">
-                <a href="{{ url_for('index') }}" class="button button-secondary">
-                    <i class="fas fa-plus"></i> Extract Another File
+                <a href="/extract-gpx-parts/" class="button button-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to File List
                 </a>
             </div>
         </header>
@@ -60,7 +61,104 @@
                 </div>
             </div>
 
-            <div class="file-actions">
+            <!-- Enhanced Metadata Section -->
+            {% if enhanced_metadata %}
+            <div class="metadata-section">
+                <h3><i class="fas fa-info-circle"></i> GPS Track Information</h3>
+                <div class="metadata-grid">
+                    {% if enhanced_metadata.trail_type %}
+                    <div class="metadata-item">
+                        <i class="fas fa-route"></i>
+                        <div class="metadata-content">
+                            <span class="metadata-label">Trail Type</span>
+                            <span class="metadata-value trail-type">{{ enhanced_metadata.trail_type }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if enhanced_metadata.suggested_name %}
+                    <div class="metadata-item">
+                        <i class="fas fa-tag"></i>
+                        <div class="metadata-content">
+                            <span class="metadata-label">Generated Name</span>
+                            <span class="metadata-value">{{ enhanced_metadata.suggested_name }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if enhanced_metadata.section_markers %}
+                    <div class="metadata-item">
+                        <i class="fas fa-map-signs"></i>
+                        <div class="metadata-content">
+                            <span class="metadata-label">Sections</span>
+                            <span class="metadata-value">{{ enhanced_metadata.section_markers|join(', ') }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if enhanced_metadata.latest_modification %}
+                    <div class="metadata-item">
+                        <i class="fas fa-calendar-alt"></i>
+                        <div class="metadata-content">
+                            <span class="metadata-label">Latest Update</span>
+                            <span class="metadata-value">{{ enhanced_metadata.latest_modification }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if enhanced_metadata.creator %}
+                    <div class="metadata-item">
+                        <i class="fas fa-user"></i>
+                        <div class="metadata-content">
+                            <span class="metadata-label">Created With</span>
+                            <span class="metadata-value">{{ enhanced_metadata.creator }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if enhanced_metadata.content_hash %}
+                    <div class="metadata-item">
+                        <i class="fas fa-fingerprint"></i>
+                        <div class="metadata-content">
+                            <span class="metadata-label">Content ID</span>
+                            <span class="metadata-value metadata-hash">{{ enhanced_metadata.content_hash }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if metadata %}
+                    <div class="metadata-item">
+                        <i class="fas fa-list"></i>
+                        <div class="metadata-content">
+                            <span class="metadata-label">Content Counts</span>
+                            <span class="metadata-value">
+                                {{ metadata.waypoint_count }} waypoints, 
+                                {{ metadata.track_count }} tracks, 
+                                {{ metadata.route_count }} routes
+                            </span>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                {% if enhanced_metadata.similar_versions %}
+                <div class="version-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div class="warning-content">
+                        <strong>Similar version detected:</strong>
+                        <p>We found potentially similar versions of this GPX file. This might be a duplicate or updated version.</p>
+                        <ul class="similar-files">
+                            {% for similar in enhanced_metadata.similar_versions %}
+                            <li>{{ similar }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <div class="results-actions">
                 <div class="action-group">
                     <button onclick="selectAll()" class="button button-outline">
                         <i class="fas fa-check-square"></i> Select All
@@ -165,7 +263,7 @@
 
         <footer class="footer">
             <p>&copy; 2026 GPX Parts Extractor | 
-               <a href="{{ url_for('index') }}"><i class="fas fa-home"></i> Home</a> |
+               <a href="/extract-gpx-parts/"><i class="fas fa-home"></i> Home</a> |
                <span class="footer-info">Files will be automatically deleted after 1 hour</span>
             </p>
         </footer>

@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app/
 
 # Create necessary directories for persistent data
-RUN mkdir -p /app/data/uploads /app/data/processed /app/web/uploads /app/web/processed
+RUN mkdir -p /app/data/uploads /app/data/processed /app/web/uploads /app/web/processed /app/web/metadata
 
 # Set environment variables
 ENV FLASK_APP=web/app.py

@@ -1,0 +1,28 @@
+# Runtime data — volume-mounted, not part of the repo
+data/uploads/*
+data/processed/*
+data/metadata/*
+web/uploads/*
+web/processed/*
+web/metadata/*
+
+# Keep directory structure
+!data/uploads/.gitkeep
+!data/processed/.gitkeep
+!data/metadata/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+
+# Test / scratch files
+test_metadata.py
+web/div.html
+
+# GPX sample data (large files)
+*.gpx
+
+# OS
+.DS_Store
