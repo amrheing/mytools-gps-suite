@@ -385,6 +385,22 @@ function hideAbout() {
     }
 }
 
+function showImpressum() {
+    const modal = document.getElementById('impressumModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function hideImpressum() {
+    const modal = document.getElementById('impressumModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+}
+
 // Close modal when clicking outside
 document.addEventListener('click', function(e) {
     if (e.target.classList.contains('modal')) {
@@ -491,6 +507,8 @@ window.gpxUtils = {
     showToast,
     hideAbout,
     showAbout,
+    showImpressum,
+    hideImpressum,
     showLoading,
     hideLoading,
     processFile,
