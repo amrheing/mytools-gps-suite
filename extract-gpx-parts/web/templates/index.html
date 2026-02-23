@@ -164,9 +164,10 @@
         </main>
 
         <footer class="footer">
-            <p>&copy; 2026 GPX Parts Extractor | 
-               <a href="https://github.com" target="_blank"><i class="fab fa-github"></i> Source Code</a> |
-               <a href="#" onclick="showAbout()"><i class="fas fa-question-circle"></i> About</a>
+            <p>&copy; 2026 Gerald Amrhein | 
+               <a href="https://github.com/amrheing/mytools-gps-suite" target="_blank"><i class="fab fa-github"></i> Source Code</a> |
+               <a href="#" onclick="showAbout()"><i class="fas fa-question-circle"></i> About</a> |
+               <a href="#" onclick="showImpressum()"><i class="fas fa-gavel"></i> Impressum</a>
             </p>
         </footer>
     </div>
@@ -187,6 +188,39 @@
             <div class="modal-footer">
                 <p><strong>Version:</strong> 1.1 | <strong>Updated:</strong> February 2026</p>
             </div>
+        </div>
+    </div>
+
+    <!-- Impressum Modal -->
+    <div id="impressumModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close" onclick="hideImpressum()">&times;</span>
+            <h3><i class="fas fa-gavel"></i> Impressum</h3>
+            <p><strong>Angaben gemäß § 5 TMG</strong></p>
+            <p>
+                Gerald Amrhein<br>
+                Kiliastraße 3<br>
+                63839 Kleinwallstadt<br>
+                Deutschland
+            </p>
+            <p><strong>Kontakt</strong><br>
+                E-Mail: <a href="mailto:webmaster@amrhein.info">webmaster@amrhein.info</a>
+            </p>
+            <p><strong>Hinweise zur Website</strong><br>
+                Die Inhalte dieser Website dienen ausschließlich zu Informationszwecken.
+                Für die bereitgestellten Werkzeuge und Software gilt die
+                <a href="https://github.com/amrheing/mytools-gps-suite/blob/main/LICENSE" target="_blank">MIT-Lizenz</a>.
+            </p>
+            <p><strong>Haftungsausschluss</strong><br>
+                Die Inhalte dieser Seite wurden mit größtmöglicher Sorgfalt erstellt.
+                Für die Richtigkeit, Vollständigkeit und Aktualität der Inhalte
+                kann jedoch keine Gewähr übernommen werden.
+            </p>
+            <p><strong>Urheberrecht</strong><br>
+                Die auf dieser Website veröffentlichte Software steht unter der MIT-Lizenz
+                und kann frei genutzt, verändert und weitergegeben werden.
+                Quellcode: <a href="https://github.com/amrheing/mytools-gps-suite" target="_blank">github.com/amrheing/mytools-gps-suite</a>
+            </p>
         </div>
     </div>
 
