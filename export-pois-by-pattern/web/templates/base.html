@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}🆕 POI Pattern Extractor - UPDATED{% endblock %}</title>
+    <link rel="stylesheet" href="/shared/shared-styles.css">
+    <link rel="stylesheet" href="/export-pois-by-pattern/static/style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/export-pois-by-pattern/static/poi-icon.png">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <div class="breadcrumb">
+                    <a href="../../index.html"><i class="fas fa-arrow-left"></i> Back to Tools</a>
+                </div>
+                <h1><i class="fas fa-map-pin"></i> POI Pattern Extractor</h1>
+                <p class="subtitle">Filter and extract Points of Interest from GPX files using patterns</p>
+            </div>
+        </header>
+
+        <nav class="breadcrumb">
+            <span class="breadcrumb-current">POI Pattern Extractor</span>
+            {% block breadcrumb %}{% endblock %}
+        </nav>
+
+        <main class="main-content">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <div class="flash-messages">
+                        {% for message in messages %}
+                            <div class="flash-message">
+                                <i class="fas fa-info-circle"></i>
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </main>
+
+        <footer class="footer">
+            <div class="footer-content">
+                <p><i class="fas fa-shield-alt"></i> Your files are automatically deleted after 24 hours</p>
+                <p><i class="fas fa-lock"></i> All processing happens securely on our servers</p>
+                <div class="footer-links">
+                    <a href="../">← Back to Tool Suite</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="/export-pois-by-pattern/static/script.js"></script>
+</body>
+</html>

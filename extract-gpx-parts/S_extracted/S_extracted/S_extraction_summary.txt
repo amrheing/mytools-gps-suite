@@ -1,0 +1,52 @@
+GPX Extraction Summary
+==================================================
+Source file: S.gpx
+Extraction date: 2026-03-09 14:15:45
+
+📋 Component Counts
+--------------------------------------------------
+Waypoints: 909
+Tracks: 28
+Routes: 0
+
+📁 Extracted Files
+--------------------------------------------------
+Waypoints file: S_waypoints.gpx
+
+Tracks extracted: 28
+  - TET_S-01_20260102.gpx
+  - TET_S-02_20260102.gpx
+  - TET_S-03_20260102.gpx
+  - TET_S-04_20260102.gpx
+  - TET_S-05_20260102.gpx
+  - TET_S-06_20260102.gpx
+  - TET_S-07_20260102.gpx
+  - TET_S-08_20260102.gpx
+  - TET_S-09_20260102.gpx
+  - TET_S-10_20260102.gpx
+  - TET_S-11_20260102.gpx
+  - TET_S-12_20260102.gpx
+  - TET_S-13_20260102.gpx
+  - TET_S-14_20260102.gpx
+  - TET_S-15_20260102.gpx
+  - TET_S-16_20260102.gpx
+  - TET_S-17_20260102.gpx
+  - TET_S-18_20260102.gpx
+  - TET_S-19_20260102.gpx
+  - TET_S-20_20260102.gpx
+  - TET_S-21_20260102.gpx
+  - TET_S-22_20260102.gpx
+  - TET_S-23_20260102.gpx
+  - TET_S-24_20260102.gpx
+  - TET_S-25_20260102.gpx
+  - TET_S-26_20260102.gpx
+  - TET_S-27_20260102.gpx
+  - TET_S-28_20260102.gpx
+
+Routes extracted: 0
+
+🔧 Technical Details
+--------------------------------------------------
+Namespace: http://www.topografix.com/GPX/1/1
+GPX version: 1.1
+Build date: 2026-01-02T09:14:53Z

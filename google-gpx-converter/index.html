@@ -4,59 +4,79 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Google Maps to GPX Converter</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="shared/shared-styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>Google Maps to GPX Converter</h1>
-            <p class="subtitle">Convert Google Maps URLs to GPX files for your GPS device</p>
-        </div>
-
-        <div class="main-content">
-            <div class="input-section">
-                <h2>Input Google Maps URLs</h2>
-                <div class="url-input-container">
-                    <textarea 
-                        id="urlInput" 
-                        placeholder="Paste one or more Google Maps URLs here (one per line)&#10;&#10;💡 For best results, use URLs with coordinates:&#10;https://www.google.com/maps/@40.7128,-74.0060,15z&#10;&#10;⚠️ Place name URLs may need coordinates:&#10;❌ https://maps.google.com/maps?q=New+York&#10;✅ Right-click location → 'What's here?' → Copy coordinates URL"
-                        rows="8"
-                    ></textarea>
+        <header class="header">
+            <div class="header-content">
+                <div class="breadcrumb">
+                    <a href="/"><i class="fas fa-arrow-left"></i> Back to Tools</a>
                 </div>
-                
-                <div class="options-section">
-                    <h3>Options</h3>
-                    <div class="option-group">
-                        <label>
-                            <input type="text" id="routeName" placeholder="Route name (optional)">
-                            <span>Route Name</span>
-                        </label>
-                    </div>
-                    <div class="option-group">
-                        <label>
-                            <input type="checkbox" id="includeTime" checked>
-                            <span>Include timestamps</span>
-                        </label>
-                    </div>
-                    <div class="option-group">
-                        <label>
-                            <input type="number" id="intervalMinutes" value="5" min="1" max="60">
-                            <span>Time interval between points (minutes)</span>
-                        </label>
-                    </div>
-                </div>
-
-                <button id="convertBtn" class="convert-btn">Convert to GPX</button>
+                <h1><i class="fas fa-map-marked-alt"></i> Google Maps to GPX Converter</h1>
+                <p class="subtitle">Convert Google Maps URLs to GPX files for your GPS device</p>
             </div>
+        </header>
 
-            <div class="output-section">
-                <h2>Results</h2>
-                <div id="statusContainer" class="status-container">
-                    <div id="statusMessage" class="status-message"></div>
-                    <div id="progressContainer" class="progress-container" style="display: none;">
-                        <div class="progress-bar">
-                            <div id="progressFill" class="progress-fill"></div>
+        <main class="main-content">
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-link"></i> Input Google Maps URLs</h2>
+                        <p>Paste your Google Maps URLs below for conversion</p>
+                    </div>
+                    <div class="url-input-container">
+                        <textarea 
+                            id="urlInput" 
+                            class="form-textarea"
+                            placeholder="Paste one or more Google Maps URLs here (one per line)&#10;&#10;💡 For best results, use URLs with coordinates:&#10;https://www.google.com/maps/@40.7128,-74.0060,15z&#10;&#10;⚠️ Place name URLs may need coordinates:&#10;❌ https://maps.google.com/maps?q=New+York&#10;✅ Right-click location → 'What's here?' → Copy coordinates URL"
+                            rows="8"
+                        ></textarea>
+                    </div>
+                
+                    <div class="options-section">
+                        <h3><i class="fas fa-cogs"></i> Options</h3>
+                        <div class="option-group">
+                            <label>
+                                <i class="fas fa-tag"></i>
+                                <span>Route Name</span>
+                                <input type="text" id="routeName" placeholder="Route name (optional)">
+                            </label>
                         </div>
+                        <div class="option-group">
+                            <label>
+                                <input type="checkbox" id="includeTime" checked>
+                                <i class="fas fa-clock"></i>
+                                <span>Include timestamps</span>
+                            </label>
+                        </div>
+                        <div class="option-group">
+                            <label>
+                                <i class="fas fa-stopwatch"></i>
+                                <span>Time interval between points (minutes)</span>
+                                <input type="number" id="intervalMinutes" value="5" min="1" max="60">
+                            </label>
+                        </div>
+                    </div>
+
+                    <button id="convertBtn" class="btn btn-large btn-primary">
+                        <i class="fas fa-magic"></i>
+                        Convert to GPX
+                    </button>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-file-download"></i> Results</h2>
+                        <p>Your converted GPX file will appear here</p>
+                    </div>
+                    <div id="statusContainer" class="status-container">
+                        <div id="statusMessage" class="status-message"></div>
+                        <div id="progressContainer" class="progress-container" style="display: none;">
+                            <div class="progress-bar">
+                                <div id="progressFill" class="progress-fill"></div>
+                            </div>
                         <div id="progressText" class="progress-text"></div>
                     </div>
                 </div>
@@ -64,56 +84,98 @@
                 <div id="resultsContainer" class="results-container" style="display: none;">
                     <div class="results-info">
                         <span id="pointCount" class="point-count"></span>
-                        <button id="downloadBtn" class="download-btn">Download GPX File</button>
+                        <button id="downloadBtn" class="btn btn-success">
+                            <i class="fas fa-download"></i>
+                            Download GPX File
+                        </button>
                     </div>
                     <div class="preview-section">
-                        <h3>GPX Preview</h3>
-                        <pre id="gpxPreview" class="gpx-preview"></pre>
+                        <h3><i class="fas fa-eye"></i> GPX Preview</h3>
+                        <pre id="gpxPreview" class="code-preview"></pre>
                     </div>
                 </div>
 
                 <div id="errorContainer" class="error-container" style="display: none;">
-                    <h3>Errors</h3>
+                    <h3><i class="fas fa-exclamation-triangle"></i> Errors</h3>
                     <ul id="errorList" class="error-list"></ul>
                 </div>
-            </div>
-        </div>
-
-        <div class="footer">
-            <div class="help-section">
-                <h3>Supported URL Formats</h3>
-                <ul class="url-examples">
-                    <li><strong>Short URLs:</strong> https://maps.app.goo.gl/xyz123</li>
-                    <li><strong>Coordinates:</strong> https://www.google.com/maps/@40.7128,-74.0060,15z</li>
-                    <li><strong>Place queries:</strong> https://maps.google.com/maps?q=New+York</li>
-                    <li><strong>Directions:</strong> https://www.google.com/maps/dir/Start/End</li>
-                </ul>
-                
-                <div class="short-url-guide">
-                    <h4>📎 Short URL Help</h4>
-                    <p>If you have a short URL like <code>maps.app.goo.gl/xyz123</code>:</p>
-                    <ol>
-                        <li>Open the short URL in your browser</li>
-                        <li>Wait for it to redirect to the full Google Maps page</li>
-                        <li>Copy the full URL from your browser's address bar</li>
-                        <li>Paste that expanded URL here instead</li>
-                    </ol>
-                    <button id="expandUrlBtn" class="expand-url-btn">Try Auto-Expand URLs</button>
-                    
-                    <h4 style="margin-top: 15px;">🎯 Getting Coordinate URLs</h4>
-                    <p>For place names, get coordinate URLs by:</p>
-                    <ol>
-                        <li>Find the location on Google Maps</li>
-                        <li>Right-click on the exact spot</li>
-                        <li>Select "What's here?" from the menu</li>
-                        <li>Copy the URL - it will contain @lat,lng coordinates</li>
-                    </ol>
                 </div>
             </div>
-            <div class="about-section">
-                <p><strong>About GPX:</strong> GPX (GPS Exchange Format) is a data format for exchanging GPS data between applications and devices.</p>
+        </main>
+
+        <footer class="footer">
+            <div class="card">
+                <div class="help-header">
+                    <h3><i class="fas fa-question-circle"></i> Supported URL Formats</h3>
+                    <p>We support various Google Maps URL formats</p>
+                </div>
+                <ul class="info-list">
+                    <li><i class="fas fa-link"></i> <strong>Short URLs:</strong> https://maps.app.goo.gl/xyz123</li>
+                    <li><i class="fas fa-crosshairs"></i> <strong>Coordinates:</strong> https://www.google.com/maps/@40.7128,-74.0060,15z</li>
+                    <li><i class="fas fa-map-pin"></i> <strong>Place queries:</strong> https://maps.google.com/maps?q=New+York</li>
+                    <li><i class="fas fa-route"></i> <strong>Directions:</strong> https://www.google.com/maps/dir/Start/End</li>
+                </ul>
+                
+                <div class="help-section">
+                    <h4><i class="fas fa-external-link-alt"></i> Short URL Help</h4>
+                    <p>If you have a short URL like <code>maps.app.goo.gl/xyz123</code>:</p>
+                    <div class="help-steps">
+                        <div class="help-step">
+                            <div class="step-number">1</div>
+                            <div class="step-content">Open the short URL in your browser</div>
+                        </div>
+                        <div class="help-step">
+                            <div class="step-number">2</div>
+                            <div class="step-content">Wait for it to redirect to the full Google Maps page</div>
+                        </div>
+                        <div class="help-step">
+                            <div class="step-number">3</div>
+                            <div class="step-content">Copy the full URL from your browser's address bar</div>
+                        </div>
+                        <div class="help-step">
+                            <div class="step-number">4</div>
+                            <div class="step-content">Paste that expanded URL here instead</div>
+                        </div>
+                    </div>
+                    <button id="expandUrlBtn" class="btn btn-warning">
+                        <i class="fas fa-expand-arrows-alt"></i>
+                        Try Auto-Expand URLs
+                    </button>
+                    
+                    <h4><i class="fas fa-crosshairs"></i> Getting Coordinate URLs</h4>
+                    <p>For place names, get coordinate URLs by:</p>
+                    <div class="help-steps">
+                        <div class="help-step">
+                            <div class="step-number">1</div>
+                            <div class="step-content">Find the location on Google Maps</div>
+                        </div>
+                        <div class="help-step">
+                            <div class="step-number">2</div>
+                            <div class="step-content">Right-click on the exact spot</div>
+                        </div>
+                        <div class="help-step">
+                            <div class="step-number">3</div>
+                            <div class="step-content">Select "What's here?" from the menu</div>
+                        </div>
+                        <div class="help-step">
+                            <div class="step-number">4</div>
+                            <div class="step-content">Copy the URL - it will contain @lat,lng coordinates</div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
+            <div class="card">
+                <h4><i class="fas fa-tools"></i> Related Tools</h4>
+                <ul class="info-list">
+                    <li><i class="fas fa-file-export"></i> <a href="../gpx-to-kml-converter/" style="color: var(--secondary-color); text-decoration: none;"><strong>GPX to KML Converter:</strong> Convert your GPX files to Google Earth format</a></li>
+                    <li><i class="fas fa-home"></i> <a href="../index.html" style="color: var(--secondary-color); text-decoration: none;"><strong>All Tools:</strong> Browse our complete suite of GPS utilities</a></li>
+                </ul>
+            </div>
+            <div class="card">
+                <h4><i class="fas fa-info-circle"></i> About GPX</h4>
+                <p>GPX (GPS Exchange Format) is a data format for exchanging GPS data between applications and devices.</p>
+            </div>
+        </footer>
     </div>
 
     <script src="url-expander.js"></script>

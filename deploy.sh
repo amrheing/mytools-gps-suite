@@ -12,9 +12,9 @@ if ! docker info > /dev/null 2>&1; then
     exit 1
 fi
 
-# Check if docker-compose is available
-if ! command -v docker-compose > /dev/null 2>&1; then
-    echo "❌ docker-compose is not installed. Please install docker-compose first."
+# Check if docker compose is available
+if ! docker compose version > /dev/null 2>&1; then
+    echo "❌ docker compose is not available. Please install Docker Compose V2."
     exit 1
 fi
 
@@ -24,18 +24,18 @@ mkdir -p extract-gpx-parts/data/{uploads,processed}
 
 # Stop existing containers if running
 echo "🔄 Stopping existing containers..."
-docker-compose down
+docker compose down
 
 # Build and start containers
 echo "🔨 Building and starting containers..."
-docker-compose up -d --build
+docker compose up -d --build
 
 # Wait a moment for containers to start
 sleep 5
 
 # Show container status
 echo "📊 Container Status:"
-docker-compose ps
+docker compose ps
 
 echo ""
 echo "✅ MyTools deployment complete!"
@@ -43,12 +43,14 @@ echo ""
 echo "🌐 Service URLs:"
 echo "   • Google GPX Converter:  http://localhost:6010"
 echo "   • Extract GPX Parts:     http://localhost:6020"
+echo "   • Export POIs by Pattern: http://localhost:6030" 
+echo "   • GPX to KML Converter:   http://localhost:6040"
 echo ""
 echo "📁 Persistent Data:"
 echo "   • GPX Uploads:    /opt/containerd/myTools/extract-gpx-parts/data/uploads"
 echo "   • GPX Processed:  /opt/containerd/myTools/extract-gpx-parts/data/processed"
 echo ""
 echo "🔧 Management Commands:"
-echo "   • Stop containers:    docker-compose down"
-echo "   • View logs:          docker-compose logs -f"
-echo "   • Restart:            docker-compose restart"
+echo "   • Stop containers:    docker compose down"
+echo "   • View logs:          docker compose logs -f"
+echo "   • Restart:            docker compose restart"

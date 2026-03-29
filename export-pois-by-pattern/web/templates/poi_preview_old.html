@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+
+{% block title %}POI Preview - {{ preview.filename }}{% endblock %}
+
+{% block breadcrumb %}
+<span class="breadcrumb-separator">›</span>
+<span class="breadcrumb-current">POI Preview</span>
+{% endblock %}
+
+{% block content %}
+<div class="poi-preview-container">
+    <div class="poi-preview-section">
+        <div class="card poi-preview-card">
+            <h2><i class="fas fa-eye"></i> POI Preview: {{ preview.filename }}</h2>
+            
+            <div class="poi-stats">
+                <div class="poi-stat">
+                    <div class="poi-stat-number">{{ preview.total_pois }}</div>
+                    <div class="poi-stat-label">Total POIs Found</div>
+                </div>
+                <div class="poi-stat">
+                    <div class="poi-stat-number" id="filtered-count">--</div>
+                    <div class="poi-stat-label">Matching Filter</div>
+                </div>
+                <div class="poi-stat">
+                    <div class="poi-stat-number" id="filter-percentage">--%</div>
+                    <div class="poi-stat-label">Match Rate</div>
+                </div>
+            </div>
+
+        <!-- Pattern Input Section -->
+        <div class="form-group">
+            <label class="form-label">Pattern Type</label>
+            <div class="radio-group">
+                <div class="radio-option">
+                    <input type="radio" id="wildcard-preview" name="pattern_type_preview" value="wildcard" checked>
+                    <label for="wildcard-preview">
+                        <i class="fas fa-asterisk"></i> Wildcard Pattern
+                        <small>Simple pattern with * and ? wildcards</small>
+                    </label>
+                </div>
+                <div class="radio-option">
+                    <input type="radio" id="regex-preview" name="pattern_type_preview" value="regex">
+                    <label for="regex-preview">
+                        <i class="fas fa-code"></i> Regular Expression
+                        <small>Advanced pattern matching with regex</small>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="pattern-input" class="form-label">Enter Pattern</label>
+            <input type="text" id="pattern-input" placeholder="*-S28" class="pattern-input">
+            <small class="text-light">Type a pattern to see matching POIs in real-time</small>
+        </div>
+
+        <!-- Filter Preview -->
+        <div class="filter-preview" id="filter-preview" style="display: none;">
+            <h4><i class="fas fa-filter"></i> Pattern Preview</h4>
+            <div class="filter-results" id="filter-results">
+                Enter a pattern above to preview matches...
+            </div>
+        </div>
+
+        <!-- POI List -->
+        <h3><i class="fas fa-list"></i> All POIs <span id="poi-count">(showing first 20 of {{ preview.total_pois }})</span></h3>
+        <div class="poi-list" id="poi-list">
+            {% for poi in preview.pois[:20] %}
+            <div class="poi-item" data-name="{{ poi.name }}">
+                <div class="poi-name">{{ poi.name }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        {% if preview.total_pois > 20 %}
+        <button class="show-more-btn" onclick="showMorePois()">
+            <i class="fas fa-chevron-down"></i> Show More POIs
+        </button>
+        {% endif %}
+
+        <!-- Action Buttons -->
+        <div class="form-actions" style="margin-top: 2rem;">
+            <form method="POST" action="process-filtered" style="display: inline-block;">
+                <input type="hidden" name="job_id" value="{{ preview.job_id }}">
+                <input type="hidden" name="pattern_type" id="final-pattern-type" value="wildcard">
+                <input type="hidden" name="pattern" id="final-pattern" value="">
+                <button type="submit" class="btn btn-primary" id="process-btn" disabled>
+                    <i class="fas fa-cogs"></i> Process with Filter
+                </button>
+            </form>
+            <a href="../export-pois-by-pattern/" class="btn btn-secondary" style="margin-left: 1rem;">
+                <i class="fas fa-upload"></i> Upload Different File
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- POI data for JavaScript -->
+<script id="poi-data" type="application/json">{{ preview.pois | tojson | safe }}</script>
+
+<script>
+// Load POI data from JSON script tag
+const poiDataElement = document.getElementById('poi-data');
+let allPois = JSON.parse(poiDataElement.textContent);
+let currentShowCount = 20;
+
+// Pattern filtering in real-time
+document.getElementById('pattern-input').addEventListener('input', function() {
+    const pattern = this.value.trim();
+    const patternType = document.querySelector('input[name="pattern_type_preview"]:checked').value;
+    
+    // Update hidden form fields
+    document.getElementById('final-pattern').value = pattern;
+    document.getElementById('final-pattern-type').value = patternType;
+    
+    if (pattern === '') {
+        hideFilterPreview();
+        clearHighlights();
+        document.getElementById('process-btn').disabled = true;
+        return;
+    }
+    
+    // Enable process button
+    document.getElementById('process-btn').disabled = false;
+    
+    // Get server-side accurate filtering via API
+    fetch('/export-pois-by-pattern/api/filter-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            job_id: '{{ preview.job_id }}',
+            pattern: pattern,
+            pattern_type: patternType
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showFilterPreview(`Error: ${data.error}`, 0, 0);
+        } else {
+            const percentage = ((data.filtered_count / data.total_pois) * 100).toFixed(1);
+            showFilterPreview(
+                `Found ${data.filtered_count} matches. Examples: ${data.sample_matches.join(', ') || 'None'}`,
+                data.filtered_count,
+                percentage
+            );
+            highlightMatches(pattern, patternType);
+        }
+    })
+    .catch(error => {
+        showFilterPreview(`Error: ${error}`, 0, 0);
+    });
+});
+
+// Pattern type change
+document.querySelectorAll('input[name="pattern_type_preview"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        const input = document.getElementById('pattern-input');
+        if (input.value.trim()) {
+            input.dispatchEvent(new Event('input'));
+        }
+    });
+});
+
+function showFilterPreview(text, count, percentage) {
+    const preview = document.getElementById('filter-preview');
+    const results = document.getElementById('filter-results');
+    results.textContent = text;
+    preview.style.display = 'block';
+    
+    document.getElementById('filtered-count').textContent = count;
+    document.getElementById('filter-percentage').textContent = percentage + '%';
+}
+
+function hideFilterPreview() {
+    document.getElementById('filter-preview').style.display = 'none';
+    document.getElementById('filtered-count').textContent = '--';
+    document.getElementById('filter-percentage').textContent = '--%';
+}
+
+function highlightMatches(pattern, patternType) {
+    const poiItems = document.querySelectorAll('.poi-item');
+    poiItems.forEach(item => {
+        const name = item.dataset.name;
+        let matches = false;
+        
+        if (patternType === 'wildcard') {
+            // Simple wildcard matching for client-side highlighting
+            const regexPattern = pattern
+                .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                .replace(/\\\\\\*/g, '.*')
+                .replace(/\\\\\\?/g, '.');
+            matches = new RegExp(regexPattern, 'i').test(name);
+        } else {
+            try {
+                matches = new RegExp(pattern, 'i').test(name);
+            } catch (e) {
+                matches = false;
+            }
+        }
+        
+        item.classList.toggle('highlighted', matches);
+    });
+}
+
+function clearHighlights() {
+    document.querySelectorAll('.poi-item').forEach(item => {
+        item.classList.remove('highlighted');
+    });
+}
+
+function showMorePois() {
+    const container = document.getElementById('poi-list');
+    const nextBatch = allPois.slice(currentShowCount, currentShowCount + 20);
+    
+    nextBatch.forEach(poi => {
+        const div = document.createElement('div');
+        div.className = 'poi-item';
+        div.dataset.name = poi.name;
+        div.innerHTML = `
+            <div class="poi-name">${poi.name}</div>
+        `;
+        container.appendChild(div);
+    });
+    
+    currentShowCount += 20;
+    
+    // Update counter
+    const showing = Math.min(currentShowCount, allPois.length);
+    document.getElementById('poi-count').textContent = `(showing first ${showing} of {{ preview.total_pois }})`;
+    
+    // Hide button if all shown
+    if (currentShowCount >= allPois.length) {
+        document.querySelector('.show-more-btn').style.display = 'none';
+    }
+    
+    // Re-apply current filter highlights
+    const pattern = document.getElementById('pattern-input').value.trim();
+    if (pattern) {
+        const patternType = document.querySelector('input[name="pattern_type_preview"]:checked').value;
+        highlightMatches(pattern, patternType);
+    }
+}
+</script>
+{% endblock %}

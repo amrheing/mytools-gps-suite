@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Processing Status - POI Pattern Extractor{% endblock %}
+
+{% block breadcrumb %}
+<span> > Processing</span>
+{% endblock %}
+
+{% block content %}
+<div class="status-section">
+    <div class="card status-card">
+        <h2><i class="fas fa-tasks"></i> Processing Status</h2>
+        
+        {% if job.status == 'processing' %}
+            <div class="status-indicator processing">
+                <div class="spinner">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </div>
+                <h3>Processing Your GPX File...</h3>
+                <p>Please wait while we filter your POIs using the specified pattern.</p>
+            </div>
+        {% elif job.status == 'completed' %}
+            <div class="status-indicator completed">
+                <i class="fas fa-check-circle"></i>
+                <h3>Processing Complete!</h3>
+                <p>Your POIs have been filtered successfully.</p>
+            </div>
+        {% elif job.status == 'error' %}
+            <div class="status-indicator error">
+                <i class="fas fa-exclamation-circle"></i>
+                <h3>Processing Error</h3>
+                <p>{{ job.get('error_message', 'An error occurred during processing.') }}</p>
+            </div>
+        {% endif %}
+
+        <div class="job-info">
+            <h3><i class="fas fa-info-circle"></i> Job Information</h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <label>Job ID:</label>
+                    <span class="mono">{{ job_id }}</span>
+                </div>
+                <div class="info-item">
+                    <label>Filename:</label>
+                    <span>{{ job.original_filename or job.filename }}</span>
+                </div>
+                <div class="info-item">
+                    <label>Pattern Type:</label>
+                    <span class="badge">{{ job.pattern_type | title }}</span>
+                </div>
+                <div class="info-item">
+                    <label>Pattern:</label>
+                    <span class="mono">{{ job.pattern }}</span>
+                </div>
+                {% if job.get('total_waypoints') %}
+                <div class="info-item">
+                    <label>Total POIs:</label>
+                    <span class="count">{{ job.total_waypoints }}</span>
+                </div>
+                {% endif %}
+                {% if job.get('matching_waypoints') is not none %}
+                <div class="info-item">
+                    <label>Matching POIs:</label>
+                    <span class="count">{{ job.matching_waypoints }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="status-actions">
+            {% if job.status == 'processing' %}
+                <button onclick="location.reload()" class="btn-secondary">
+                    <i class="fas fa-refresh"></i> Refresh Status
+                </button>
+            {% elif job.status == 'completed' %}
+                <a href="/export-pois-by-pattern/job-result/{{ job_id }}" class="btn-primary">
+                    <i class="fas fa-eye"></i> View Results
+                </a>
+                <a href="/export-pois-by-pattern/download/{{ job_id }}" class="btn-secondary">
+                    <i class="fas fa-download"></i> Download GPX
+                </a>
+            {% else %}
+                <a href="/export-pois-by-pattern/" class="btn-primary">
+                    <i class="fas fa-home"></i> Start Over
+                </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if job.status == 'processing' %}
+<script>
+// Auto-refresh for processing jobs
+setTimeout(function() {
+    location.reload();
+}, 3000); // Refresh every 3 seconds
+</script>
+{% endif %}
+
+<script>
+// Add copy functionality for job ID
+document.addEventListener('DOMContentLoaded', function() {
+    const jobIdElement = document.querySelector('.mono');
+    if (jobIdElement) {
+        jobIdElement.addEventListener('click', function() {
+            navigator.clipboard.writeText(this.textContent);
+            
+            // Show feedback
+            const originalText = this.textContent;
+            this.textContent = 'Copied!';
+            setTimeout(() => {
+                this.textContent = originalText;
+            }, 1000);
+        });
+        
+        jobIdElement.style.cursor = 'pointer';
+        jobIdElement.title = 'Click to copy job ID';
+    }
+});
+</script>
+{% endblock %}
