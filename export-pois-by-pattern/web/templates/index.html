@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+
+{% block title %}POI Pattern Extractor{% endblock %}
+
+{% block content %}
+<div class="main-grid">
+    <!-- Left Column: Upload -->
+    <div class="upload-section">
+        <div class="upload-card">
+            <div class="upload-header">
+                <h2><i class="fas fa-map-pin"></i> Upload GPX File</h2>
+                <p>Select your GPX file to filter Points of Interest by pattern</p>
+            </div>
+
+            <form action="preview-pois" method="post" enctype="multipart/form-data" class="upload-form">
+                <div class="file-input-container">
+                    <input type="file" id="file" name="file" accept=".gpx" required>
+                    <label for="file" class="file-input-label">
+                        <i class="fas fa-plus-circle"></i>
+                        <span class="file-input-text">Choose GPX File</span>
+                    </label>
+                    <div class="file-info" style="display: none;">
+                        <i class="fas fa-file"></i>
+                        <span class="file-name"></span>
+                        <span class="file-size"></span>
+                    </div>
+                </div>
+
+                <div class="upload-progress" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                    <div class="progress-text">Loading POIs...</div>
+                </div>
+
+                <button type="submit" class="upload-button">
+                    <i class="fas fa-eye"></i>
+                    Preview POIs
+                </button>
+            </form>
+
+            <div class="upload-help">
+                <h3><i class="fas fa-info-circle"></i> How it works</h3>
+                <div class="help-steps">
+                    <div class="help-step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <strong>Upload</strong> your GPX file containing POIs (waypoints)
+                        </div>
+                    </div>
+                    <div class="help-step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <strong>Preview</strong> all POIs and test pattern filters
+                        </div>
+                    </div>
+                    <div class="help-step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <strong>Filter</strong> and download matching POIs as new GPX
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="file-requirements">
+                <h4><i class="fas fa-check-circle"></i> Requirements &amp; Info</h4>
+                <ul class="requirements-list">
+                    <li><i class="fas fa-check"></i> GPX files up to 500MB</li>
+                    <li><i class="fas fa-check"></i> Supports waypoints (POIs)</li>
+                    <li><i class="fas fa-check"></i> Wildcard and regex patterns</li>
+                    <li><i class="fas fa-check"></i> Files auto-deleted after 24h</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Pattern Guide -->
+    <div class="info-section">
+        <div class="info-card">
+            <h3><i class="fas fa-lightbulb"></i> Pattern Examples</h3>
+            <div class="pattern-examples">
+                <h4>Wildcard Patterns</h4>
+                <div class="example-group">
+                    <div class="example">
+                        <code>*-S28</code>
+                        <span>POIs ending with "-S28"</span>
+                    </div>
+                    <div class="example">
+                        <code>Hotel*</code>
+                        <span>POIs starting with "Hotel"</span>
+                    </div>
+                    <div class="example">
+                        <code>*Bridge*</code>
+                        <span>POIs containing "Bridge"</span>
+                    </div>
+                </div>
+                
+                <h4>Regular Expression Patterns</h4>
+                <div class="example-group">
+                    <div class="example">
+                        <code>.*-S\d+$</code>
+                        <span>POIs ending with "-S" + numbers</span>
+                    </div>
+                    <div class="example">
+                        <code>^! .+</code>
+                        <span>POIs starting with "! "</span>
+                    </div>
+                    <div class="example">
+                        <code>(AVOID|DANGER)</code>
+                        <span>POIs containing warnings</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// File input handling
+document.getElementById('file').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const fileInfo = document.querySelector('.file-info');
+    const fileInputText = document.querySelector('.file-input-text');
+    const fileName = document.querySelector('.file-name');
+    const fileSize = document.querySelector('.file-size');
+    
+    if (file) {
+        const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+        fileName.textContent = file.name;
+        fileSize.textContent = `${sizeMB} MB`;
+        fileInputText.textContent = 'File Selected';
+        fileInfo.style.display = 'flex';
+    } else {
+        fileInputText.textContent = 'Choose GPX File';
+        fileInfo.style.display = 'none';
+    }
+});
+
+// Form submission with progress
+document.querySelector('.upload-form').addEventListener('submit', function() {
+    const progress = document.querySelector('.upload-progress');
+    const button = document.querySelector('.upload-button');
+    
+    progress.style.display = 'block';
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+});
+</script>
+                        <p><strong>?</strong> = matches exactly one character</p>
+                        <p>Pattern matching is case-insensitive</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Regex Pattern Input -->
+            <div class="form-group pattern-group" id="regex-group" style="display: none;">
+                <label for="regex_pattern" class="form-label">Regular Expression Pattern</label>
+                <input type="text" id="regex_pattern" name="regex_pattern" 
+                       placeholder=".*-S\d+$" class="pattern-input">
+                <div class="pattern-help">
+                    <h4><i class="fas fa-lightbulb"></i> Regex Examples:</h4>
+                    <div class="examples">
+                        <div class="example">
+                            <code>.*-S\d+$</code>
+                            <span>Matches POIs ending with "-S" followed by numbers</span>
+                        </div>
+                        <div class="example">
+                            <code>^! .+-S\d+$</code>
+                            <span>Matches POIs starting with "! " and ending with "-S" + numbers</span>
+                        </div>
+                        <div class="example">
+                            <code>Bridge|Tunnel</code>
+                            <span>Matches POIs containing "Bridge" OR "Tunnel"</span>
+                        </div>
+                        <div class="example">
+                            <code>\b(AVOID|DANGER)\b</code>
+                            <span>Matches POIs containing exact words "AVOID" or "DANGER"</span>
+                        </div>
+                    </div>
+                    <div class="pattern-help-text">
+                        <p>Regular expressions provide powerful pattern matching</p>
+                        <p>Matching is case-insensitive by default</p>
+                        <p><a href="https://regexr.com/" target="_blank">Test your regex patterns here <i class="fas fa-external-link-alt"></i></a></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="form-actions">
+                <button type="button" onclick="previewPois()" class="btn btn-warning" style="margin-right: 1rem;">
+                    <i class="fas fa-eye"></i> \ud83c\udd95 Preview POIs First
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-filter"></i> Filter POIs Directly
+                </button>
+            </div>
+            <p style="text-align: center; margin-top: 1rem; color: #e74c3c; font-weight: 600;">⭐ NEW: Preview your POIs before filtering! ⭐</p>
+        </form>
+        
+        <!-- Hidden form for preview -->
+        <form id="preview-form" method="POST" action="preview-pois" enctype="multipart/form-data" style="display: none;">
+            <input type="file" id="preview-file" name="file">
+        </form>
+    </div>
+</div>
+
+<script>
+function previewPois() {
+    const fileInput = document.getElementById('file');
+    const previewFileInput = document.getElementById('preview-file');
+    const previewForm = document.getElementById('preview-form');
+    
+    if (!fileInput.files[0]) {
+        alert('Please select a GPX file first');
+        return;
+    }
+    
+    // Copy the file to the preview form
+    const dt = new DataTransfer();
+    dt.items.add(fileInput.files[0]);
+    previewFileInput.files = dt.files;
+    
+    // Submit the preview form
+    previewForm.submit();
+}
+
+// Pattern type switching
+document.addEventListener('DOMContentLoaded', function() {
+    const wildcardRadio = document.getElementById('wildcard');
+    const regexRadio = document.getElementById('regex');
+    const wildcardGroup = document.getElementById('wildcard-group');
+    const regexGroup = document.getElementById('regex-group');
+
+    // Only proceed if all elements exist
+    if (!wildcardRadio || !regexRadio || !wildcardGroup || !regexGroup) {
+        return;
+    }
+
+    function switchPatternType() {
+        if (wildcardRadio.checked) {
+            wildcardGroup.style.display = 'block';
+            regexGroup.style.display = 'none';
+        } else {
+            wildcardGroup.style.display = 'none';
+            regexGroup.style.display = 'block';
+        }
+    }
+
+    wildcardRadio.addEventListener('change', switchPatternType);
+    regexRadio.addEventListener('change', switchPatternType);
+    
+    // Initial state
+    switchPatternType();
+});
+</script>
+
+<!-- How It Works Section -->
+<div class="info-section">
+    <div class="card">
+        <h3><i class="fas fa-cogs"></i> How It Works</h3>
+        <div class="steps">
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h4>Upload GPX File</h4>
+                    <p>Upload your GPX file containing waypoints (POIs)</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h4>Specify Pattern</h4>
+                    <p>Choose wildcard or regex pattern to filter POIs</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h4>Filter & Download</h4>
+                    <p>Get a new GPX file with only matching POIs</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3><i class="fas fa-info-circle"></i> What are POIs?</h3>
+        <p>Points of Interest (POIs) are waypoints in your GPX file that mark specific locations like:</p>
+        <ul class="feature-list">
+            <li><i class="fas fa-map-marker-alt"></i> Landmarks and attractions</li>
+            <li><i class="fas fa-exclamation-triangle"></i> Warnings and hazards</li>
+            <li><i class="fas fa-gas-pump"></i> Services and facilities</li>
+            <li><i class="fas fa-camera"></i> Photo spots and viewpoints</li>
+            <li><i class="fas fa-road"></i> Navigation waypoints</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const wildcardRadio = document.getElementById('wildcard');
+    const regexRadio = document.getElementById('regex');
+    const wildcardGroup = document.getElementById('wildcard-group');
+    const regexGroup = document.getElementById('regex-group');
+    
+    // Only proceed if all elements exist
+    if (!wildcardRadio || !regexRadio || !wildcardGroup || !regexGroup) {
+        return;
+    }
+    
+    function togglePatternGroups() {
+        if (wildcardRadio.checked) {
+            wildcardGroup.style.display = 'block';
+            regexGroup.style.display = 'none';
+        } else {
+            wildcardGroup.style.display = 'none';
+            regexGroup.style.display = 'block';
+        }
+    }
+    
+    wildcardRadio.addEventListener('change', togglePatternGroups);
+    regexRadio.addEventListener('change', togglePatternGroups);
+    
+    // Initialize
+    togglePatternGroups();
+});
+</script>
+{% endblock %}

@@ -32,19 +32,25 @@ function initializeApp() {
     // Form submission
     setupFormSubmission();
     
-    // Initialize any existing data from HTML data attributes
-    const dataElement = document.getElementById('extraction-data');
-    if (dataElement) {
-        try {
-            const filesData = dataElement.getAttribute('data-files');
-            const outputDir = dataElement.getAttribute('data-output-directory');
-            
-            window.gpxExtractor.allFiles = filesData ? JSON.parse(filesData) : [];
-            window.gpxExtractor.outputDirectory = outputDir || '';
-        } catch (error) {
-            console.warn('Failed to parse extraction data:', error);
-            window.gpxExtractor.allFiles = [];
-            window.gpxExtractor.outputDirectory = '';
+    // Initialize data from window.extractionData if available
+    if (window.extractionData) {
+        window.gpxExtractor.allFiles = window.extractionData.files || [];
+        window.gpxExtractor.outputDirectory = window.extractionData.outputDirectory || '';
+    } else {
+        // Fallback: try to get data from HTML data attributes (legacy)
+        const dataElement = document.getElementById('extraction-data');
+        if (dataElement) {
+            try {
+                const filesData = dataElement.getAttribute('data-files');
+                const outputDir = dataElement.getAttribute('data-output-directory');
+                
+                window.gpxExtractor.allFiles = filesData ? JSON.parse(filesData) : [];
+                window.gpxExtractor.outputDirectory = outputDir || '';
+            } catch (error) {
+                console.warn('Failed to parse extraction data:', error);
+                window.gpxExtractor.allFiles = [];
+                window.gpxExtractor.outputDirectory = '';
+            }
         }
     }
 }

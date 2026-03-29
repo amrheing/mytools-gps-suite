@@ -4,21 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Extraction Results - GPX Parts Extractor</title>
-    <link rel="icon" type="image/x-icon" href="/extract-gpx-parts/static/favicon.ico">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('shared_styles') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
     <div class="container">
         <header class="header">
             <div class="header-content">
+                <div class="breadcrumb">
+                    <a href="/"><i class="fas fa-arrow-left"></i> Back to Tools</a>
+                </div>
                 <h1><i class="fas fa-route"></i> GPX Parts Extractor</h1>
                 <p class="subtitle">Extraction Results for: <strong>{{ original_filename }}</strong></p>
             </div>
             <div class="header-actions">
-                <a href="/extract-gpx-parts/" class="button button-secondary">
+                <button onclick="goBackToMainPage()" class="btn btn-secondary">
                     <i class="fas fa-arrow-left"></i> Back to File List
-                </a>
+                </button>
             </div>
         </header>
 
@@ -142,10 +145,12 @@
                 </div>
                 
                 {% if enhanced_metadata.similar_versions %}
-                <div class="version-warning">
-                    <i class="fas fa-exclamation-triangle"></i>
+                <div class="warning-section">
+                    <div class="warning-header">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span>Similar version detected</span>
+                    </div>
                     <div class="warning-content">
-                        <strong>Similar version detected:</strong>
                         <p>We found potentially similar versions of this GPX file. This might be a duplicate or updated version.</p>
                         <ul class="similar-files">
                             {% for similar in enhanced_metadata.similar_versions %}
@@ -160,24 +165,24 @@
 
             <div class="results-actions">
                 <div class="action-group">
-                    <button onclick="selectAll()" class="button button-outline">
+                    <button onclick="selectAll()" class="btn btn-outline">
                         <i class="fas fa-check-square"></i> Select All
                     </button>
-                    <button onclick="selectNone()" class="button button-outline">
+                    <button onclick="selectNone()" class="btn btn-outline">
                         <i class="fas fa-square"></i> Select None
                     </button>
-                    <button onclick="selectByType('waypoints')" class="button button-outline">
+                    <button onclick="selectByType('waypoints')" class="btn btn-outline">
                         <i class="fas fa-map-marker-alt"></i> Waypoints Only
                     </button>
-                    <button onclick="selectByType('track')" class="button button-outline">
+                    <button onclick="selectByType('track')" class="btn btn-outline">
                         <i class="fas fa-route"></i> Tracks Only
                     </button>
                 </div>
                 <div class="download-group">
-                    <button onclick="downloadSelected()" class="button button-primary" id="downloadSelectedBtn" disabled>
+                    <button onclick="downloadSelected()" class="btn btn-primary" id="downloadSelectedBtn" disabled>
                         <i class="fas fa-download"></i> Download Selected (<span id="selectedCount">0</span>)
                     </button>
-                    <a href="{{ url_for('download_all', directory=output_directory) }}" class="button button-success">
+                    <a href="{{ url_for('download_all', directory=output_directory) }}" class="btn btn-success">
                         <i class="fas fa-download"></i> Download All Files
                     </a>
                 </div>
@@ -241,11 +246,11 @@
                     </div>
                     <div class="file-actions-cell">
                         <a href="{{ url_for('download_file', directory=output_directory, filename=file.name) }}" 
-                           class="button-icon" title="Download {{ file.name }}">
+                           class="btn btn-small" title="Download {{ file.name }}">
                             <i class="fas fa-download"></i>
                         </a>
                         <button onclick="previewFile('{{ file.name }}')" 
-                                class="button-icon" title="Preview {{ file.name }}">
+                                class="btn btn-small" title="Preview {{ file.name }}">
                             <i class="fas fa-eye"></i>
                         </button>
                     </div>
@@ -263,7 +268,7 @@
 
         <footer class="footer">
             <p>&copy; 2026 GPX Parts Extractor | 
-               <a href="/extract-gpx-parts/"><i class="fas fa-home"></i> Home</a> |
+               <a href="{{ url_for('index') }}"><i class="fas fa-home"></i> Home</a> |
                <span class="footer-info">Files will be automatically deleted after 1 hour</span>
             </p>
         </footer>
@@ -280,8 +285,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button onclick="hidePreview()" class="button button-secondary">Close</button>
-                <button id="downloadPreviewBtn" class="button button-primary">
+                <button onclick="hidePreview()" class="btn btn-secondary">Close</button>
+                <button id="downloadPreviewBtn" class="btn btn-primary">
                     <i class="fas fa-download"></i> Download This File
                 </button>
             </div>
@@ -297,10 +302,30 @@
     </div>
 
     <!-- Data for JavaScript -->
-    <div id="extraction-data" 
-         data-output-directory="{{ output_directory }}" 
-         data-files="{{ extracted_files|tojson|e }}" 
-         style="display: none;"></div>
+    <script type="text/javascript">
+        // Function to go back to the main GPX extractor page
+        function goBackToMainPage() {
+            var mainPageUrl = localStorage.getItem('gpxExtractorMainPage');
+            console.log('DEBUG - Retrieved main page URL from localStorage:', mainPageUrl);
+            
+            if (mainPageUrl) {
+                window.location.href = mainPageUrl;
+            } else {
+                // Fallback if localStorage is empty
+                console.log('DEBUG - No stored URL found, using fallback');
+                var currentPath = window.location.pathname;
+                if (currentPath.includes('/extract-gpx-parts/')) {
+                    window.location.href = '/extract-gpx-parts/';
+                } else {
+                    window.location.href = '/';
+                }
+            }
+        }
+        
+        // Initialize extraction data for JavaScript
+        const outputDirectory = JSON.parse('{{ output_directory|tojson|safe }}');
+        const extractedFiles = JSON.parse('{{ extracted_files|tojson|safe }}');
+    </script>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script src="{{ url_for('static', filename='results.js') }}"></script>
 </body>

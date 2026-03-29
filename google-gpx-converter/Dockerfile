@@ -1,8 +1,11 @@
 # Google GPX Converter - Static Web Application
 FROM nginx:alpine
 
-# Copy application files
-COPY . /usr/share/nginx/html/
+# Copy application files (excluding styles.css as we use shared styles)
+COPY index.html script.js url-expander.js README.md /usr/share/nginx/html/
+
+# Create shared directory (will be mounted as volume)
+RUN mkdir -p /usr/share/nginx/html/shared
 
 # Create nginx config for the application
 RUN echo 'server { \

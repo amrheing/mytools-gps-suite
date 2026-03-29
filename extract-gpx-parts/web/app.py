@@ -18,6 +18,7 @@ import time
 import uuid
 from pathlib import Path
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify
 import tempfile
 import shutil
@@ -30,6 +31,8 @@ sys.path.append(str(Path(__file__).parent.parent))
 from gpx_extractor import GPXExtractor, GPXMetadataExtractor
 
 app = Flask(__name__)
+# Handle reverse proxy headers correctly
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 os.umask(0o002)  # Ensure new files/dirs get group-write (775/664) so host user can delete them
 app.secret_key = 'gpx_extractor_web_2026'  # Change this in production
 # Default to 500MB unless overridden by env var
@@ -272,28 +275,28 @@ def background_process_gpx(job_id, file_path, original_filename, existing_metada
         
         update_job_status(job_id, 40, 'Preparing output directory...')
         
-        # Use suggested name for output directory
-        suggested_name = extractor.metadata.get('suggested_name', Path(original_filename).stem)
+        # Use simple base name for extraction
+        base_name = Path(original_filename).stem
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_dir = PROCESSED_FOLDER / f"{timestamp}_{suggested_name}_extracted"
+        output_dir = PROCESSED_FOLDER / f"{timestamp}_{base_name}_extracted"
         extractor.output_dir = output_dir
         output_dir.mkdir(exist_ok=True)
         
         update_job_status(job_id, 50, 'Extracting waypoints...')
         
         # Extract components
-        waypoint_file = extractor.extract_waypoints_enhanced(suggested_name)
+        waypoint_file = extractor.extract_waypoints_enhanced(base_name)
         
         update_job_status(job_id, 70, 'Extracting tracks...')
-        track_files = extractor.extract_tracks_enhanced(suggested_name) 
+        track_files = extractor.extract_tracks_enhanced(base_name) 
         
         update_job_status(job_id, 85, 'Extracting routes...')
-        route_files = extractor.extract_routes_enhanced(suggested_name)
+        route_files = extractor.extract_routes_enhanced(base_name)
         
         update_job_status(job_id, 95, 'Creating summary...')
         
         # Create enhanced summary
-        summary_file = extractor.create_summary(waypoint_file, track_files, route_files)
+        summary_file = extractor.create_summary(waypoint_file, track_files, route_files, base_name)
         
         if not waypoint_file and not track_files and not route_files:
             update_job_status(job_id, 0, 'No extractable content found in GPX file.',
@@ -343,7 +346,7 @@ def background_process_gpx(job_id, file_path, original_filename, existing_metada
             'latest_modification': extractor.metadata.get('latest_modification'),
             'creator': extractor.metadata.get('creator'),
             'content_hash': extractor.metadata.get('content_hash'),
-            'suggested_name': suggested_name,
+            'suggested_name': base_name,
             'similar_versions': similar_files if has_similar else None
         }
         
@@ -494,6 +497,17 @@ def find_available_port(start_port=6001, max_port=6100):
 def favicon():
     return send_file(Path(__file__).parent / 'static' / 'favicon.ico', mimetype='image/x-icon')
 
+@app.route('/shared/shared-styles.css')
+def shared_styles():
+    """Serve shared CSS file with cache-busting headers"""
+    shared_css_path = Path(__file__).parent.parent / 'shared' / 'shared-styles.css'
+    response = send_file(shared_css_path, mimetype='text/css')
+    # Add cache-busting headers to force browser reload
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
 @app.route('/')
 def index():
     """Main upload page with available files list"""
@@ -614,20 +628,20 @@ def process_gpx_file(file_path, original_filename, existing_metadata=None):
         # Check for existing versions
         has_similar, similar_files = extractor.check_existing_version()
         
-        # Use suggested name for output directory
-        suggested_name = extractor.metadata.get('suggested_name', Path(original_filename).stem)
+        # Use simple base name for extraction
+        base_name = Path(original_filename).stem
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_dir = PROCESSED_FOLDER / f"{timestamp}_{suggested_name}_extracted"
+        output_dir = PROCESSED_FOLDER / f"{timestamp}_{base_name}_extracted"
         extractor.output_dir = output_dir
         output_dir.mkdir(exist_ok=True)
         
         # Extract components
-        waypoint_file = extractor.extract_waypoints_enhanced(suggested_name)
-        track_files = extractor.extract_tracks_enhanced(suggested_name) 
-        route_files = extractor.extract_routes_enhanced(suggested_name)
+        waypoint_file = extractor.extract_waypoints_enhanced(base_name)
+        track_files = extractor.extract_tracks_enhanced(base_name) 
+        route_files = extractor.extract_routes_enhanced(base_name)
         
         # Create enhanced summary
-        summary_file = extractor.create_summary(waypoint_file, track_files, route_files)
+        summary_file = extractor.create_summary(waypoint_file, track_files, route_files, base_name)
         
         if not waypoint_file and not track_files and not route_files:
             return jsonify({'error': 'No extractable content found in GPX file.'}), 400
@@ -675,7 +689,7 @@ def process_gpx_file(file_path, original_filename, existing_metadata=None):
             'latest_modification': extractor.metadata.get('latest_modification'),
             'creator': extractor.metadata.get('creator'),
             'content_hash': extractor.metadata.get('content_hash'),
-            'suggested_name': suggested_name,
+            'suggested_name': base_name,
             'similar_versions': similar_files if has_similar else None
         }
         

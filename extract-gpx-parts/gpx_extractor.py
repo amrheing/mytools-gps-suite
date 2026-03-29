@@ -10,6 +10,7 @@ Features:
 - Smart filename generation with version detection
 - Duplicate version detection and handling
 - Enhanced GPX content analysis for better organization
+- Always outputs clean, simple GPX format compatible with all platforms
 
 Usage:
     python gpx_extractor.py input.gpx [output_directory]
@@ -412,20 +413,13 @@ class GPXExtractor:
         return False, None
     
     def get_gpx_header(self, content_type="extracted"):
-        """Create a new GPX header with metadata"""
-        # Start with the original root attributes
-        root_attribs = self.root.attrib.copy()
-        
-        # Build header
-        header = '<?xml version="1.0" encoding="utf-8"?>'
-        
-        # Build GPX opening tag with all original attributes
-        gpx_tag = '<gpx'
-        for key, value in root_attribs.items():
-            gpx_tag += f' {key}="{value}"'
-        gpx_tag += '>'
-        
-        header += gpx_tag + '\n'
+        """Create a clean, simple GPX header compatible with all platforms"""
+        return '''<?xml version="1.0" encoding="UTF-8"?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="GPX Extractor">
+\t<metadata>
+\t\t<name>Extracted {}</name>
+\t</metadata>
+'''.format(content_type.title())
         
         # Add metadata
         header += '  <metadata>\n'
@@ -459,7 +453,12 @@ class GPXExtractor:
         return header
     
     def extract_waypoints_enhanced(self, base_name):
-        """Extract all waypoints with enhanced naming"""
+        """Extract all waypoints in clean, compatible format"""
+        # Ensure output_dir is a Path object
+        from pathlib import Path
+        if not isinstance(self.output_dir, Path):
+            self.output_dir = Path(self.output_dir)
+            
         # Handle namespaced elements
         if self.namespace.get('default'):
             waypoints = self.root.findall('.//{%s}wpt' % self.namespace['default'])
@@ -472,21 +471,46 @@ class GPXExtractor:
             
         output_file = self.output_dir / f"{base_name}_waypoints.gpx"
         
+        # Create clean waypoint content
+        gpx_content = '''<?xml version="1.0" encoding="UTF-8"?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="GPX Extractor">
+\t<metadata>
+\t\t<name>Extracted Waypoints</name>
+\t</metadata>
+'''
+        
+        for wpt in waypoints:
+            lat = wpt.get('lat')
+            lon = wpt.get('lon')
+            if lat and lon:
+                # Get waypoint name if available
+                if self.namespace.get('default'):
+                    name_elem = wpt.find('.//{%s}name' % self.namespace['default'])
+                else:
+                    name_elem = wpt.find('.//name')
+                
+                wpt_name = name_elem.text if name_elem is not None and name_elem.text else ""
+                
+                gpx_content += f'\t<wpt lat="{lat}" lon="{lon}">\n'
+                if wpt_name:
+                    gpx_content += f'\t\t<name>{wpt_name}</name>\n'
+                gpx_content += '\t</wpt>\n'
+        
+        gpx_content += '</gpx>'
+        
         with open(output_file, 'w', encoding='utf-8') as f:
-            f.write(self.get_gpx_header("waypoints"))
-            
-            for wpt in waypoints:
-                f.write('  ')
-                f.write(ET.tostring(wpt, encoding='unicode'))
-                f.write('\n')
-            
-            f.write('\n</gpx>')
+            f.write(gpx_content)
         
         print(f"✓ Extracted {len(waypoints)} waypoints to: {output_file.name}")
         return output_file
     
     def extract_tracks_enhanced(self, base_name):
-        """Extract each track with enhanced naming and analysis"""
+        """Extract each track in clean, compatible format"""
+        # Ensure output_dir is a Path object
+        from pathlib import Path
+        if not isinstance(self.output_dir, Path):
+            self.output_dir = Path(self.output_dir)
+            
         # Handle namespaced elements
         if self.namespace.get('default'):
             tracks = self.root.findall('.//{%s}trk' % self.namespace['default'])
@@ -514,34 +538,55 @@ class GPXExtractor:
             
             output_file = self.output_dir / f"{safe_name}.gpx"
             
-            # Count track points and analyze time span
+            # Extract all track points from all segments
+            track_points = []
             if self.namespace.get('default'):
                 trkpts = trk.findall('.//{%s}trkpt' % self.namespace['default'])
             else:
                 trkpts = trk.findall('.//trkpt')
             
-            # Extract time information from track points
-            times = []
-            for trkpt in trkpts[:10]:  # Sample first 10 points
-                time_elem = trkpt.find('.//time')
-                if time_elem is not None:
-                    times.append(time_elem.text)
+            for trkpt in trkpts:
+                lat = trkpt.get('lat')
+                lon = trkpt.get('lon')
+                if lat and lon:
+                    track_points.append((lat, lon))
             
-            time_info = f" (recorded: {times[0][:10]})" if times else ""
-            
-            with open(output_file, 'w', encoding='utf-8') as f:
-                f.write(self.get_gpx_header("track"))
-                f.write('  ')
-                f.write(ET.tostring(trk, encoding='unicode'))
-                f.write('\n\n</gpx>')
-            
-            print(f"✓ Extracted track {i}: '{track_name}' ({len(trkpts)} points{time_info}) to: {output_file.name}")
-            output_files.append(output_file)
+            if track_points:
+                # Create clean, simple GPX content
+                gpx_content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="GPX Extractor">
+\t<metadata>
+\t\t<name>{track_name}</name>
+\t</metadata>
+\t<trk>
+\t\t<name>{track_name}</name>
+\t\t<trkseg>
+'''
+                
+                # Add track points
+                for lat, lon in track_points:
+                    gpx_content += f'\t\t\t<trkpt lat="{lat}" lon="{lon}"></trkpt>\n'
+                
+                # Close the GPX structure
+                gpx_content += '''\t\t</trkseg>
+\t</trk>
+</gpx>'''
+                
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    f.write(gpx_content)
+                
+                print(f"✓ Extracted track {i}: '{track_name}' ({len(track_points)} points) to: {output_file.name}")
+                output_files.append(output_file)
         
         return output_files
     
     def extract_routes_enhanced(self, base_name):
         """Extract each route with enhanced naming and analysis"""
+        # Ensure output_dir is a Path object
+        from pathlib import Path
+        if not isinstance(self.output_dir, Path):
+            self.output_dir = Path(self.output_dir)
+            
         # Handle namespaced elements
         if self.namespace.get('default'):
             routes = self.root.findall('.//{%s}rte' % self.namespace['default'])
@@ -586,10 +631,9 @@ class GPXExtractor:
         
         return output_files
     
-    def create_summary(self, waypoint_file, track_files, route_files):
-        """Create an enhanced summary with metadata information"""
-        suggested_name = self.metadata.get('suggested_name', self.gpx_file_path.stem)
-        summary_file = self.output_dir / f"{suggested_name}_extraction_summary.txt"
+    def create_summary(self, waypoint_file, track_files, route_files, base_name):
+        """Create a simple summary with extraction information"""
+        summary_file = self.output_dir / f"{base_name}_extraction_summary.txt"
         
         with open(summary_file, 'w') as f:
             f.write(f"GPX Extraction Summary\n")
@@ -597,25 +641,11 @@ class GPXExtractor:
             f.write(f"Source file: {self.gpx_file_path}\n")
             f.write(f"Extraction date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             
-            # Enhanced metadata section
-            f.write(f"📊 Content Analysis\n")
+            f.write(f"📋 Component Counts\n")
             f.write(f"{'-'*50}\n")
-            if self.metadata.get('trail_type'):
-                f.write(f"Trail type: {self.metadata['trail_type']}\n")
-            if self.metadata.get('section_markers'):
-                f.write(f"Sections: {', '.join(self.metadata['section_markers'])}\n")
-            if self.metadata.get('latest_modification'):
-                f.write(f"Latest update: {self.metadata['latest_modification']}\n")
-            if self.metadata.get('creator'):
-                f.write(f"Creator: {self.metadata['creator']}\n")
-            f.write(f"Content hash: {self.metadata.get('content_hash', 'N/A')}\n")
-            f.write(f"Suggested name: {self.metadata.get('suggested_name', 'N/A')}\n")
-            
-            f.write(f"\n📋 Component Counts\n")
-            f.write(f"{'-'*50}\n")
-            f.write(f"Waypoints: {self.metadata['waypoint_count']}\n")
-            f.write(f"Tracks: {self.metadata['track_count']}\n")
-            f.write(f"Routes: {self.metadata['route_count']}\n")
+            f.write(f"Waypoints: {self.metadata.get('waypoint_count', 0)}\n")
+            f.write(f"Tracks: {self.metadata.get('track_count', 0)}\n")
+            f.write(f"Routes: {self.metadata.get('route_count', 0)}\n")
             
             f.write(f"\n📁 Extracted Files\n")
             f.write(f"{'-'*50}\n")
@@ -655,26 +685,27 @@ class GPXExtractor:
                 print("❌ Extraction cancelled by user")
                 return False
         
-        # Create output directory with suggested name
-        suggested_name = self.metadata.get('suggested_name', self.gpx_file_path.stem)
-        self.output_dir = self.output_dir / f"{suggested_name}_extracted"
+        # Create output directory with simple name
+        base_name = self.gpx_file_path.stem
+        self.output_dir = self.output_dir / f"{base_name}_extracted"
         self.output_dir.mkdir(parents=True, exist_ok=True, mode=0o775)
         
         print(f"\nExtracting components from {self.gpx_file_path.name}...")
         print(f"Output directory: {self.output_dir}")
-        print(f"Using name: {suggested_name}")
         print("-" * 60)
         
-        # Extract each component using the suggested name as base
-        waypoint_file = self.extract_waypoints_enhanced(suggested_name)
-        track_files = self.extract_tracks_enhanced(suggested_name)
-        route_files = self.extract_routes_enhanced(suggested_name)
+        # Extract each component using the base name
+        waypoint_file = self.extract_waypoints_enhanced(base_name)
+        track_files = self.extract_tracks_enhanced(base_name)
+        route_files = self.extract_routes_enhanced(base_name)
         
         # Create enhanced summary
-        summary_file = self.create_summary(waypoint_file, track_files, route_files)
+        summary_file = self.create_summary(waypoint_file, track_files, route_files, base_name)
         
         print("-" * 60)
-        print(f"✅ Extraction complete! Created {1 + len(track_files) + len(route_files)} files.")
+        extracted_count = 1 + len(track_files) + len(route_files)
+        
+        print(f"✅ Extraction complete! Created {extracted_count} files in clean, compatible format.")
         print(f"📁 Output directory: {self.output_dir}")
         return True
 

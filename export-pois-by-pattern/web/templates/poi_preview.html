@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+
+{% block title %}POI Preview - {{ preview.filename }}{% endblock %}
+
+{% block content %}
+<div class="main-grid">
+    <!-- Left Column: POI Console -->
+    <div class="upload-section">
+        <div class="upload-card">
+            <div class="upload-header">
+                <h2><i class="fas fa-terminal"></i> POI List: {{ preview.filename }}</h2>
+                <p>Found <strong>{{ preview.total_pois }}</strong> Points of Interest</p>
+            </div>
+            
+            <div class="preview-section">
+                <h3><i class="fas fa-list"></i> All POIs (console view)</h3>
+                <div class="code-preview" id="poi-console">
+$ cat {{ preview.filename }} | grep -o '<name>.*</name>' | sed 's/<[^>]*>//g'
+{% for poi in preview.pois %}{{ poi.name }}
+{% endfor %}
+$ echo "Total POIs: {{ preview.total_pois }}"
+Total POIs: {{ preview.total_pois }}
+                </div>
+            </div>
+            
+            <div class="upload-help">
+                <h3><i class="fas fa-info-circle"></i> Pattern Test Results</h3>
+                <div class="filter-stats" style="display: none;" id="filter-stats">
+                    <div class="stat-item">
+                        <i class="fas fa-filter"></i>
+                        <span class="stat-number" id="match-count">0</span>
+                        <span class="stat-label">Matches Found</span>
+                    </div>
+                    <div class="stat-item">
+                        <i class="fas fa-percent"></i>
+                        <span class="stat-number" id="match-percentage">0%</span>
+                        <span class="stat-label">Match Rate</span>
+                    </div>
+                </div>
+                <div id="no-filter-message">
+                    <p><i class="fas fa-arrow-right"></i> Enter a pattern to see matches highlighted</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Column: Pattern Input -->
+    <div class="info-section">
+        <div class="info-card">
+            <h3><i class="fas fa-search"></i> Pattern Filter</h3>
+            
+            <!-- Pattern Type Selection -->
+            <div class="form-group">
+                <label class="form-label">Pattern Type</label>
+                <div class="radio-group">
+                    <div class="radio-option">
+                        <input type="radio" id="wildcard-preview" name="pattern_type_preview" value="wildcard" checked>
+                        <label for="wildcard-preview">
+                            <i class="fas fa-asterisk"></i> Wildcard
+                        </label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="regex-preview" name="pattern_type_preview" value="regex">
+                        <label for="regex-preview">
+                            <i class="fas fa-code"></i> Regex
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="pattern-input" class="form-label">Test Pattern</label>
+                <input type="text" id="pattern-input" placeholder="*-S28" class="pattern-input">
+                <small class="text-light">Type to see real-time matches in console</small>
+            </div>
+            
+            <!-- Pattern Examples -->
+            <div class="pattern-examples">
+                <h4>Quick Examples</h4>
+                <div class="example-buttons">
+                    <button type="button" class="btn btn-small" onclick="testPattern('*Hotel*')">
+                        *Hotel*
+                    </button>
+                    <button type="button" class="btn btn-small" onclick="testPattern('*-S*')">
+                        *-S*
+                    </button>
+                    <button type="button" class="btn btn-small" onclick="testPattern('! *')">
+                        ! *
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="form-actions" style="margin-top: 2rem;">
+                <form method="POST" action="/export-pois-by-pattern/process-filtered" onsubmit="return validateForm()">
+                    <input type="hidden" name="job_id" value="{{ preview.job_id }}">
+                    <input type="hidden" name="pattern_type" id="final-pattern-type" value="wildcard">
+                    <input type="hidden" name="pattern" id="final-pattern" value="">
+                    <button type="submit" class="btn btn-primary" id="process-btn" disabled>
+                        <i class="fas fa-cogs"></i> Process with Filter
+                    </button>
+                </form>
+                <a href="../export-pois-by-pattern/" class="btn btn-secondary" style="margin-top: 1rem;">
+                    <i class="fas fa-upload"></i> Upload Different File
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- POI data for JavaScript -->
+<script id="poi-data" type="application/json">{{ preview.pois | tojson | safe }}</script>
+
+<script>
+// Load POI data from JSON script tag
+const poiDataElement = document.getElementById('poi-data');
+let allPois = JSON.parse(poiDataElement.textContent);
+
+// Pattern filtering in real-time
+document.getElementById('pattern-input').addEventListener('input', function() {
+    const pattern = this.value.trim();
+    const patternType = document.querySelector('input[name="pattern_type_preview"]:checked').value;
+    
+    // Update hidden form fields
+    document.getElementById('final-pattern').value = pattern;
+    document.getElementById('final-pattern-type').value = patternType;
+    
+    if (pattern === '') {
+        resetConsoleView();
+        document.getElementById('process-btn').disabled = true;
+        return;
+    }
+    
+    // Enable process button
+    document.getElementById('process-btn').disabled = false;
+    
+    // Get server-side accurate filtering via API
+    fetch('/export-pois-by-pattern/api/filter-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            job_id: '{{ preview.job_id }}',
+            pattern: pattern,
+            pattern_type: patternType
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showFilterResults(`Error: ${data.error}`, 0, 0);
+        } else {
+            const percentage = ((data.filtered_count / data.total_pois) * 100).toFixed(1);
+            showFilterResults('Success', data.filtered_count, percentage);
+            updateConsoleView(pattern, patternType, data.filtered_count, data.sample_matches);
+        }
+    })
+    .catch(error => {
+        showFilterResults(`Error: ${error}`, 0, 0);
+    });
+});
+
+// Pattern type change
+document.querySelectorAll('input[name="pattern_type_preview"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        const input = document.getElementById('pattern-input');
+        if (input.value.trim()) {
+            input.dispatchEvent(new Event('input'));
+        }
+    });
+});
+
+function testPattern(pattern) {
+    document.getElementById('pattern-input').value = pattern;
+    document.getElementById('pattern-input').dispatchEvent(new Event('input'));
+}
+
+function showFilterResults(status, count, percentage) {
+    const filterStats = document.getElementById('filter-stats');
+    const noFilterMessage = document.getElementById('no-filter-message');
+    
+    if (count > 0) {
+        document.getElementById('match-count').textContent = count;
+        document.getElementById('match-percentage').textContent = percentage + '%';
+        filterStats.style.display = 'flex';
+        noFilterMessage.style.display = 'none';
+    } else {
+        filterStats.style.display = 'none';
+        noFilterMessage.style.display = 'block';
+    }
+}
+
+function updateConsoleView(pattern, patternType, matchCount, sampleMatches) {
+    const console = document.getElementById('poi-console');
+    const filename = '{{ preview.filename }}';
+    
+    let consoleContent = `$ cat ${filename} | grep -o '<name>.*</name>' | sed 's/<[^>]*>//g'\n`;
+    
+    // Show all POIs, highlighting matches
+    allPois.forEach(poi => {
+        let matches = false;
+        if (patternType === 'wildcard') {
+            const regexPattern = pattern
+                .replace(/[.*+?^${}()|[\\]\\]/g, '\\\\$&')
+                .replace(/\\\\\\*/g, '.*')
+                .replace(/\\\\\\?/g, '.');
+            matches = new RegExp(regexPattern, 'i').test(poi.name);
+        } else {
+            try {
+                matches = new RegExp(pattern, 'i').test(poi.name);
+            } catch (e) {
+                matches = false;
+            }
+        }
+        
+        if (matches) {
+            consoleContent += `\u001b[32m${poi.name}\u001b[0m\n`;  // Green for matches
+        } else {
+            consoleContent += `\u001b[90m${poi.name}\u001b[0m\n`;  // Gray for non-matches
+        }
+    });
+    
+    consoleContent += `$ echo "Pattern: ${pattern}"\nPattern: ${pattern}\n`;
+    consoleContent += `$ echo "Matches: ${matchCount} / {{ preview.total_pois }}"\nMatches: ${matchCount} / {{ preview.total_pois }}\n`;
+    
+    if (sampleMatches && sampleMatches.length > 0) {
+        consoleContent += `$ echo "Sample matches: ${sampleMatches.slice(0, 5).join(', ')}"\nSample matches: ${sampleMatches.slice(0, 5).join(', ')}\n`;
+    }
+    
+    console.textContent = consoleContent;
+}
+
+function resetConsoleView() {
+    const console = document.getElementById('poi-console');
+    const filename = '{{ preview.filename }}';
+    
+    let consoleContent = `$ cat ${filename} | grep -o '<name>.*</name>' | sed 's/<[^>]*>//g'\n`;
+    allPois.forEach(poi => {
+        consoleContent += `${poi.name}\n`;
+    });
+    consoleContent += `$ echo "Total POIs: {{ preview.total_pois }}"\nTotal POIs: {{ preview.total_pois }}`;
+    
+    console.textContent = consoleContent;
+    
+    document.getElementById('filter-stats').style.display = 'none';
+    document.getElementById('no-filter-message').style.display = 'block';
+}
+
+// Form validation
+function validateForm() {
+    const pattern = document.getElementById('final-pattern').value.trim();
+    if (!pattern) {
+        alert('Please enter a pattern before processing.');
+        return false;
+    }
+    return true;
+}
+</script>
+{% endblock %}

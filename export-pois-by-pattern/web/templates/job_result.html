@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Results - POI Pattern Extractor{% endblock %}
+
+{% block breadcrumb %}
+<span> > Results</span>
+{% endblock %}
+
+{% block content %}
+<div class="results-section">
+    <div class="card results-card">
+        <h2><i class="fas fa-check-circle success"></i> Filtering Complete</h2>
+        
+        <div class="results-summary">
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <i class="fas fa-file-alt"></i>
+                    <div class="summary-content">
+                        <h3>{{ metadata.total_waypoints }}</h3>
+                        <p>Total POIs in file</p>
+                    </div>
+                </div>
+                <div class="summary-item">
+                    <i class="fas fa-filter"></i>
+                    <div class="summary-content">
+                        <h3>{{ metadata.matching_waypoints }}</h3>
+                        <p>Matching POIs found</p>
+                    </div>
+                </div>
+                <div class="summary-item">
+                    <i class="fas fa-percentage"></i>
+                    <div class="summary-content">
+                        <h3>{{ "%.1f" | format((metadata.matching_waypoints / metadata.total_waypoints * 100) if metadata.total_waypoints > 0 else 0) }}%</h3>
+                        <p>Match percentage</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="filter-info">
+            <h3><i class="fas fa-search"></i> Filter Applied</h3>
+            <div class="filter-details">
+                <div class="filter-item">
+                    <label>Pattern Type:</label>
+                    <span class="badge">{{ metadata.pattern_type | title }}</span>
+                </div>
+                <div class="filter-item">
+                    <label>Pattern:</label>
+                    <span class="mono">{{ metadata.pattern }}</span>
+                </div>
+                {% if metadata.regex_pattern %}
+                <div class="filter-item">
+                    <label>Regex:</label>
+                    <span class="mono">{{ metadata.regex_pattern }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if metadata.matching_waypoints > 0 %}
+        <div class="matches-preview">
+            <h3><i class="fas fa-list"></i> Sample Matches {% if metadata.results|length < metadata.matching_waypoints %}(showing first {{ metadata.results|length }}){% endif %}</h3>
+            <div class="matches-list">
+                {% for poi in metadata.results %}
+                <div class="match-item">
+                    <i class="fas fa-map-pin"></i>
+                    <div class="match-content">
+                        <div class="match-name">{{ poi.name }}</div>
+                        <div class="match-coords">{{ "%.6f" | format(poi.lat) }}, {{ "%.6f" | format(poi.lon) }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% if metadata.matching_waypoints > metadata.results|length %}
+                <div class="match-item more-matches">
+                    <i class="fas fa-ellipsis-h"></i>
+                    <div class="match-content">
+                        <div class="match-name">... and {{ metadata.matching_waypoints - metadata.results|length }} more POIs</div>
+                        <div class="match-coords">Available in downloaded file</div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="no-matches">
+            <i class="fas fa-search-minus"></i>
+            <h3>No Matches Found</h3>
+            <p>No POIs in your file matched the specified pattern. Try:</p>
+            <ul>
+                <li>Using a broader pattern (e.g., use * wildcards)</li>
+                <li>Checking the pattern syntax</li>
+                <li>Trying a different pattern type (wildcard vs regex)</li>
+            </ul>
+        </div>
+        {% endif %}
+
+        <div class="results-actions">
+            {% if metadata.matching_waypoints > 0 %}
+            <a href="/download/{{ job_id }}" class="btn-primary download-btn">
+                <i class="fas fa-download"></i> Download Filtered GPX
+                <small>{{ metadata.output_filename }}</small>
+            </a>
+            {% endif %}
+            <a href="/" class="btn-secondary">
+                <i class="fas fa-plus"></i> Filter Another File
+            </a>
+        </div>
+    </div>
+
+    {% if metadata.matching_waypoints > 0 %}
+    <div class="card usage-tips">
+        <h3><i class="fas fa-lightbulb"></i> Using Your Filtered GPX</h3>
+        <div class="tips-grid">
+            <div class="tip">
+                <i class="fas fa-mobile-alt"></i>
+                <h4>GPS Devices</h4>
+                <p>Import the filtered GPX into your Garmin, TomTom, or other GPS device for navigation</p>
+            </div>
+            <div class="tip">
+                <i class="fas fa-map"></i>
+                <h4>Mapping Apps</h4>
+                <p>Open in Google Earth, Gaia GPS, or other mapping applications to visualize the POIs</p>
+            </div>
+            <div class="tip">
+                <i class="fas fa-route"></i>
+                <h4>Route Planning</h4>
+                <p>Use the filtered POIs for planning specific routes or avoiding certain areas</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

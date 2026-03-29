@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPX to KML Converter</title>
+    <link rel="stylesheet" href="shared/shared-styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <div class="breadcrumb">
+                    <a href="/"><i class="fas fa-arrow-left"></i> Back to Tools</a>
+                </div>
+                <h1><i class="fas fa-file-export"></i> GPX to KML Converter</h1>
+                <p class="subtitle">Convert GPX files to KML format for Google Earth and mapping applications</p>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-upload"></i> Upload GPX File</h2>
+                        <p>Select your GPX file for conversion to KML format</p>
+                    </div>
+                    
+                    <div class="file-upload-container">
+                        <div class="file-drop-zone" id="dropZone">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <p>Drag & drop your GPX file here</p>
+                            <p class="or-text">or</p>
+                            <button type="button" class="btn btn-secondary" id="selectFileBtn">
+                                <i class="fas fa-folder-open"></i> Select File
+                            </button>
+                            <input type="file" id="fileInput" accept=".gpx,.xml" style="display: none;">
+                        </div>
+                        
+                        <div class="file-info" id="fileInfo" style="display: none;">
+                            <div class="file-details">
+                                <i class="fas fa-file-alt"></i>
+                                <span id="fileName"></span>
+                                <span id="fileSize"></span>
+                            </div>
+                            <button type="button" class="btn btn-danger btn-sm" id="clearFileBtn">
+                                <i class="fas fa-times"></i> Clear
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="options-section">
+                        <h3><i class="fas fa-cogs"></i> Conversion Options</h3>
+                        
+                        <div class="form-group">
+                            <label for="kmlName">KML Document Name:</label>
+                            <input type="text" id="kmlName" class="form-input" placeholder="My GPS Track" value="Converted Track">
+                        </div>
+
+                        <div class="option-group">
+                            <label for="includeWaypoints">
+                                <input type="checkbox" id="includeWaypoints" checked>
+                                <i class="fas fa-map-marker-alt"></i>
+                                Include waypoints as placemarks
+                            </label>
+                        </div>
+
+                        <div class="option-group">
+                            <label for="includeTracks">
+                                <input type="checkbox" id="includeTracks" checked>
+                                <i class="fas fa-route"></i>
+                                Include tracks as paths
+                            </label>
+                        </div>
+
+                        <div class="option-group">
+                            <label for="includeRoutes">
+                                <input type="checkbox" id="includeRoutes" checked>
+                                <i class="fas fa-directions"></i>
+                                Include routes as paths
+                            </label>
+                        </div>
+
+                        <div class="option-group">
+                            <label for="trackColor">
+                                <i class="fas fa-palette"></i>
+                                Track Color:
+                            </label>
+                            <select id="trackColor" class="form-select">
+                                <option value="ff0000ff">Red</option>
+                                <option value="ff00ff00">Green</option>
+                                <option value="ffff0000" selected>Blue</option>
+                                <option value="ff00ffff">Yellow</option>
+                                <option value="ffff00ff">Magenta</option>
+                                <option value="ffffff00">Cyan</option>
+                            </select>
+                        </div>
+
+                        <div class="option-group">
+                            <label for="trackWidth">
+                                <i class="fas fa-pencil-ruler"></i>
+                                Track Width:
+                            </label>
+                            <input type="range" id="trackWidth" min="1" max="10" value="3">
+                            <span id="trackWidthValue">3</span>px
+                        </div>
+                    </div>
+
+                    <div class="text-center">
+                        <button type="button" class="btn btn-large" id="convertBtn" disabled>
+                            <i class="fas fa-sync-alt"></i> Convert to KML
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-chart-bar"></i> Conversion Results</h2>
+                        <p>Preview and download your converted KML file</p>
+                    </div>
+
+                    <!-- Status Messages -->
+                    <div class="status-container" id="statusContainer" style="display: none;">
+                        <div class="status-message" id="statusMessage">
+                            <i class="fas fa-info-circle"></i>
+                            <span></span>
+                        </div>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="progress-container" id="progressContainer" style="display: none;">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <div class="progress-text" id="progressText">Processing...</div>
+                    </div>
+
+                    <!-- Results -->
+                    <div class="results-container" id="resultsContainer" style="display: none;">
+                        <div class="results-summary">
+                            <div class="stat-item">
+                                <i class="fas fa-map-marker-alt"></i>
+                                <span>Waypoints: <strong id="waypointCount">0</strong></span>
+                            </div>
+                            <div class="stat-item">
+                                <i class="fas fa-route"></i>
+                                <span>Track Points: <strong id="trackPointCount">0</strong></span>
+                            </div>
+                            <div class="stat-item">
+                                <i class="fas fa-ruler"></i>
+                                <span>Routes: <strong id="routeCount">0</strong></span>
+                            </div>
+                        </div>
+
+                        <div class="text-center">
+                            <button type="button" class="btn btn-success btn-large" id="downloadBtn">
+                                <i class="fas fa-download"></i> Download KML File
+                            </button>
+                        </div>
+
+                        <div class="preview-section">
+                            <h3><i class="fas fa-eye"></i> KML Preview</h3>
+                            <div class="code-preview" id="kmlContent"></div>
+                        </div>
+                    </div>
+
+                    <!-- Error Messages -->
+                    <div class="error-container" id="errorContainer" style="display: none;">
+                        <h3><i class="fas fa-exclamation-triangle"></i> Conversion Errors</h3>
+                        <ul class="error-list" id="errorList"></ul>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>Related Tools</h3>
+                    <ul>
+                        <li><a href="../google-gpx-converter/"><i class="fas fa-map-marked-alt"></i> Maps to GPX</a></li>
+                        <li><a href="../index.html"><i class="fas fa-tools"></i> All Tools</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h3>Support</h3>
+                    <ul>
+                        <li><a href="#"><i class="fas fa-question-circle"></i> Help</a></li>
+                        <li><a href="#"><i class="fas fa-bug"></i> Report Issue</a></li>
+                    </ul>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -125,14 +125,6 @@
                                         <div class="file-details">
                                             <div class="file-display-name">{{ file.display_name }}</div>
                                         </div>
-                                        <div class="file-actions">
-                                            <button class="btn btn-small process-file-btn" title="Process File" onclick="processFile('{{ file.unique_id }}')">
-                                                <i class="fas fa-play"></i>
-                                            </button>
-                                            <button class="btn btn-small delete-file-btn" title="Delete File" onclick="showDeleteDialog('{{ file.unique_id }}', '{{ file.display_name }}')">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </div>
                                     </div>
                                     <div class="file-row-2">
                                         <input
@@ -148,7 +140,14 @@
                                         <span class="file-size">{{ (file.metadata.waypoint_count or 0) + (file.metadata.track_count or 0) + (file.metadata.route_count or 0) }} components</span>
                                         <span class="file-date">{{ file.upload_date[:10] }}</span>
                                     </div>
-
+                                    <div class="file-actions">
+                                        <button class="btn btn-small process-file-btn" title="Process File" onclick="processFile('{{ file.unique_id }}')">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                        <button class="btn btn-small delete-file-btn" title="Delete File" onclick="showDeleteDialog('{{ file.unique_id }}', '{{ file.display_name }}')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 {% endfor %}
                             {% else %}
@@ -252,11 +251,6 @@
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
-        // Store the current main page URL in localStorage for back navigation
-        var currentPageUrl = window.location.href;
-        localStorage.setItem('gpxExtractorMainPage', currentPageUrl);
-        console.log('DEBUG - Stored main page URL:', currentPageUrl);
-        
         // Save description on blur or Enter key
         document.addEventListener('blur', function(e) {
             if (e.target instanceof HTMLInputElement && e.target.classList.contains('file-description')) {
