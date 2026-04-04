@@ -1,0 +1,74 @@
+web app for receiving GPS data from iPhone Overlander app
+
+use myTools/shared/shared-styles.css as style sheet. implement this as volume to the app.
+
+# Route Tracker - GPS Data Receiver
+A Node.js web application that receives GPS data from the Overlander iPhone app and displays route tracking in real-time.
+
+## Architecture
+- **Backend**: Node.js/Express API server receives GPS data via HTTP POST
+- **Frontend**: Interactive web interface displays received routes on maps
+- **Data Source**: iPhone Overlander app sends GPS coordinates to the server
+- **Authentication**: Access tokens for secure data transmission
+- **Storage**: Local JSON file storage for routes, devices, and tokens
+
+## Features
+- Receive real-time GPS data from Overlander iPhone app via HTTP API
+- Display route tracking on interactive maps using Leaflet/OpenStreetMap  
+- Support multiple data formats: all data, latest points, OwnTracks compatible
+- Device management with unique device IDs for multiple iPhones
+- User authentication with access tokens for secure data transmission
+- Route history and statistics (distance, speed, elevation, duration)
+- Export route data in multiple formats (GPX, KML, JSON, CSV)
+- Real-time route visualization with start/end markers
+- Auto-refresh capabilities for live tracking updates
+- Responsive design for mobile and desktop use
+- Data persistence with local file storage
+- Notifications for route updates and system status
+- Route sharing and social features
+- Comprehensive API for route and device management
+
+## Configuration
+1. Set API token (default: 'default-token-123')
+2. Configure Overlander iPhone app endpoint: http://server:6050/api/gps
+3. Set device ID for tracking multiple devices
+4. Choose data format (all/latest/owntracks)
+5. Start GPS tracking in Overlander app
+
+## API Endpoints
+- POST /api/gps - Receive GPS data from iPhone (requires token)
+- GET /api/devices/{deviceId} - Get device information
+- GET /api/routes/{routeId} - Get specific route data
+- GET /api/devices/{deviceId}/routes - List routes for device
+- POST /api/devices/{deviceId}/stop-route - Stop active route
+- POST /api/admin/tokens - Generate new access tokens (admin)
+
+## Data Format Support
+- Standard GPS: lat, lng, alt, speed, timestamp
+- OwnTracks format: _type, lat, lon, tst, vel, acc, batt
+- Device metadata: deviceId, routeName, accuracy
+- Bulk upload: array of GPS points
+
+## Installation
+1. Clone the repository
+2. Build Docker container with Node.js backend  
+3. Start with docker-compose (port 6050)
+4. Configure iPhone Overlander app with server endpoint
+
+## Usage
+1. Open web interface at http://server:6050
+2. Set API token and device ID
+3. Configure iPhone Overlander app with endpoint details
+4. Start GPS tracking on iPhone
+5. View real-time routes and statistics in web interface
+6. Export route data as needed
+
+## iPhone Overlander App Configuration
+- Endpoint URL: http://your-server:6050/api/gps
+- Access Token: default-token-123 (or custom token)
+- Device ID: default-device (or custom ID)  
+- HTTP Method: POST
+- Content-Type: application/json
+- Data Format: all, latest, or owntracks
+
+The system transforms the Route Tracker from a browser-based GPS collector into a server-based GPS data receiver that works with the professional Overlander iPhone application for route tracking and location data management.

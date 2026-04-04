@@ -156,8 +156,16 @@ logs/
 tmp/
 temp/
 
-# Node modules (if any frontend tools are added)
+# Node modules
 node_modules/
+
+# Route Tracker - runtime data (sensitive: tokens, passwords, GPS data)
+route-tracker/data/routes/*
+route-tracker/data/devices/*
+route-tracker/data/tokens.json
+route-tracker/data/users.json
+!route-tracker/data/routes/.gitkeep
+!route-tracker/data/devices/.gitkeep
 
 # Build artifacts
 *.tar.gz
