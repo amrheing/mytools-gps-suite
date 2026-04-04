@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Route Tracker – Login</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 50px 40px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 35px;
+        }
+        .logo i {
+            font-size: 3rem;
+            color: #e74c3c;
+            margin-bottom: 12px;
+            display: block;
+        }
+        .logo h1 {
+            color: white;
+            font-size: 1.6rem;
+            font-weight: 600;
+        }
+        .logo p {
+            color: rgba(255,255,255,0.5);
+            font-size: 0.85rem;
+            margin-top: 5px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            color: rgba(255,255,255,0.7);
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        .input-wrap {
+            position: relative;
+        }
+        .input-wrap i {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255,255,255,0.35);
+            font-size: 0.9rem;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px 14px 12px 40px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 10px;
+            color: white;
+            font-size: 1rem;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #e74c3c;
+            background: rgba(255,255,255,0.12);
+        }
+        .form-group input::placeholder { color: rgba(255,255,255,0.25); }
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            margin-top: 8px;
+        }
+        .btn-login:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-login:active { transform: translateY(0); }
+        .btn-login:disabled { opacity: 0.5; cursor: not-allowed; }
+        .error-msg {
+            background: rgba(231,76,60,0.15);
+            border: 1px solid rgba(231,76,60,0.4);
+            border-radius: 8px;
+            padding: 12px 15px;
+            color: #e74c3c;
+            font-size: 0.85rem;
+            margin-top: 15px;
+            display: none;
+        }
+        .error-msg.show { display: block; }
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 20px 0;
+            gap: 10px;
+        }
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(255,255,255,0.1);
+        }
+        .divider span { color: rgba(255,255,255,0.3); font-size: 0.8rem; }
+        .btn-passkey {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255,255,255,0.07);
+            color: rgba(255,255,255,0.8);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .btn-passkey:hover { background: rgba(255,255,255,0.12); }
+        .btn-passkey.hidden { display: none; }
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="logo">
+            <i class="fas fa-route"></i>
+            <h1>Route Tracker</h1>
+            <p>GPS Route Monitoring</p>
+        </div>
+
+        <form id="login-form" onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <div class="input-wrap">
+                    <i class="fas fa-user"></i>
+                    <input type="text" id="username" placeholder="Enter username" autocomplete="username" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <div class="input-wrap">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="password" placeholder="Enter password" autocomplete="current-password" required>
+                </div>
+            </div>
+            <button type="submit" class="btn-login" id="login-btn">
+                <i class="fas fa-sign-in-alt"></i> Sign In
+            </button>
+        </form>
+
+        <div id="passkey-section">
+            <div class="divider"><span>or</span></div>
+            <button class="btn-passkey hidden" id="passkey-btn" onclick="loginWithPasskey()">
+                <i class="fas fa-fingerprint"></i> Sign in with Passkey
+            </button>
+        </div>
+
+        <div class="error-msg" id="error-msg"></div>
+    </div>
+
+    <script>
+        // Show passkey button only if WebAuthn is supported
+        if (window.PublicKeyCredential) {
+            PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(available => {
+                if (available) {
+                    document.getElementById('passkey-btn').classList.remove('hidden');
+                }
+            });
+        }
+
+        async function handleLogin(event) {
+            event.preventDefault();
+            const btn = document.getElementById('login-btn');
+            const errorDiv = document.getElementById('error-msg');
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Signing in...';
+            errorDiv.classList.remove('show');
+
+            try {
+                const res = await fetch('./api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    window.location.href = data.role === 'admin' ? './index.html' : './index.html';
+                } else {
+                    showError(data.error || 'Login failed');
+                }
+            } catch (e) {
+                showError('Connection error. Please try again.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
+            }
+        }
+
+        async function loginWithPasskey() {
+            const errorDiv = document.getElementById('error-msg');
+            errorDiv.classList.remove('show');
+            try {
+                // Request passkey challenge from server
+                const challengeRes = await fetch('./api/auth/passkey/challenge');
+                if (!challengeRes.ok) { showError('Passkeys not configured yet.'); return; }
+                const options = await challengeRes.json();
+
+                options.challenge = base64urlToBuffer(options.challenge);
+                options.allowCredentials = (options.allowCredentials || []).map(c => ({
+                    ...c, id: base64urlToBuffer(c.id)
+                }));
+
+                const credential = await navigator.credentials.get({ publicKey: options });
+
+                const verifyRes = await fetch('./api/auth/passkey/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: credential.id,
+                        rawId: bufferToBase64url(credential.rawId),
+                        response: {
+                            authenticatorData: bufferToBase64url(credential.response.authenticatorData),
+                            clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
+                            signature: bufferToBase64url(credential.response.signature),
+                        },
+                        type: credential.type
+                    })
+                });
+
+                const result = await verifyRes.json();
+                if (verifyRes.ok) {
+                    window.location.href = './index.html';
+                } else {
+                    showError(result.error || 'Passkey authentication failed');
+                }
+            } catch (e) {
+                showError('Passkey error: ' + e.message);
+            }
+        }
+
+        function showError(msg) {
+            const div = document.getElementById('error-msg');
+            div.textContent = msg;
+            div.classList.add('show');
+        }
+
+        function base64urlToBuffer(b64) {
+            const str = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
+            return Uint8Array.from(str, c => c.charCodeAt(0)).buffer;
+        }
+
+        function bufferToBase64url(buf) {
+            return btoa(String.fromCharCode(...new Uint8Array(buf)))
+                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        // If already logged in, redirect
+        fetch('./api/auth/me').then(r => {
+            if (r.ok) window.location.href = './index.html';
+        }).catch(() => {});
+    </script>
+</body>
+</html>

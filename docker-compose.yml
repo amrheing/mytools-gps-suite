@@ -62,6 +62,8 @@ services:
       # Live-reload for static files and templates
       - ./export-pois-by-pattern/web/static:/app/web/static
       - ./export-pois-by-pattern/web/templates:/app/web/templates
+      # Mount shared styles directory
+      - ./shared:/app/shared
     environment:
       - FLASK_ENV=production
       - PORT=80
@@ -92,6 +94,29 @@ services:
       - "traefik.http.routers.gpx-to-kml-converter.rule=Host(`gpx-to-kml.local`,`tools.amrhein.info`)"
       - "traefik.http.services.gpx-to-kml-converter.loadbalancer.server.port=80"
 
+  route-tracker:
+    build:
+      context: ./route-tracker
+    container_name: route-tracker
+    ports:
+      - "6050:3000"  # Internal port for Nginx proxy
+    restart: unless-stopped
+    volumes:
+      # Live-reload for application code
+      - ./route-tracker:/app
+      # Preserve node_modules installed during image build (prevents bind mount from wiping them)
+      - route-tracker-node-modules:/app/node_modules
+      # Mount shared styles directory
+      - ./shared:/app/shared
+      # Persistent storage for GPS data
+      - ./route-tracker/data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - ADMIN_PASSWORD=admin123
+    networks:
+      - mytools-network
+
 # Network for inter-service communication
 networks:
   mytools-network:
@@ -99,3 +124,7 @@ networks:
     ipam:
       config:
         - subnet: 172.25.0.0/16
+
+# Named volumes
+volumes:
+  route-tracker-node-modules:

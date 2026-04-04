@@ -43,6 +43,15 @@ jobs:
       with:
         node-version: '18'
     
+    - name: Install and test Route Tracker
+      run: |
+        cd route-tracker
+        npm install
+        node -e "require('./server.js')" &
+        sleep 3
+        curl -f http://localhost:3000/api/health || exit 1
+        kill %1 2>/dev/null || true
+
     - name: Test JavaScript components
       run: |
         cd google-gpx-converter
@@ -69,6 +78,11 @@ jobs:
         cd extract-gpx-parts
         docker build -t extract-gpx-parts:test .
     
+    - name: Build Route Tracker
+      run: |
+        cd route-tracker
+        docker build -t route-tracker:test .
+
     - name: Test Docker containers
       run: |
         docker compose -f docker-compose.yml config
@@ -159,6 +173,11 @@ jobs:
           --exclude='.git' \
           --exclude='extract-gpx-parts/data/uploads/*' \
           --exclude='extract-gpx-parts/data/processed/*' \
+          --exclude='route-tracker/data/routes/*' \
+          --exclude='route-tracker/data/devices/*' \
+          --exclude='route-tracker/data/tokens.json' \
+          --exclude='route-tracker/data/users.json' \
+          --exclude='route-tracker/node_modules' \
           --exclude='__pycache__' \
           --exclude='*.pyc' \
           .
