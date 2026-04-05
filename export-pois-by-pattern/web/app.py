@@ -20,7 +20,7 @@ import tempfile
 import shutil
 from pathlib import Path
 from werkzeug.utils import secure_filename
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify, send_from_directory
 from datetime import datetime
 from xml.etree import ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
@@ -472,6 +472,18 @@ def api_job_status(job_id):
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/shared/shared-styles.css')
+def shared_styles():
+    """Serve shared CSS file with cache-busting headers"""
+    shared_css_path = Path(__file__).parent.parent / 'shared' / 'shared-styles.css'
+    response = send_file(shared_css_path, mimetype='text/css')
+    # Add cache-busting headers to force browser reload
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 
 if __name__ == '__main__':
