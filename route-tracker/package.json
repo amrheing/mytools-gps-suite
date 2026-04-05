@@ -18,9 +18,10 @@
   "author": "Gerald Amrhein",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
+    "@simplewebauthn/server": "^9.0.3",
     "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
     "express-session": "^1.18.0"
   },
   "devDependencies": {

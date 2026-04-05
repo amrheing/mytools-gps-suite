@@ -139,6 +139,50 @@
         }
         .btn-passkey:hover { background: rgba(255,255,255,0.12); }
         .btn-passkey.hidden { display: none; }
+        /* Passkey upgrade prompt */
+        .passkey-prompt { display: none; text-align: center; }
+        .passkey-prompt.show { display: block; }
+        .passkey-prompt .pk-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .passkey-prompt h2 { color: white; font-size: 1.3rem; margin-bottom: 10px; }
+        .passkey-prompt p { color: rgba(255,255,255,0.55); font-size: 0.88rem; margin-bottom: 24px; line-height: 1.5; }
+        .btn-setup-passkey {
+            width: 100%;
+            padding: 13px;
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: opacity 0.2s;
+        }
+        .btn-setup-passkey:hover { opacity: 0.9; }
+        .btn-setup-passkey:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-skip {
+            width: 100%;
+            padding: 11px;
+            background: transparent;
+            color: rgba(255,255,255,0.4);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: color 0.2s, border-color 0.2s;
+        }
+        .btn-skip:hover { color: rgba(255,255,255,0.7); border-color: rgba(255,255,255,0.25); }
+        .pk-status { color: rgba(255,255,255,0.5); font-size: 0.82rem; margin-top: 12px; min-height: 18px; }
         .spinner {
             display: inline-block;
             width: 16px;
@@ -188,7 +232,19 @@
             </button>
         </div>
 
-        <div class="error-msg" id="error-msg"></div>
+        <div id="error-msg" class="error-msg"></div>
+
+        <!-- Passkey upgrade prompt (shown after password login) -->
+        <div class="passkey-prompt" id="passkey-prompt">
+            <div class="pk-icon"><i class="fas fa-fingerprint"></i></div>
+            <h2>Save a Passkey?</h2>
+            <p>Sign in faster next time with Face ID or Touch ID — no password needed.</p>
+            <button class="btn-setup-passkey" id="setup-passkey-btn" onclick="setupPasskeyNow()">
+                <i class="fas fa-fingerprint"></i> Set Up Passkey
+            </button>
+            <button class="btn-skip" onclick="doRedirect()">Maybe Later</button>
+            <div class="pk-status" id="pk-status"></div>
+        </div>
     </div>
 
     <script>
@@ -200,6 +256,8 @@
                 }
             });
         }
+
+        let _redirectTarget = './index.html';
 
         async function handleLogin(event) {
             event.preventDefault();
@@ -221,9 +279,9 @@
                 const data = await res.json();
 
                 if (res.ok) {
-                    const redirect = sessionStorage.getItem('redirectAfterLogin') || './index.html';
+                    _redirectTarget = sessionStorage.getItem('redirectAfterLogin') || './index.html';
                     sessionStorage.removeItem('redirectAfterLogin');
-                    window.location.href = redirect;
+                    await maybeShowPasskeyPrompt();
                 } else {
                     showError(data.error || 'Login failed');
                 }
@@ -233,6 +291,78 @@
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
             }
+        }
+
+        async function maybeShowPasskeyPrompt() {
+            // Only show if browser supports platform authenticator
+            if (!window.PublicKeyCredential) return doRedirect();
+            let platformAvailable = false;
+            try { platformAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); } catch(e) {}
+            if (!platformAvailable) return doRedirect();
+
+            // Only show if user has no passkeys yet
+            try {
+                const me = await fetch('./api/auth/me').then(r => r.json());
+                if (me.passkeys && me.passkeys.length > 0) return doRedirect();
+            } catch(e) { return doRedirect(); }
+
+            // Show the prompt
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('passkey-section').style.display = 'none';
+            document.getElementById('passkey-prompt').classList.add('show');
+        }
+
+        async function setupPasskeyNow() {
+            const btn = document.getElementById('setup-passkey-btn');
+            const status = document.getElementById('pk-status');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Setting up...';
+            status.textContent = '';
+            try {
+                const optRes = await fetch('./api/auth/passkey/register-options');
+                if (!optRes.ok) throw new Error('Failed to get options');
+                const options = await optRes.json();
+
+                options.challenge = base64urlToBuffer(options.challenge);
+                options.user.id = base64urlToBuffer(options.user.id);
+                if (options.excludeCredentials) {
+                    options.excludeCredentials = options.excludeCredentials.map(c => ({ ...c, id: base64urlToBuffer(c.id) }));
+                }
+
+                const credential = await navigator.credentials.create({ publicKey: options });
+                if (!credential) throw new Error('Cancelled');
+
+                const regRes = await fetch('./api/auth/passkey/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: credential.id,
+                        rawId: bufferToBase64url(credential.rawId),
+                        response: {
+                            clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
+                            attestationObject: bufferToBase64url(credential.response.attestationObject),
+                            transports: credential.response.getTransports ? credential.response.getTransports() : [],
+                        },
+                        type: credential.type,
+                        clientExtensionResults: credential.getClientExtensionResults ? credential.getClientExtensionResults() : {},
+                    }),
+                });
+                const data = await regRes.json();
+                if (!regRes.ok) throw new Error(data.error || 'Registration failed');
+
+                status.style.color = '#2ecc71';
+                status.textContent = '✓ Passkey saved!';
+                setTimeout(doRedirect, 1200);
+            } catch (err) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-fingerprint"></i> Set Up Passkey';
+                status.style.color = 'rgba(231,76,60,0.9)';
+                status.textContent = err.message === 'Cancelled' ? 'Cancelled.' : 'Error: ' + err.message;
+            }
+        }
+
+        function doRedirect() {
+            window.location.href = _redirectTarget;
         }
 
         async function loginWithPasskey() {
@@ -261,8 +391,12 @@
                             authenticatorData: bufferToBase64url(credential.response.authenticatorData),
                             clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
                             signature: bufferToBase64url(credential.response.signature),
+                            userHandle: credential.response.userHandle
+                                ? bufferToBase64url(credential.response.userHandle) : null,
                         },
-                        type: credential.type
+                        type: credential.type,
+                        clientExtensionResults: credential.getClientExtensionResults
+                            ? credential.getClientExtensionResults() : {},
                     })
                 });
 
@@ -286,6 +420,10 @@
         }
 
         function base64urlToBuffer(b64) {
+            if (b64 && typeof b64 === 'object') {
+                const arr = b64.type === 'Buffer' ? b64.data : Object.values(b64);
+                return new Uint8Array(arr).buffer;
+            }
             const str = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
             return Uint8Array.from(str, c => c.charCodeAt(0)).buffer;
         }

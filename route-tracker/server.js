@@ -5,10 +5,28 @@ const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const session = require('express-session');
+const {
+    generateRegistrationOptions,
+    verifyRegistrationResponse,
+    generateAuthenticationOptions,
+    verifyAuthenticationResponse
+} = require('@simplewebauthn/server');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = '/app/data';
+const RP_NAME = 'Route Tracker';
+const RP_ID = process.env.RP_ID || 'tools.amrhein.info';
+const ORIGIN = process.env.ORIGIN || 'https://tools.amrhein.info';
+
+// Normalize credentialID to Base64URL string — handles legacy format where
+// Uint8Array was stored as {"0":193,"1":28,...} before the storage bug was fixed
+function normalizeCredentialIDStr(raw) {
+    if (typeof raw === 'string') return raw;
+    const bytes = Object.values(raw);
+    return Buffer.from(bytes).toString('base64')
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
 
 // Middleware
 app.use(cors());
@@ -403,6 +421,205 @@ app.post('/api/auth/logout', (req, res) => {
     res.json({ success: true });
 });
 
+// ======================
+// PASSKEY (WebAuthn)
+// ======================
+
+// Step 1: Get registration options (must be logged in)
+app.get('/api/auth/passkey/register-options', requireLogin, async (req, res) => {
+    try {
+        const users = await loadUsers();
+        const user = users[req.session.userId];
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const options = await generateRegistrationOptions({
+            rpName: RP_NAME,
+            rpID: RP_ID,
+            userID: Buffer.from(user.id),
+            userName: user.username,
+            userDisplayName: user.username,
+            attestationType: 'none',
+            excludeCredentials: (user.passkeys || []).map(pk => ({
+                id: pk.credentialID,
+                type: 'public-key',
+                transports: pk.transports || [],
+            })),
+            authenticatorSelection: {
+                residentKey: 'preferred',
+                userVerification: 'preferred',
+            },
+        });
+
+        req.session.passkeyRegChallenge = options.challenge;
+        // simplewebauthn v9 returns user.id as a Buffer; convert to Base64URL string for the client
+        const jsonOptions = {
+            ...options,
+            user: {
+                ...options.user,
+                id: Buffer.from(options.user.id).toString('base64')
+                    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+            },
+        };
+        res.json(jsonOptions);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Step 2: Verify registration
+app.post('/api/auth/passkey/register', requireLogin, async (req, res) => {
+    try {
+        const users = await loadUsers();
+        const user = users[req.session.userId];
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const expectedChallenge = req.session.passkeyRegChallenge;
+        if (!expectedChallenge) return res.status(400).json({ error: 'No challenge. Restart registration.' });
+
+        const verification = await verifyRegistrationResponse({
+            response: req.body,
+            expectedChallenge,
+            expectedOrigin: ORIGIN,
+            expectedRPID: RP_ID,
+        });
+
+        if (!verification.verified || !verification.registrationInfo) {
+            return res.status(400).json({ error: 'Verification failed' });
+        }
+
+        const { credentialID, credentialPublicKey, counter } = verification.registrationInfo;
+        if (!user.passkeys) user.passkeys = [];
+        const label = req.body.label || `Passkey ${user.passkeys.length + 1}`;
+        // credentialID is a Uint8Array in v9 — store as Base64URL string for reliable lookup
+        const credentialIDStr = Buffer.from(credentialID).toString('base64')
+            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        user.passkeys.push({
+            credentialID: credentialIDStr,
+            credentialPublicKey: Buffer.from(credentialPublicKey).toString('base64'),
+            counter,
+            transports: req.body.response?.transports || [],
+            registeredAt: new Date().toISOString(),
+            label,
+        });
+
+        delete req.session.passkeyRegChallenge;
+        await saveUsers(users);
+        res.json({ success: true, label });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Step 3: Get authentication challenge (no login required)
+app.get('/api/auth/passkey/challenge', async (req, res) => {
+    try {
+        // Use empty allowCredentials to trigger discoverable-credential mode —
+        // the device (iPhone) will present all saved passkeys for this RP via Face ID
+        // without needing to match credential IDs, avoiding the QR-code fallback.
+        const options = await generateAuthenticationOptions({
+            rpID: RP_ID,
+            allowCredentials: [],
+            userVerification: 'preferred',
+        });
+
+        req.session.passkeyAuthChallenge = options.challenge;
+        res.json(options);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Step 4: Verify authentication
+app.post('/api/auth/passkey/verify', async (req, res) => {
+    try {
+        const expectedChallenge = req.session.passkeyAuthChallenge;
+        if (!expectedChallenge) return res.status(400).json({ error: 'No challenge. Try again.' });
+
+        const users = await loadUsers();
+        let targetUser = null;
+        let targetPasskey = null;
+
+        for (const user of Object.values(users)) {
+            const pk = (user.passkeys || []).find(p => normalizeCredentialIDStr(p.credentialID) === req.body.id);
+            if (pk) { targetUser = user; targetPasskey = pk; break; }
+        }
+
+        if (!targetUser || !targetPasskey) {
+            return res.status(404).json({ error: 'Passkey not recognized' });
+        }
+
+        // Normalize to Base64URL string for verifier (also migrate in-memory for save)
+        const credentialIDStr = normalizeCredentialIDStr(targetPasskey.credentialID);
+        targetPasskey.credentialID = credentialIDStr;
+
+        const verification = await verifyAuthenticationResponse({
+            response: req.body,
+            expectedChallenge,
+            expectedOrigin: ORIGIN,
+            expectedRPID: RP_ID,
+            authenticator: {
+                credentialID: credentialIDStr,
+                credentialPublicKey: Buffer.from(targetPasskey.credentialPublicKey, 'base64'),
+                counter: targetPasskey.counter,
+                transports: targetPasskey.transports,
+            },
+        });
+
+        if (!verification.verified) {
+            return res.status(401).json({ error: 'Passkey verification failed' });
+        }
+
+        targetPasskey.counter = verification.authenticationInfo.newCounter;
+        targetUser.lastLogin = new Date().toISOString();
+        await saveUsers(users);
+
+        delete req.session.passkeyAuthChallenge;
+        req.session.userId = targetUser.id;
+        req.session.username = targetUser.username;
+        req.session.role = targetUser.role;
+
+        res.json({ success: true, username: targetUser.username, role: targetUser.role });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Rename a passkey
+app.patch('/api/auth/passkey/:credentialID', requireLogin, async (req, res) => {
+    try {
+        const { label } = req.body;
+        if (!label || !label.trim()) return res.status(400).json({ error: 'Label required' });
+        const users = await loadUsers();
+        const user = users[req.session.userId];
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        const pk = (user.passkeys || []).find(p => normalizeCredentialIDStr(p.credentialID) === req.params.credentialID);
+        if (!pk) return res.status(404).json({ error: 'Passkey not found' });
+        pk.label = label.trim();
+        await saveUsers(users);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Delete a passkey
+app.delete('/api/auth/passkey/:credentialID', requireLogin, async (req, res) => {
+    try {
+        const users = await loadUsers();
+        const user = users[req.session.userId];
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const before = (user.passkeys || []).length;
+        user.passkeys = (user.passkeys || []).filter(pk => normalizeCredentialIDStr(pk.credentialID) !== req.params.credentialID);
+        if (user.passkeys.length === before) return res.status(404).json({ error: 'Passkey not found' });
+
+        await saveUsers(users);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Current session info
 app.get('/api/auth/me', requireLogin, async (req, res) => {
     // Share session
@@ -427,7 +644,13 @@ app.get('/api/auth/me', requireLogin, async (req, res) => {
         role: req.session.role,
         gpsToken: user?.gpsToken || null,
         allowedDevices: user?.allowedDevices || [],
-        dataWindow: user?.dataWindow || { from: null, to: null }
+        dataWindow: user?.dataWindow || { from: null, to: null },
+        passkeys: (user?.passkeys || []).map(pk => ({
+            credentialID: normalizeCredentialIDStr(pk.credentialID),
+            label: pk.label,
+            registeredAt: pk.registeredAt,
+            transports: pk.transports,
+        })),
     });
 });
 
@@ -653,8 +876,8 @@ app.delete('/api/shares/:shareId', requireLogin, requireAdmin, async (req, res) 
 // Receive GPS data from Overlander app
 app.post('/api/gps', validateToken, async (req, res) => {
     try {
-        // Extract deviceId - for OwnTracks, use the device segment from topic
-        let deviceId = req.body.deviceId || req.headers['device-id'] || 'default-device';
+        // Extract deviceId — priority: query param > body field > header > OwnTracks topic > default
+        let deviceId = req.query.deviceId || req.body.deviceId || req.headers['device-id'] || 'default-device';
         if (req.body?.topic) {
             const parts = req.body.topic.split('/');
             if (parts.length >= 3) deviceId = parts[2]; // owntracks/<user>/<deviceId>
