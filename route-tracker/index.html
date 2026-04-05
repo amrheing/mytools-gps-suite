@@ -638,7 +638,7 @@
                         <h3 style="margin: 0; color: var(--primary-color);">
                             <i class="fas fa-map"></i> Live Route Tracking
                         </h3>
-                        <div style="display: flex; gap: 10px;">
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                             <button class="btn btn-sm btn-info admin-only" onclick="testConnectivity()">
                                 <i class="fas fa-wifi"></i> Test Connection
                             </button>
@@ -647,6 +647,9 @@
                             </button>
                             <button class="btn btn-sm btn-danger admin-only" onclick="clearLiveRoute()">
                                 <i class="fas fa-trash"></i> Clear Route
+                            </button>
+                            <button class="btn btn-sm btn-success admin-only" onclick="openMediaUpload()">
+                                <i class="fas fa-camera"></i> Add Media
                             </button>
                         </div>
                     </div>
@@ -940,5 +943,88 @@
     <script src="user-manager.js"></script>
     <script src="script.js"></script>
     <script src="export-manager.js"></script>
+
+    <!-- ═══ MEDIA UPLOAD DIALOG ═══ -->
+    <dialog id="media-upload-dialog" style="border:none;border-radius:12px;padding:0;max-width:520px;width:95%;box-shadow:0 8px 40px rgba(0,0,0,0.3);">
+        <div style="background:var(--primary-color);color:white;padding:20px 24px;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;">
+            <h3 style="margin:0;font-size:1.1rem;"><i class="fas fa-camera"></i> Add Media</h3>
+            <button onclick="document.getElementById('media-upload-dialog').close()" style="background:none;border:none;color:white;font-size:1.4rem;cursor:pointer;line-height:1;">×</button>
+        </div>
+        <div style="padding:24px;">
+            <!-- Tabs -->
+            <div style="display:flex;gap:8px;margin-bottom:20px;">
+                <button id="media-tab-photo" class="btn btn-primary" style="flex:1;" onclick="switchMediaTab('photo')"><i class="fas fa-image"></i> Photo</button>
+                <button id="media-tab-youtube" class="btn btn-secondary" style="flex:1;" onclick="switchMediaTab('youtube')"><i class="fab fa-youtube"></i> YouTube</button>
+            </div>
+
+            <!-- Photo tab -->
+            <div id="media-panel-photo">
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;margin-bottom:6px;font-weight:500;">Photo file</label>
+                    <input type="file" id="media-photo-file" accept="image/*" style="width:100%;" onchange="onMediaPhotoSelected()">
+                </div>
+                <div id="media-photo-no-gps" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px;margin-bottom:16px;font-size:0.9rem;">
+                    <i class="fas fa-exclamation-triangle" style="color:#e67e22;"></i>
+                    <strong>No GPS in photo.</strong> Click a point on the map to set coordinates.
+                    <div style="margin-top:8px;">
+                        <span id="media-picked-coords" style="font-family:monospace;color:#555;">No point selected yet</span>
+                        <button class="btn btn-sm btn-info" style="margin-left:8px;" onclick="startMapCoordPicker()">
+                            <i class="fas fa-map-pin"></i> Pick on map
+                        </button>
+                    </div>
+                </div>
+                <input type="hidden" id="media-photo-lat">
+                <input type="hidden" id="media-photo-lng">
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;margin-bottom:6px;font-weight:500;">Description <span style="color:#999;font-weight:400;">(optional)</span></label>
+                    <input type="text" id="media-photo-desc" placeholder="What is this photo about?" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;">
+                </div>
+                <button class="btn btn-primary" style="width:100%;" onclick="submitPhotoUpload()">
+                    <i class="fas fa-upload"></i> Upload Photo
+                </button>
+            </div>
+
+            <!-- YouTube tab -->
+            <div id="media-panel-youtube" style="display:none;">
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;margin-bottom:6px;font-weight:500;">YouTube URL</label>
+                    <input type="url" id="media-yt-url" placeholder="https://youtu.be/..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;">
+                </div>
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;margin-bottom:6px;font-weight:500;">Description <span style="color:#999;font-weight:400;">(shown on map)</span></label>
+                    <input type="text" id="media-yt-desc" placeholder="Short description for the map marker" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;">
+                </div>
+                <div style="background:#f0f4ff;border:1px solid #c0d0ff;border-radius:8px;padding:12px;margin-bottom:16px;font-size:0.9rem;">
+                    <i class="fas fa-map-pin" style="color:var(--primary-color);"></i>
+                    <strong>Coordinates:</strong> Click a point on the map to set location.
+                    <div style="margin-top:8px;">
+                        <span id="media-yt-coords" style="font-family:monospace;color:#555;">No point selected yet</span>
+                        <button class="btn btn-sm btn-info" style="margin-left:8px;" onclick="startMapCoordPicker()">
+                            <i class="fas fa-map-pin"></i> Pick on map
+                        </button>
+                    </div>
+                </div>
+                <input type="hidden" id="media-yt-lat">
+                <input type="hidden" id="media-yt-lng">
+                <button class="btn btn-primary" style="width:100%;" onclick="submitYoutubeAdd()">
+                    <i class="fab fa-youtube"></i> Add Video
+                </button>
+            </div>
+
+            <div id="media-upload-status" style="margin-top:14px;display:none;"></div>
+        </div>
+    </dialog>
+
+    <!-- ═══ MEDIA VIEWER DIALOG (photo / youtube overlay) ═══ -->
+    <dialog id="media-viewer-dialog" style="border:none;border-radius:12px;padding:0;max-width:860px;width:96%;box-shadow:0 8px 40px rgba(0,0,0,0.5);background:#000;">
+        <div style="position:relative;">
+            <button onclick="document.getElementById('media-viewer-dialog').close()" style="position:absolute;top:10px;right:14px;z-index:10;background:rgba(0,0,0,0.6);border:none;color:white;font-size:1.6rem;cursor:pointer;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>
+            <div id="media-viewer-content"></div>
+            <div id="media-viewer-footer" style="background:#111;color:#eee;padding:12px 18px;border-radius:0 0 12px 12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                <span id="media-viewer-desc" style="font-size:0.95rem;"></span>
+                <div id="media-viewer-actions" style="display:flex;gap:8px;"></div>
+            </div>
+        </div>
+    </dialog>
 </body>
 </html>

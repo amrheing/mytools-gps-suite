@@ -5,6 +5,8 @@ const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const session = require('express-session');
+const multer = require('multer');
+const sharp = require('sharp');
 const {
     generateRegistrationOptions,
     verifyRegistrationResponse,
@@ -15,6 +17,7 @@ const {
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = '/app/data';
+const MEDIA_DIR = path.join(DATA_DIR, 'media');
 const RP_NAME = 'Route Tracker';
 const RP_ID = process.env.RP_ID || 'tools.amrhein.info';
 const ORIGIN = process.env.ORIGIN || 'https://tools.amrhein.info';
@@ -135,6 +138,7 @@ const ensureDataDir = async () => {
         await fs.mkdir(DATA_DIR, { recursive: true });
         await fs.mkdir(path.join(DATA_DIR, 'routes'), { recursive: true });
         await fs.mkdir(path.join(DATA_DIR, 'devices'), { recursive: true });
+        await fs.mkdir(MEDIA_DIR, { recursive: true });
     } catch (error) {
         console.error('Error creating data directories:', error);
     }
@@ -1423,6 +1427,277 @@ const startServer = async () => {
         console.log(`✅ Admin user created. Username: admin  Password: ${adminPassword}`);
     }
     
+    // ─── MEDIA ROUTES ────────────────────────────────────────────────────────
+
+    // multer: store uploads in a temp dir, we process with sharp then move
+    const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
+        fileFilter: (req, file, cb) => {
+            if (file.mimetype.startsWith('image/')) cb(null, true);
+            else cb(new Error('Only image files are allowed'));
+        }
+    });
+
+    // helpers
+    const mediaFile = (deviceId) => path.join(MEDIA_DIR, deviceId, 'media.json');
+
+    const loadMedia = async (deviceId) => {
+        try {
+            const raw = await fs.readFile(mediaFile(deviceId), 'utf8');
+            return JSON.parse(raw);
+        } catch { return []; }
+    };
+
+    const saveMedia = async (deviceId, entries) => {
+        const dir = path.join(MEDIA_DIR, deviceId);
+        await fs.mkdir(dir, { recursive: true });
+        await fs.writeFile(mediaFile(deviceId), JSON.stringify(entries, null, 2));
+    };
+
+    // GET all media for a device — logged in users only
+    app.get('/api/media/:deviceId', requireLogin, async (req, res) => {
+        try {
+            const entries = await loadMedia(req.params.deviceId);
+            res.json(entries);
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    });
+
+    // GET photo file
+    app.get('/api/media/:deviceId/:id/photo', requireLogin, async (req, res) => {
+        const file = path.join(MEDIA_DIR, req.params.deviceId, 'photos', `${req.params.id}.jpg`);
+        try {
+            await fs.access(file);
+            res.sendFile(file);
+        } catch { res.status(404).json({ error: 'Not found' }); }
+    });
+
+    // GET thumbnail
+    app.get('/api/media/:deviceId/:id/thumb', requireLogin, async (req, res) => {
+        const file = path.join(MEDIA_DIR, req.params.deviceId, 'photos', `${req.params.id}_thumb.jpg`);
+        try {
+            await fs.access(file);
+            res.sendFile(file);
+        } catch { res.status(404).json({ error: 'Not found' }); }
+    });
+
+    // POST upload photo — admin only
+    app.post('/api/media/:deviceId/photo', requireLogin, requireAdmin, upload.single('photo'), async (req, res) => {
+        try {
+            const { deviceId } = req.params;
+            const { description = '', lat, lng, timestamp } = req.body;
+
+            if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+            // Extract EXIF GPS via sharp metadata
+            const metadata = await sharp(req.file.buffer).metadata();
+            let photoLat = parseFloat(lat);
+            let photoLng = parseFloat(lng);
+            let photoTime = timestamp || new Date().toISOString();
+
+            // Try EXIF if no coords provided
+            if ((!photoLat || !photoLng) && metadata.exif) {
+                try {
+                    // Parse EXIF manually — sharp exposes raw exif buffer
+                    const exifData = parseExifGPS(metadata.exif);
+                    if (exifData) {
+                        photoLat = exifData.lat;
+                        photoLng = exifData.lng;
+                        if (exifData.timestamp) photoTime = exifData.timestamp;
+                    }
+                } catch (e) { /* no EXIF GPS */ }
+            }
+
+            if (!photoLat || !photoLng || isNaN(photoLat) || isNaN(photoLng)) {
+                return res.status(400).json({ error: 'no_gps', message: 'No GPS data in photo. Please provide coordinates.' });
+            }
+
+            // Determine target ratio from original dimensions
+            const { width, height } = metadata;
+            const ratio = width / height;
+            let targetWidth, targetHeight;
+            if (ratio >= 1) {
+                // Landscape: 16:9 or 16:10
+                if (Math.abs(ratio - 16/10) < Math.abs(ratio - 16/9)) {
+                    targetWidth = 1980; targetHeight = Math.round(1980 * 10 / 16);
+                } else {
+                    targetWidth = 1980; targetHeight = Math.round(1980 * 9 / 16);
+                }
+            } else {
+                // Portrait: 3:4
+                targetHeight = 1980; targetWidth = Math.round(1980 * 3 / 4);
+            }
+
+            const id = crypto.randomBytes(8).toString('hex');
+            const photoDir = path.join(MEDIA_DIR, deviceId, 'photos');
+            await fs.mkdir(photoDir, { recursive: true });
+
+            // Save resized full photo
+            await sharp(req.file.buffer)
+                .resize(targetWidth, targetHeight, { fit: 'cover', position: 'attention' })
+                .jpeg({ quality: 85 })
+                .toFile(path.join(photoDir, `${id}.jpg`));
+
+            // Save thumbnail (200px wide)
+            await sharp(req.file.buffer)
+                .resize(200, 200, { fit: 'cover', position: 'attention' })
+                .jpeg({ quality: 75 })
+                .toFile(path.join(photoDir, `${id}_thumb.jpg`));
+
+            const entry = {
+                id,
+                type: 'photo',
+                lat: photoLat,
+                lng: photoLng,
+                timestamp: photoTime,
+                description,
+                filename: `${id}.jpg`,
+                createdAt: new Date().toISOString()
+            };
+
+            const entries = await loadMedia(deviceId);
+            entries.push(entry);
+            await saveMedia(deviceId, entries);
+
+            res.json({ success: true, entry });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    });
+
+    // POST add YouTube video — admin only
+    app.post('/api/media/:deviceId/youtube', requireLogin, requireAdmin, async (req, res) => {
+        try {
+            const { deviceId } = req.params;
+            const { url, description = '', lat, lng } = req.body;
+
+            if (!url || !url.includes('youtu')) return res.status(400).json({ error: 'Invalid YouTube URL' });
+            const photoLat = parseFloat(lat);
+            const photoLng = parseFloat(lng);
+            if (isNaN(photoLat) || isNaN(photoLng)) return res.status(400).json({ error: 'Coordinates required' });
+
+            const id = crypto.randomBytes(8).toString('hex');
+            const entry = {
+                id,
+                type: 'youtube',
+                lat: photoLat,
+                lng: photoLng,
+                url,
+                description,
+                createdAt: new Date().toISOString()
+            };
+
+            const entries = await loadMedia(deviceId);
+            entries.push(entry);
+            await saveMedia(deviceId, entries);
+
+            res.json({ success: true, entry });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    });
+
+    // DELETE media entry — admin only
+    app.delete('/api/media/:deviceId/:id', requireLogin, requireAdmin, async (req, res) => {
+        try {
+            const { deviceId, id } = req.params;
+            const entries = await loadMedia(deviceId);
+            const entry = entries.find(e => e.id === id);
+            if (!entry) return res.status(404).json({ error: 'Not found' });
+
+            if (entry.type === 'photo') {
+                const photoDir = path.join(MEDIA_DIR, deviceId, 'photos');
+                await fs.unlink(path.join(photoDir, `${id}.jpg`)).catch(() => {});
+                await fs.unlink(path.join(photoDir, `${id}_thumb.jpg`)).catch(() => {});
+            }
+
+            await saveMedia(deviceId, entries.filter(e => e.id !== id));
+            res.json({ success: true });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    });
+
+    // Helper: parse raw EXIF buffer for GPS (IFD GPS tags)
+    function parseExifGPS(exifBuffer) {
+        try {
+            // Look for GPS IFD markers in raw EXIF — simple implementation
+            // GPS Latitude: tag 0x0002, Longitude: 0x0004
+            const buf = Buffer.isBuffer(exifBuffer) ? exifBuffer : Buffer.from(exifBuffer);
+
+            // Find Exif header
+            const exifHeader = buf.indexOf('Exif\0\0');
+            if (exifHeader === -1) return null;
+            const tiffStart = exifHeader + 6;
+
+            // Determine byte order
+            const byteOrder = buf.readUInt16BE(tiffStart);
+            const littleEndian = byteOrder === 0x4949;
+            const readUInt16 = (offset) => littleEndian ? buf.readUInt16LE(offset) : buf.readUInt16BE(offset);
+            const readUInt32 = (offset) => littleEndian ? buf.readUInt32LE(offset) : buf.readUInt32BE(offset);
+
+            // IFD0 offset
+            const ifd0Offset = tiffStart + readUInt32(tiffStart + 4);
+            const ifd0Count = readUInt16(ifd0Offset);
+
+            let gpsIFDOffset = null;
+            for (let i = 0; i < ifd0Count; i++) {
+                const entry = ifd0Offset + 2 + i * 12;
+                const tag = readUInt16(entry);
+                if (tag === 0x8825) { // GPS IFD pointer
+                    gpsIFDOffset = tiffStart + readUInt32(entry + 8);
+                    break;
+                }
+            }
+            if (!gpsIFDOffset) return null;
+
+            const gpsCount = readUInt16(gpsIFDOffset);
+            const gpsData = {};
+            for (let i = 0; i < gpsCount; i++) {
+                const entry = gpsIFDOffset + 2 + i * 12;
+                const tag = readUInt16(entry);
+                gpsData[tag] = { entry, type: readUInt16(entry + 2), count: readUInt32(entry + 4), valueOffset: entry + 8 };
+            }
+
+            // Tag 1=LatRef, 2=Lat, 3=LonRef, 4=Lon
+            if (!gpsData[2] || !gpsData[4]) return null;
+
+            const readRational = (offset) => {
+                const num = readUInt32(tiffStart + offset);
+                const den = readUInt32(tiffStart + offset + 4);
+                return den === 0 ? 0 : num / den;
+            };
+
+            const latOffset = readUInt32(gpsData[2].valueOffset);
+            const latDeg = readRational(latOffset);
+            const latMin = readRational(latOffset + 8);
+            const latSec = readRational(latOffset + 16);
+            let lat = latDeg + latMin / 60 + latSec / 3600;
+
+            const lonOffset = readUInt32(gpsData[4].valueOffset);
+            const lonDeg = readRational(lonOffset);
+            const lonMin = readRational(lonOffset + 8);
+            const lonSec = readRational(lonOffset + 16);
+            let lng = lonDeg + lonMin / 60 + lonSec / 3600;
+
+            // Apply S/W negative
+            if (gpsData[1]) {
+                const latRef = buf.toString('ascii', tiffStart + readUInt32(gpsData[1].valueOffset), tiffStart + readUInt32(gpsData[1].valueOffset) + 1);
+                if (latRef === 'S') lat = -lat;
+            }
+            if (gpsData[3]) {
+                const lonRef = buf.toString('ascii', tiffStart + readUInt32(gpsData[3].valueOffset), tiffStart + readUInt32(gpsData[3].valueOffset) + 1);
+                if (lonRef === 'W') lng = -lng;
+            }
+
+            return (lat !== 0 || lng !== 0) ? { lat, lng } : null;
+        } catch { return null; }
+    }
+
+    // ─── END MEDIA ROUTES ─────────────────────────────────────────────────────
+
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`Route Tracker GPS Receiver API running on port ${PORT}`);
         console.log(`Data directory: ${DATA_DIR}`);

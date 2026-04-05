@@ -1963,4 +1963,342 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 100);
 });
 
+// ═══════════════════════════════════════════════════════════
+//  MEDIA — photos & YouTube videos on the map
+// ═══════════════════════════════════════════════════════════
+
+const mediaState = {
+    markers: [],          // Leaflet marker instances
+    activeTab: 'photo',
+    pickingCoords: false,
+    pickedLat: null,
+    pickedLng: null,
+    coordPickerHandler: null,
+};
+
+// ── open/close upload dialog ──────────────────────────────
+function openMediaUpload() {
+    const dlg = document.getElementById('media-upload-dialog');
+    resetMediaForm();
+    dlg.showModal();
+}
+
+function resetMediaForm() {
+    document.getElementById('media-photo-file').value = '';
+    document.getElementById('media-photo-desc').value = '';
+    document.getElementById('media-photo-lat').value = '';
+    document.getElementById('media-photo-lng').value = '';
+    document.getElementById('media-photo-no-gps').style.display = 'none';
+    document.getElementById('media-yt-url').value = '';
+    document.getElementById('media-yt-desc').value = '';
+    document.getElementById('media-yt-lat').value = '';
+    document.getElementById('media-yt-lng').value = '';
+    document.getElementById('media-yt-coords').textContent = 'No point selected yet';
+    document.getElementById('media-picked-coords').textContent = 'No point selected yet';
+    const status = document.getElementById('media-upload-status');
+    status.style.display = 'none';
+    mediaState.pickedLat = null;
+    mediaState.pickedLng = null;
+    switchMediaTab('photo');
+}
+
+function switchMediaTab(tab) {
+    mediaState.activeTab = tab;
+    document.getElementById('media-panel-photo').style.display = tab === 'photo' ? '' : 'none';
+    document.getElementById('media-panel-youtube').style.display = tab === 'youtube' ? '' : 'none';
+    document.getElementById('media-tab-photo').className = 'btn ' + (tab === 'photo' ? 'btn-primary' : 'btn-secondary');
+    document.getElementById('media-tab-youtube').className = 'btn ' + (tab === 'youtube' ? 'btn-primary' : 'btn-secondary');
+    // reset shared coord state
+    mediaState.pickedLat = null;
+    mediaState.pickedLng = null;
+}
+
+// ── file selected: read EXIF GPS client-side ──────────────
+function onMediaPhotoSelected() {
+    const file = document.getElementById('media-photo-file').files[0];
+    if (!file) return;
+    // Use FileReader to peek at EXIF bytes
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const coords = extractExifGPS(e.target.result);
+        if (coords) {
+            document.getElementById('media-photo-lat').value = coords.lat;
+            document.getElementById('media-photo-lng').value = coords.lng;
+            document.getElementById('media-photo-no-gps').style.display = 'none';
+        } else {
+            document.getElementById('media-photo-lat').value = '';
+            document.getElementById('media-photo-lng').value = '';
+            document.getElementById('media-photo-no-gps').style.display = '';
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+// Minimal client-side EXIF GPS parser
+function extractExifGPS(buffer) {
+    try {
+        const view = new DataView(buffer);
+        // Find JPEG EXIF marker 0xFFE1
+        let offset = 2;
+        while (offset < view.byteLength - 4) {
+            const marker = view.getUint16(offset);
+            const segLen = view.getUint16(offset + 2);
+            if (marker === 0xFFE1) {
+                // Check 'Exif\0\0'
+                const exifHeader = String.fromCharCode(
+                    view.getUint8(offset + 4), view.getUint8(offset + 5),
+                    view.getUint8(offset + 6), view.getUint8(offset + 7)
+                );
+                if (exifHeader === 'Exif') {
+                    const tiffStart = offset + 10;
+                    const byteOrder = view.getUint16(tiffStart);
+                    const le = byteOrder === 0x4949;
+                    const r16 = (o) => le ? view.getUint16(o, true) : view.getUint16(o, false);
+                    const r32 = (o) => le ? view.getUint32(o, true) : view.getUint32(o, false);
+
+                    const ifd0 = tiffStart + r32(tiffStart + 4);
+                    const cnt = r16(ifd0);
+                    let gpsOff = null;
+                    for (let i = 0; i < cnt; i++) {
+                        const e = ifd0 + 2 + i * 12;
+                        if (r16(e) === 0x8825) { gpsOff = tiffStart + r32(e + 8); break; }
+                    }
+                    if (!gpsOff) return null;
+                    const gcnt = r16(gpsOff);
+                    const gps = {};
+                    for (let i = 0; i < gcnt; i++) {
+                        const e = gpsOff + 2 + i * 12;
+                        gps[r16(e)] = r32(e + 8);
+                    }
+                    if (!gps[2] || !gps[4]) return null;
+                    const rat = (o) => { const n = r32(tiffStart + o); const d = r32(tiffStart + o + 4); return d ? n / d : 0; };
+                    const latRaw = [rat(gps[2]), rat(gps[2] + 8), rat(gps[2] + 16)];
+                    const lonRaw = [rat(gps[4]), rat(gps[4] + 8), rat(gps[4] + 16)];
+                    let lat = latRaw[0] + latRaw[1] / 60 + latRaw[2] / 3600;
+                    let lng = lonRaw[0] + lonRaw[1] / 60 + lonRaw[2] / 3600;
+                    if (gps[1]) {
+                        const ref = String.fromCharCode(view.getUint8(tiffStart + gps[1]));
+                        if (ref === 'S') lat = -lat;
+                    }
+                    if (gps[3]) {
+                        const ref = String.fromCharCode(view.getUint8(tiffStart + gps[3]));
+                        if (ref === 'W') lng = -lng;
+                    }
+                    if (lat !== 0 || lng !== 0) return { lat, lng };
+                }
+            }
+            offset += 2 + segLen;
+        }
+    } catch (e) { /* ignore */ }
+    return null;
+}
+
+// ── map coord picker ──────────────────────────────────────
+function startMapCoordPicker() {
+    const dlg = document.getElementById('media-upload-dialog');
+    dlg.close();
+    mediaState.pickingCoords = true;
+    document.body.style.cursor = 'crosshair';
+
+    const map = window.routeTracker && window.routeTracker.map;
+    if (!map) return;
+
+    mediaState.coordPickerHandler = (e) => {
+        mediaState.pickedLat = e.latlng.lat;
+        mediaState.pickedLng = e.latlng.lng;
+        mediaState.pickingCoords = false;
+        document.body.style.cursor = '';
+        map.off('click', mediaState.coordPickerHandler);
+
+        const coordText = `${mediaState.pickedLat.toFixed(6)}, ${mediaState.pickedLng.toFixed(6)}`;
+        if (mediaState.activeTab === 'photo') {
+            document.getElementById('media-photo-lat').value = mediaState.pickedLat;
+            document.getElementById('media-photo-lng').value = mediaState.pickedLng;
+            document.getElementById('media-picked-coords').textContent = coordText;
+        } else {
+            document.getElementById('media-yt-lat').value = mediaState.pickedLat;
+            document.getElementById('media-yt-lng').value = mediaState.pickedLng;
+            document.getElementById('media-yt-coords').textContent = coordText;
+        }
+        dlg.showModal();
+    };
+    map.once('click', mediaState.coordPickerHandler);
+}
+
+// ── submit photo ──────────────────────────────────────────
+async function submitPhotoUpload() {
+    const file = document.getElementById('media-photo-file').files[0];
+    const lat = document.getElementById('media-photo-lat').value;
+    const lng = document.getElementById('media-photo-lng').value;
+    const desc = document.getElementById('media-photo-desc').value;
+    const deviceId = window.routeTracker?.selectedDeviceId;
+
+    if (!file) return showMediaStatus('Please select a photo.', 'error');
+    if (!lat || !lng) return showMediaStatus('Please pick coordinates on the map.', 'error');
+    if (!deviceId) return showMediaStatus('No device selected.', 'error');
+
+    const formData = new FormData();
+    formData.append('photo', file);
+    formData.append('lat', lat);
+    formData.append('lng', lng);
+    formData.append('description', desc);
+
+    showMediaStatus('<i class="fas fa-spinner fa-spin"></i> Uploading...', 'info');
+    try {
+        const res = await fetch(`/api/media/${deviceId}/photo`, { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || data.error);
+        showMediaStatus('<i class="fas fa-check"></i> Photo uploaded!', 'success');
+        setTimeout(() => {
+            document.getElementById('media-upload-dialog').close();
+            loadMediaMarkers(deviceId);
+        }, 1000);
+    } catch (e) {
+        showMediaStatus('Upload failed: ' + e.message, 'error');
+    }
+}
+
+// ── submit youtube ────────────────────────────────────────
+async function submitYoutubeAdd() {
+    const url = document.getElementById('media-yt-url').value.trim();
+    const desc = document.getElementById('media-yt-desc').value.trim();
+    const lat = document.getElementById('media-yt-lat').value;
+    const lng = document.getElementById('media-yt-lng').value;
+    const deviceId = window.routeTracker?.selectedDeviceId;
+
+    if (!url) return showMediaStatus('Please enter a YouTube URL.', 'error');
+    if (!lat || !lng) return showMediaStatus('Please pick coordinates on the map.', 'error');
+    if (!deviceId) return showMediaStatus('No device selected.', 'error');
+
+    showMediaStatus('<i class="fas fa-spinner fa-spin"></i> Saving...', 'info');
+    try {
+        const res = await fetch(`/api/media/${deviceId}/youtube`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, description: desc, lat, lng })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showMediaStatus('<i class="fas fa-check"></i> Video added!', 'success');
+        setTimeout(() => {
+            document.getElementById('media-upload-dialog').close();
+            loadMediaMarkers(deviceId);
+        }, 1000);
+    } catch (e) {
+        showMediaStatus('Failed: ' + e.message, 'error');
+    }
+}
+
+function showMediaStatus(msg, type) {
+    const el = document.getElementById('media-upload-status');
+    const colors = { error: '#f8d7da', success: '#d4edda', info: '#d1ecf1' };
+    const borders = { error: '#f5c6cb', success: '#c3e6cb', info: '#bee5eb' };
+    el.style.display = '';
+    el.style.background = colors[type] || '#fff';
+    el.style.border = `1px solid ${borders[type] || '#ddd'}`;
+    el.style.borderRadius = '6px';
+    el.style.padding = '10px 14px';
+    el.style.fontSize = '0.9rem';
+    el.innerHTML = msg;
+}
+
+// ── load & render media markers on map ───────────────────
+async function loadMediaMarkers(deviceId) {
+    const map = window.routeTracker?.map;
+    if (!map || !deviceId) return;
+
+    // Remove existing media markers
+    mediaState.markers.forEach(m => map.removeLayer(m));
+    mediaState.markers = [];
+
+    try {
+        const res = await fetch(`/api/media/${deviceId}`);
+        if (!res.ok) return;
+        const entries = await res.json();
+
+        entries.forEach(entry => {
+            const marker = createMediaMarker(entry, map);
+            if (marker) mediaState.markers.push(marker);
+        });
+    } catch (e) {
+        console.warn('Could not load media markers:', e.message);
+    }
+}
+
+function createMediaMarker(entry, map) {
+    if (entry.type === 'photo') {
+        const thumbUrl = `/api/media/${entry.deviceId || window.routeTracker?.selectedDeviceId}/${entry.id}/thumb`;
+        // Use a div icon with the thumbnail
+        const icon = L.divIcon({
+            html: `<div style="width:44px;height:44px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);overflow:hidden;background:#eee;">
+                     <img src="/api/media/${window.routeTracker?.selectedDeviceId}/${entry.id}/thumb" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<i class=\'fas fa-camera\' style=\'line-height:38px;font-size:18px;color:#888;padding-left:11px;\'></i>'">
+                   </div>`,
+            className: '',
+            iconSize: [44, 44],
+            iconAnchor: [22, 22],
+        });
+        const marker = L.marker([entry.lat, entry.lng], { icon }).addTo(map);
+        marker.on('click', () => openMediaViewer(entry));
+        return marker;
+
+    } else if (entry.type === 'youtube') {
+        const icon = L.divIcon({
+            html: `<div style="width:44px;height:44px;border-radius:50%;background:#FF0000;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;">
+                     <i class="fab fa-youtube" style="color:white;font-size:22px;"></i>
+                   </div>`,
+            className: '',
+            iconSize: [44, 44],
+            iconAnchor: [22, 22],
+        });
+        const marker = L.marker([entry.lat, entry.lng], { icon }).addTo(map);
+        marker.on('click', () => openMediaViewer(entry));
+        return marker;
+    }
+    return null;
+}
+
+// ── media viewer overlay ──────────────────────────────────
+function openMediaViewer(entry) {
+    const dlg = document.getElementById('media-viewer-dialog');
+    const content = document.getElementById('media-viewer-content');
+    const desc = document.getElementById('media-viewer-desc');
+    const actions = document.getElementById('media-viewer-actions');
+    const deviceId = window.routeTracker?.selectedDeviceId;
+
+    desc.textContent = entry.description || '';
+    actions.innerHTML = '';
+
+    if (entry.type === 'photo') {
+        const photoUrl = `/api/media/${deviceId}/${entry.id}/photo`;
+        content.innerHTML = `<img src="${photoUrl}" style="width:100%;max-height:75vh;object-fit:contain;display:block;background:#000;">`;
+        actions.innerHTML = `<a href="${photoUrl}" download class="btn btn-success btn-sm"><i class="fas fa-download"></i> Download</a>`;
+
+    } else if (entry.type === 'youtube') {
+        const videoId = extractYoutubeId(entry.url);
+        content.innerHTML = videoId
+            ? `<div style="position:relative;padding-bottom:56.25%;height:0;">
+                 <iframe src="https://www.youtube.com/embed/${videoId}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen></iframe>
+               </div>`
+            : `<div style="padding:40px;text-align:center;color:white;">Could not embed video.</div>`;
+        actions.innerHTML = `<a href="${entry.url}" target="_blank" rel="noopener" class="btn btn-danger btn-sm"><i class="fab fa-youtube"></i> Open in YouTube</a>`;
+    }
+
+    dlg.showModal();
+}
+
+function extractYoutubeId(url) {
+    try {
+        const u = new URL(url);
+        if (u.hostname.includes('youtu.be')) return u.pathname.slice(1);
+        return u.searchParams.get('v');
+    } catch { return null; }
+}
+
+// Hook into device loading — reload media when device/route changes
+const _origLoadDevicesAndRoutes = RouteTracker.prototype.loadDevicesAndRoutes;
+RouteTracker.prototype.loadDevicesAndRoutes = async function() {
+    await _origLoadDevicesAndRoutes.call(this);
+    loadMediaMarkers(this.selectedDeviceId);
+};
+
 console.log('Route Tracker GPS Receiver script loaded - Debug functions available');
