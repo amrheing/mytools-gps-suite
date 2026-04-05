@@ -277,8 +277,10 @@ class RouteTracker {
                 .addTo(this.map);
             }
             
-            // Fit map to route with proper padding for better visibility  
-            this.map.fitBounds(latLngs, { padding: [20, 20], maxZoom: 17 });
+            // Fit map to route on first load only; don't reset if user has manually panned/zoomed
+            if (!this.userHasMovedMap) {
+                this.map.fitBounds(latLngs, { padding: [20, 20], maxZoom: 17 });
+            }
         }
     }
 
@@ -478,6 +480,10 @@ class RouteTracker {
         // Add scale
         L.control.scale().addTo(this.map);
 
+        // Track whether user has manually moved/zoomed the map
+        this.userHasMovedMap = false;
+        this.map.on('dragstart zoomstart', () => { this.userHasMovedMap = true; });
+
         // Initialize live tracking properties
         this.liveMarker = null;
         this.liveTrail = [];
@@ -545,20 +551,16 @@ class RouteTracker {
         `;
         this.liveMarker.bindPopup(popupContent);
 
-        // Auto-fit map to show entire route, but keep reasonable zoom
-        if (this.liveTrail.length > 1) {
-            const bounds = L.latLngBounds(this.liveTrail);
-            const padding = 0.001; // Add some padding around the route
-            const paddedBounds = bounds.pad(0.1);
-            
-            // Fit to bounds but with max zoom limit for single points
-            this.map.fitBounds(paddedBounds, {
-                maxZoom: 16,
-                padding: [20, 20]
-            });
-        } else {
-            // For single point, center and zoom reasonably
-            this.map.setView([lat, lng], 15);
+        // Only auto-fit if the user hasn't manually moved the map
+        if (!this.userHasMovedMap) {
+            if (this.liveTrail.length > 1) {
+                this.map.fitBounds(L.latLngBounds(this.liveTrail).pad(0.1), {
+                    maxZoom: 16,
+                    padding: [20, 20]
+                });
+            } else {
+                this.map.setView([lat, lng], 15);
+            }
         }
 
         console.log(`Live position updated: ${lat}, ${lng} (${this.liveTrail.length} points total)`);
@@ -1925,6 +1927,22 @@ function sendRandomNearbyGPS() {
 }
 
 // Clear live GPS route function
+function resetMapView() {
+    const rt = window.routeTracker;
+    if (!rt || !rt.map) return;
+    rt.userHasMovedMap = false;
+    // Fit to live trail if available, otherwise current route layer, otherwise default
+    if (rt.liveTrail && rt.liveTrail.length > 1) {
+        rt.map.fitBounds(L.latLngBounds(rt.liveTrail).pad(0.1), { maxZoom: 16, padding: [20, 20] });
+    } else if (rt.liveTrail && rt.liveTrail.length === 1) {
+        rt.map.setView(rt.liveTrail[0], 15);
+    } else if (rt.currentRoute) {
+        rt.map.fitBounds(rt.currentRoute.getBounds(), { padding: [20, 20], maxZoom: 17 });
+    } else {
+        rt.map.setView([49.4875, 8.466], 13);
+    }
+}
+
 function clearLiveRoute() {
     if (window.routeTracker && window.routeTracker.clearLiveRoute) {
         window.routeTracker.clearLiveRoute();
