@@ -2096,6 +2096,7 @@ function extractExifGPS(buffer) {
 // ── map coord picker ──────────────────────────────────────
 function startMapCoordPicker() {
     const dlg = document.getElementById('media-upload-dialog');
+    const activeTab = mediaState.activeTab;
     dlg.close();
     mediaState.pickingCoords = true;
     document.body.style.cursor = 'crosshair';
@@ -2103,15 +2104,21 @@ function startMapCoordPicker() {
     const map = window.routeTracker && window.routeTracker.map;
     if (!map) return;
 
+    // Remove any previous stale handler
+    if (mediaState.coordPickerHandler) {
+        map.off('click', mediaState.coordPickerHandler);
+    }
+
     mediaState.coordPickerHandler = (e) => {
+        map.off('click', mediaState.coordPickerHandler);
+        mediaState.coordPickerHandler = null;
         mediaState.pickedLat = e.latlng.lat;
         mediaState.pickedLng = e.latlng.lng;
         mediaState.pickingCoords = false;
         document.body.style.cursor = '';
-        map.off('click', mediaState.coordPickerHandler);
 
         const coordText = `${mediaState.pickedLat.toFixed(6)}, ${mediaState.pickedLng.toFixed(6)}`;
-        if (mediaState.activeTab === 'photo') {
+        if (activeTab === 'photo') {
             document.getElementById('media-photo-lat').value = mediaState.pickedLat;
             document.getElementById('media-photo-lng').value = mediaState.pickedLng;
             document.getElementById('media-picked-coords').textContent = coordText;
@@ -2122,7 +2129,12 @@ function startMapCoordPicker() {
         }
         dlg.showModal();
     };
-    map.once('click', mediaState.coordPickerHandler);
+
+    // Delay registration slightly so the button-click that triggered this
+    // doesn't immediately fire the map click handler
+    setTimeout(() => {
+        map.on('click', mediaState.coordPickerHandler);
+    }, 200);
 }
 
 // ── submit photo ──────────────────────────────────────────
@@ -2202,6 +2214,12 @@ function showMediaStatus(msg, type) {
     el.innerHTML = msg;
 }
 
+// Global onerror handler for media thumbnails (avoids broken JS in HTML attributes)
+window.mediaThumbError = function(img) {
+    img.style.display = 'none';
+    img.parentElement.innerHTML = '<i class="fas fa-camera" style="line-height:38px;font-size:18px;color:#888;padding-left:11px;"></i>';
+};
+
 // ── load & render media markers on map ───────────────────
 async function loadMediaMarkers(deviceId) {
     const map = window.routeTracker?.map;
@@ -2217,7 +2235,7 @@ async function loadMediaMarkers(deviceId) {
         const entries = await res.json();
 
         entries.forEach(entry => {
-            const marker = createMediaMarker(entry, map);
+            const marker = createMediaMarker(entry, deviceId, map);
             if (marker) mediaState.markers.push(marker);
         });
     } catch (e) {
@@ -2225,25 +2243,24 @@ async function loadMediaMarkers(deviceId) {
     }
 }
 
-function createMediaMarker(entry, map) {
+function createMediaMarker(entry, deviceId, map) {
     if (entry.type === 'photo') {
-        const thumbUrl = `/api/media/${entry.deviceId || window.routeTracker?.selectedDeviceId}/${entry.id}/thumb`;
-        // Use a div icon with the thumbnail
+        const thumbUrl = `/api/media/${deviceId}/${entry.id}/thumb`;
         const icon = L.divIcon({
-            html: `<div style="width:44px;height:44px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);overflow:hidden;background:#eee;">
-                     <img src="/api/media/${window.routeTracker?.selectedDeviceId}/${entry.id}/thumb" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<i class=\'fas fa-camera\' style=\'line-height:38px;font-size:18px;color:#888;padding-left:11px;\'></i>'">
+            html: `<div style="width:44px;height:44px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);overflow:hidden;background:#eee;cursor:pointer;">
+                     <img src="${thumbUrl}" style="width:100%;height:100%;object-fit:cover;" onerror="mediaThumbError(this)">
                    </div>`,
             className: '',
             iconSize: [44, 44],
             iconAnchor: [22, 22],
         });
         const marker = L.marker([entry.lat, entry.lng], { icon }).addTo(map);
-        marker.on('click', () => openMediaViewer(entry));
+        marker.on('click', () => openMediaViewer(entry, deviceId));
         return marker;
 
     } else if (entry.type === 'youtube') {
         const icon = L.divIcon({
-            html: `<div style="width:44px;height:44px;border-radius:50%;background:#FF0000;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;">
+            html: `<div style="width:44px;height:44px;border-radius:50%;background:#FF0000;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;cursor:pointer;">
                      <i class="fab fa-youtube" style="color:white;font-size:22px;"></i>
                    </div>`,
             className: '',
@@ -2251,19 +2268,19 @@ function createMediaMarker(entry, map) {
             iconAnchor: [22, 22],
         });
         const marker = L.marker([entry.lat, entry.lng], { icon }).addTo(map);
-        marker.on('click', () => openMediaViewer(entry));
+        marker.on('click', () => openMediaViewer(entry, deviceId));
         return marker;
     }
     return null;
 }
 
 // ── media viewer overlay ──────────────────────────────────
-function openMediaViewer(entry) {
+function openMediaViewer(entry, deviceId) {
+    deviceId = deviceId || window.routeTracker?.selectedDeviceId;
     const dlg = document.getElementById('media-viewer-dialog');
     const content = document.getElementById('media-viewer-content');
     const desc = document.getElementById('media-viewer-desc');
     const actions = document.getElementById('media-viewer-actions');
-    const deviceId = window.routeTracker?.selectedDeviceId;
 
     desc.textContent = entry.description || '';
     actions.innerHTML = '';
