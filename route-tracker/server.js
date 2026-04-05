@@ -302,7 +302,7 @@ const createNewRoute = (deviceId, routeName) => {
         totalDistance: 0,
         status: 'active',
         metadata: {
-            source: 'overlander-app',
+            source: 'owntracks',
             version: '1.0'
         }
     };
@@ -329,95 +329,26 @@ const calculateDistance = (lat1, lng1, lat2, lng2) => {
     return R * c;
 };
 
-// Parse different GPS data formats
-const parseGPSData = (data, format = 'auto') => {
-    let points = [];
-    
-    if (format === 'owntracks' || (format === 'auto' && data._type)) {
-        // OwnTracks format
-        if (data._type === 'location') {
-            points.push({
-                lat: data.lat,
-                lng: data.lon,
-                alt: data.alt || null,
-                timestamp: new Date(data.tst * 1000).toISOString(),
-                accuracy: data.acc || null,
-                speed: data.vel || null,
-                bearing: data.cog || null,
-                battery: data.batt || null,
-                source: 'owntracks'
-            });
-        }
-    } else if (data.locations && Array.isArray(data.locations)) {
-        // Overland/Overlander batch format: { locations: [ GeoJSON Feature, ... ] }
-        points = data.locations
-            .filter(f => f.geometry && f.geometry.type === 'Point' && Array.isArray(f.geometry.coordinates))
-            .map(f => {
-                const coords = f.geometry.coordinates; // [lon, lat, alt?]
-                const props = f.properties || {};
-                return {
-                    lat: coords[1],
-                    lng: coords[0],
-                    alt: coords[2] != null ? coords[2] : (props.altitude || null),
-                    timestamp: props.timestamp || new Date().toISOString(),
-                    accuracy: props.horizontal_accuracy || null,
-                    speed: props.speed != null ? props.speed : null,
-                    bearing: props.course || null,
-                    battery: props.battery_level != null ? Math.round(props.battery_level * 100) : null,
-                    motion: props.motion ? props.motion[0] : null,
-                    source: 'overland'
-                };
-            });
-    } else if (data.current && data.current.geometry) {
-        // Overlander single-point format: { current: GeoJSON Feature, locations: [...] }
-        // Process all locations if present, otherwise just current
-        const features = (data.locations && data.locations.length > 0) ? data.locations : [data.current];
-        points = features
-            .filter(f => f.geometry && f.geometry.type === 'Point' && Array.isArray(f.geometry.coordinates))
-            .map(f => {
-                const coords = f.geometry.coordinates;
-                const props = f.properties || {};
-                return {
-                    lat: coords[1],
-                    lng: coords[0],
-                    alt: coords[2] != null ? coords[2] : (props.altitude || null),
-                    timestamp: props.timestamp || new Date().toISOString(),
-                    accuracy: props.horizontal_accuracy || null,
-                    speed: props.speed != null ? props.speed : null,
-                    bearing: props.course || null,
-                    battery: props.battery_level != null ? Math.round(props.battery_level * 100) : null,
-                    motion: props.motion ? props.motion[0] : null,
-                    source: 'overlander'
-                };
-            });
-    } else if (Array.isArray(data)) {
-        // Array of points
-        points = data.map(point => ({
-            lat: point.lat || point.latitude,
-            lng: point.lng || point.lon || point.longitude,
-            alt: point.alt || point.altitude || null,
-            timestamp: point.timestamp || new Date().toISOString(),
-            accuracy: point.accuracy || null,
-            speed: point.speed || null,
-            bearing: point.bearing || null,
-            source: 'overlander'
-        }));
-    } else if (data.lat && data.lng) {
-        // Single point
-        points.push({
-            lat: data.lat || data.latitude,
-            lng: data.lng || data.lon || data.longitude,
-            alt: data.alt || data.altitude || null,
-            timestamp: data.timestamp || new Date().toISOString(),
-            accuracy: data.accuracy || null,
-            speed: data.speed || null,
-            bearing: data.bearing || null,
-            source: 'overlander'
-        });
-    }
-    
-    // Filter out any points with invalid coordinates
-    return points.filter(p => p.lat != null && p.lng != null && !isNaN(p.lat) && !isNaN(p.lng));
+// Parse OwnTracks JSON location payload
+// OwnTracks HTTP mode POSTs all message types to the same endpoint.
+// Only _type=location contains GPS data; all others are acknowledged with [].
+const parseGPSData = (data) => {
+    if (data._type !== 'location') return [];
+
+    const point = {
+        lat: data.lat,
+        lng: data.lon,
+        alt: data.alt || null,
+        timestamp: new Date(data.tst * 1000).toISOString(),
+        accuracy: data.acc || null,
+        speed: data.vel || null,
+        bearing: data.cog || null,
+        battery: data.batt || null,
+        source: 'owntracks'
+    };
+
+    if (point.lat == null || point.lng == null || isNaN(point.lat) || isNaN(point.lng)) return [];
+    return [point];
 };
 
 // =====================
@@ -915,38 +846,30 @@ app.delete('/api/shares/:shareId', requireLogin, requireAdmin, async (req, res) 
     }
 });
 
-// Receive GPS data from Overlander app
+// Receive GPS data from OwnTracks app (HTTP mode)
 app.post('/api/gps', validateToken, async (req, res) => {
     try {
-        // Extract deviceId — priority:
-        // 1. query param (explicit override)
-        // 2. OwnTracks topic third segment (owntracks/<user>/<device>)
-        // 3. Overland/Overlander top-level device_id field
-        // 4. First location's properties.device_id
-        // 5. body.deviceId / header
-        // 6. fallback
-        let deviceId = req.query.deviceId;
+        // OwnTracks sends all message types to the same endpoint.
+        // Non-location types must be acknowledged with HTTP 200 and an empty array.
+        if (req.body._type && req.body._type !== 'location') {
+            return res.status(200).json([]);
+        }
 
+        // Extract deviceId from OwnTracks topic (owntracks/<user>/<device>)
+        // or fall back to query param / header.
+        let deviceId = req.query.deviceId;
         if (!deviceId && req.body?.topic) {
             const parts = req.body.topic.split('/');
             if (parts.length >= 3) deviceId = parts[2];
         }
-        if (!deviceId) deviceId = req.body?.device_id;
-        if (!deviceId && req.body?.locations?.[0]?.properties?.device_id) {
-            deviceId = req.body.locations[0].properties.device_id;
-        }
-        // Overlander {current: GeoJSON} format
-        if (!deviceId && req.body?.current?.properties?.device_id) {
-            deviceId = req.body.current.properties.device_id;
-        }
-        if (!deviceId) deviceId = req.body?.deviceId || req.headers['device-id'] || 'default-device';
-        const format = req.body.format || req.query.format || 'auto';
+        if (!deviceId) deviceId = req.body?.tid || req.headers['device-id'] || 'default-device';
+
         const routeName = req.body.routeName || req.headers['route-name'];
-        
+
         console.log(`Received GPS data from device: ${deviceId}`);
-        
+
         // Parse GPS data
-        const points = parseGPSData(req.body, format);
+        const points = parseGPSData(req.body);
         
         if (points.length === 0) {
             return res.status(400).json({ 
