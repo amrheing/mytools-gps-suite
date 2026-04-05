@@ -168,10 +168,11 @@ class RouteTracker {
     }
 
     setupDeviceSelector() {
-        const selector = document.getElementById('device-selector');
-        if (selector) selector.addEventListener('change', (event) => {
-            this.onDeviceSelectorChange(event.target.value);
-        });
+        const handler = (event) => this.onDeviceSelectorChange(event.target.value);
+        const s1 = document.getElementById('device-selector');
+        const s2 = document.getElementById('device-selector-viewer');
+        if (s1) { s1.removeEventListener('change', s1._deviceHandler); s1._deviceHandler = handler; s1.addEventListener('change', handler); }
+        if (s2) { s2.removeEventListener('change', s2._deviceHandler); s2._deviceHandler = handler; s2.addEventListener('change', handler); }
     }
 
     async loadDevicesAndRoutes() {

@@ -117,7 +117,12 @@ const logRequests = (req, res, next) => {
         requestLogs = requestLogs.slice(0, MAX_LOGS);
     }
     
-    console.log(`[${logEntry.timestamp}] ${logEntry.method} ${logEntry.path}`, req.body ? JSON.stringify(req.body).substring(0, 200) : '');
+    const bodyStr = req.body ? JSON.stringify(req.body) : '';
+    console.log(`[${logEntry.timestamp}] ${logEntry.method} ${logEntry.path}`, bodyStr.substring(0, 200));
+    // Log device_id fields specifically for diagnosis
+    if (req.body?.locations || req.body?.current) {
+        console.log(`  [device_id] body.device_id=${req.body.device_id} | locations.device_id=${req.body.locations?.[0]?.properties?.device_id} | current.device_id=${req.body.current?.properties?.device_id}`);
+    }
     next();
 };
 
@@ -339,7 +344,7 @@ const parseGPSData = (data, format = 'auto') => {
             });
         }
     } else if (data.locations && Array.isArray(data.locations)) {
-        // Overland app format: { locations: [ GeoJSON Feature, ... ] }
+        // Overland/Overlander batch format: { locations: [ GeoJSON Feature, ... ] }
         points = data.locations
             .filter(f => f.geometry && f.geometry.type === 'Point' && Array.isArray(f.geometry.coordinates))
             .map(f => {
@@ -356,6 +361,28 @@ const parseGPSData = (data, format = 'auto') => {
                     battery: props.battery_level != null ? Math.round(props.battery_level * 100) : null,
                     motion: props.motion ? props.motion[0] : null,
                     source: 'overland'
+                };
+            });
+    } else if (data.current && data.current.geometry) {
+        // Overlander single-point format: { current: GeoJSON Feature, locations: [...] }
+        // Process all locations if present, otherwise just current
+        const features = (data.locations && data.locations.length > 0) ? data.locations : [data.current];
+        points = features
+            .filter(f => f.geometry && f.geometry.type === 'Point' && Array.isArray(f.geometry.coordinates))
+            .map(f => {
+                const coords = f.geometry.coordinates;
+                const props = f.properties || {};
+                return {
+                    lat: coords[1],
+                    lng: coords[0],
+                    alt: coords[2] != null ? coords[2] : (props.altitude || null),
+                    timestamp: props.timestamp || new Date().toISOString(),
+                    accuracy: props.horizontal_accuracy || null,
+                    speed: props.speed != null ? props.speed : null,
+                    bearing: props.course || null,
+                    battery: props.battery_level != null ? Math.round(props.battery_level * 100) : null,
+                    motion: props.motion ? props.motion[0] : null,
+                    source: 'overlander'
                 };
             });
     } else if (Array.isArray(data)) {
@@ -876,12 +903,28 @@ app.delete('/api/shares/:shareId', requireLogin, requireAdmin, async (req, res) 
 // Receive GPS data from Overlander app
 app.post('/api/gps', validateToken, async (req, res) => {
     try {
-        // Extract deviceId — priority: query param > body field > header > OwnTracks topic > default
-        let deviceId = req.query.deviceId || req.body.deviceId || req.headers['device-id'] || 'default-device';
-        if (req.body?.topic) {
+        // Extract deviceId — priority:
+        // 1. query param (explicit override)
+        // 2. OwnTracks topic third segment (owntracks/<user>/<device>)
+        // 3. Overland/Overlander top-level device_id field
+        // 4. First location's properties.device_id
+        // 5. body.deviceId / header
+        // 6. fallback
+        let deviceId = req.query.deviceId;
+
+        if (!deviceId && req.body?.topic) {
             const parts = req.body.topic.split('/');
-            if (parts.length >= 3) deviceId = parts[2]; // owntracks/<user>/<deviceId>
+            if (parts.length >= 3) deviceId = parts[2];
         }
+        if (!deviceId) deviceId = req.body?.device_id;
+        if (!deviceId && req.body?.locations?.[0]?.properties?.device_id) {
+            deviceId = req.body.locations[0].properties.device_id;
+        }
+        // Overlander {current: GeoJSON} format
+        if (!deviceId && req.body?.current?.properties?.device_id) {
+            deviceId = req.body.current.properties.device_id;
+        }
+        if (!deviceId) deviceId = req.body?.deviceId || req.headers['device-id'] || 'default-device';
         const format = req.body.format || req.query.format || 'auto';
         const routeName = req.body.routeName || req.headers['route-name'];
         
