@@ -12,6 +12,7 @@ Open the Route Tracker URL in your browser. You will be redirected to the login 
 
 - Enter your **username** and **password**.
 - After login you are redirected back to the main view.
+- Click **Logout** in the top-right header to end your session.
 
 ---
 
@@ -19,25 +20,27 @@ Open the Route Tracker URL in your browser. You will be redirected to the login 
 
 ### Control Panel (left sidebar)
 
+As a regular user you see:
+
 | Element | Description |
 |---|---|
 | **GPS Monitoring** button | Starts/stops automatic polling for new position data |
-| **Auto Refresh** button | Toggles automatic refresh every few seconds |
-| **Refresh** button | Manually fetches the latest position and route |
-| **Device** display | Shows the GPS device currently being tracked |
-| **Status** | Shows connection state, last update time and number of GPS points |
+| **Device** selector | Switch between available GPS devices |
+| **Status** display | Shows device name, connection status and last update time |
+
+> The token setup, controls panel (auto-refresh, disconnect, refresh rate) and configuration section are only visible to admins.
 
 ### Map
 
-The map shows the current route as a polyline with start marker and current-position marker.
+The map shows the current route as a polyline with a start marker and a current-position marker.
 
-- **Zoom / Pan** freely — the map will not automatically reset its view after you interact with it.
+- **Zoom / Pan** freely — the map will not reset its view after you interact with it.
 - **Reset View** button (top right of map) — fits the map back to the full route.
 - Clicking a **photo thumbnail** or **YouTube icon** on the map opens the media viewer.
 
 ### Statistics Dashboard
 
-Shows a summary of the current route:
+Shows a summary of the currently loaded route:
 
 | Stat | Description |
 |---|---|
@@ -50,10 +53,15 @@ Shows a summary of the current route:
 
 ### Route Management
 
+Export buttons are available to all users:
+
 - **Export GPX** – downloads the current route as a GPX file (compatible with most GPS apps and devices).
 - **Export KML** – downloads as KML (Google Earth / Maps).
 - **Export JSON** – raw JSON data export.
-- The **Route History** list below the export buttons shows all saved routes. Click **Load** to display a past route on the map.
+
+The **Route History** list shows all saved routes. Click **Load** to display a past route on the map.
+
+> The **Share** button is only available to admins.
 
 ---
 
@@ -64,19 +72,4 @@ Photo thumbnails and YouTube icons appear as circular markers on the map.
 - **Click** a marker to open the full photo or play the embedded YouTube video.
 - In the viewer you can **download** a photo or **open** a YouTube link in a new tab.
 
----
-
-## Overlander App Setup
-
-The app receives GPS data from the **Overlander** iPhone app via a webhook URL.
-
-1. Open the Overlander app on your iPhone.
-2. Go to **Settings → Webhooks**.
-3. Enter the URL shown in the *Overlander Setup* section of the control panel.
-4. The app will then send your position automatically while tracking.
-
----
-
-## Logging Out
-
-Click the **Logout** button in the top-right header to end your session.
+> Uploading and repositioning media is only available to admins.

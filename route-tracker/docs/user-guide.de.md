@@ -12,6 +12,7 @@ Route Tracker ist eine Live-GPS-Tracking-Web-App, die Positionsdaten von der **O
 
 - Gib deinen **Benutzernamen** und dein **Passwort** ein.
 - Nach dem Login wirst du zur Hauptansicht weitergeleitet.
+- Klicke auf **Logout** oben rechts im Header, um deine Sitzung zu beenden.
 
 ---
 
@@ -19,13 +20,15 @@ Route Tracker ist eine Live-GPS-Tracking-Web-App, die Positionsdaten von der **O
 
 ### Steuerungsleiste (linke Seitenleiste)
 
+Als normaler Benutzer siehst du:
+
 | Element | Beschreibung |
 |---|---|
 | **GPS Monitoring** Schaltfläche | Startet/stoppt das automatische Abrufen neuer Positionsdaten |
-| **Auto Refresh** Schaltfläche | Schaltet das automatische Aktualisieren alle paar Sekunden ein/aus |
-| **Refresh** Schaltfläche | Ruft manuell die neueste Position und Route ab |
-| **Gerät** Anzeige | Zeigt das aktuell verfolgte GPS-Gerät an |
-| **Status** | Zeigt Verbindungsstatus, letzte Aktualisierungszeit und Anzahl der GPS-Punkte |
+| **Gerät** Auswahl | Wechsel zwischen verfügbaren GPS-Geräten |
+| **Status** Anzeige | Zeigt Gerätename, Verbindungsstatus und letzte Aktualisierungszeit |
+
+> Token-Einrichtung, Steuerungsbereich (Auto-Refresh, Trennen, Aktualisierungsrate) und der Konfigurationsbereich sind nur für Admins sichtbar.
 
 ### Karte
 
@@ -37,7 +40,7 @@ Die Karte zeigt die aktuelle Route als Linie mit Start-Markierung und aktueller 
 
 ### Statistik-Dashboard
 
-Zeigt eine Zusammenfassung der aktuellen Route:
+Zeigt eine Zusammenfassung der aktuell geladenen Route:
 
 | Statistik | Beschreibung |
 |---|---|
@@ -50,10 +53,15 @@ Zeigt eine Zusammenfassung der aktuellen Route:
 
 ### Routenverwaltung
 
+Export-Schaltflächen stehen allen Benutzern zur Verfügung:
+
 - **Export GPX** – lädt die aktuelle Route als GPX-Datei herunter (kompatibel mit den meisten GPS-Apps und -Geräten).
 - **Export KML** – Download als KML (Google Earth / Maps).
 - **Export JSON** – Rohdaten-Export im JSON-Format.
-- Die **Routenverlauf**-Liste unterhalb der Exportschaltflächen zeigt alle gespeicherten Routen. Klicke auf **Laden**, um eine frühere Route auf der Karte anzuzeigen.
+
+Die **Routenverlauf**-Liste zeigt alle gespeicherten Routen. Klicke auf **Laden**, um eine frühere Route auf der Karte anzuzeigen.
+
+> Die Schaltfläche **Teilen** ist nur für Admins verfügbar.
 
 ---
 
@@ -64,19 +72,4 @@ Foto-Thumbnails und YouTube-Symbole erscheinen als runde Marker auf der Karte.
 - **Klick** auf einen Marker öffnet das vollständige Foto oder spielt das eingebettete YouTube-Video ab.
 - Im Viewer kannst du ein Foto **herunterladen** oder einen YouTube-Link in einem neuen Tab **öffnen**.
 
----
-
-## Overlander-App einrichten
-
-Die App empfängt GPS-Daten von der **Overlander**-iPhone-App über eine Webhook-URL.
-
-1. Öffne die Overlander-App auf deinem iPhone.
-2. Gehe zu **Einstellungen → Webhooks**.
-3. Gib die URL ein, die im Abschnitt *Overlander Setup* der Steuerungsleiste angezeigt wird.
-4. Die App sendet dann automatisch deine Position während des Trackings.
-
----
-
-## Abmelden
-
-Klicke auf die Schaltfläche **Logout** oben rechts im Header, um deine Sitzung zu beenden.
+> Medien hochladen und neu positionieren ist nur für Admins möglich.
