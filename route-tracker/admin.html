@@ -670,11 +670,9 @@ init();
 // ---- Media Management ----
 async function loadMediaAdmin() {
     const container = document.getElementById('media-sections');
-    const tokens = Object.keys(allTokens).length ? allTokens : await fetch('./api/admin/tokens').then(r => r.json()).catch(() => ({}));
-    const deviceIds = new Set();
-    Object.values(tokens).forEach(t => (t.deviceIds || []).forEach(id => deviceIds.add(id)));
+    const deviceIds = await fetch('./api/admin/media-devices').then(r => r.json()).catch(() => []);
 
-    if (deviceIds.size === 0) {
+    if (!deviceIds.length) {
         container.innerHTML = '<p class="empty-state">No devices found.</p>';
         return;
     }

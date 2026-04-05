@@ -813,6 +813,16 @@ app.get('/api/admin/tokens', requireLogin, requireAdmin, async (req, res) => {
     }
 });
 
+app.get('/api/admin/media-devices', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const entries = await fs.readdir(MEDIA_DIR, { withFileTypes: true }).catch(() => []);
+        const deviceIds = entries.filter(e => e.isDirectory()).map(e => e.name);
+        res.json(deviceIds);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.post('/api/admin/tokens', requireLogin, requireAdmin, async (req, res) => {
     try {
         const { name } = req.body;
