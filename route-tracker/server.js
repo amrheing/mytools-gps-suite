@@ -139,57 +139,62 @@ const saveTokens = async (tokens) => {
 const validateToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     
-    // Extract token from Bearer header, Basic Auth username, query param, body, or OwnTracks topic
-    let token = authHeader?.replace('Bearer ', '');
-    
-    // Basic Auth (OwnTracks HTTP mode uses username as token)
-    if (!token && authHeader?.startsWith('Basic ')) {
+    // Extract the raw token string from request (priority: Bearer > query > body > Basic Auth > topic)
+    let raw = null;
+    if (authHeader?.startsWith('Bearer ')) raw = authHeader.slice(7);
+    if (!raw) raw = req.query.token;
+    if (!raw) raw = req.body?.token;
+    if (!raw && authHeader?.startsWith('Basic ')) {
         const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf8');
-        token = decoded.split(':')[0]; // username part
+        raw = decoded.split(':')[0];
     }
-    
-    if (!token) token = req.query.token;
-    if (!token) token = req.body?.token;
-    
-    // OwnTracks topic format: "owntracks/<username>/<deviceId>"
-    // Check both username (parts[1]) and deviceId (parts[2]) as potential tokens
-    if (!token && req.body?.topic) {
+    if (!raw && req.body?.topic) {
         const parts = req.body.topic.split('/');
-        if (parts.length >= 2) token = parts[1]; // username segment first
-        // parts[2] will be checked against tokens below as fallback
-    }
-    
-    if (!token) {
-        console.log('❌ No token provided');
-        return res.status(401).json({ 
-            error: 'Access token required',
-            message: 'Provide token in Authorization header, query parameter, or body'
-        });
+        if (parts.length >= 2) raw = parts[1];
     }
 
+    if (!raw) {
+        return res.status(401).json({ error: 'Access token required' });
+    }
+
+    // --- PRIMARY: check user gpsToken (stored in users.json — always persistent) ---
+    const users = await loadUsers();
+    const userByToken = Object.values(users).find(u => u.gpsToken && u.gpsToken === raw);
+    if (userByToken) {
+        console.log(`✅ GPS token validated for user: ${userByToken.username}`);
+        req.token = raw;
+        req.tokenData = { name: userByToken.username, userId: userByToken.id };
+        req.tokenUserId = userByToken.id;
+        return next();
+    }
+
+    // --- FALLBACK: check tokens.json (for shared/anonymous device tokens) ---
     const tokens = await loadTokens();
-    
-    // If token from parts[1] not valid, try parts[2] (the deviceId segment)
+    let token = raw;
+
+    // Try by key, then by name
+    if (!tokens[token]) {
+        const byName = Object.entries(tokens).find(([, t]) => t.name === token);
+        if (byName) token = byName[0];
+    }
+    // Try topic parts[2] as last resort
     if (!tokens[token] && req.body?.topic) {
         const parts = req.body.topic.split('/');
         if (parts.length >= 3) token = parts[2];
+        if (!tokens[token]) {
+            const byName = Object.entries(tokens).find(([, t]) => t.name === token);
+            if (byName) token = byName[0];
+        }
     }
-    
+
     if (!tokens[token]) {
-        console.log('❌ Token not found in tokens:', token);
-        return res.status(403).json({ 
-            error: 'Invalid access token',
-            message: 'Token not found or expired'
-        });
+        console.log(`❌ Token not found: ${raw}`);
+        return res.status(403).json({ error: 'Invalid access token' });
     }
 
-    console.log('✅ Token validated successfully');
-    console.log('===============================');
-
-    // Update last used timestamp
+    console.log(`✅ Token validated: ${tokens[token].name}`);
     tokens[token].lastUsed = new Date().toISOString();
     await saveTokens(tokens);
-
     req.token = token;
     req.tokenData = tokens[token];
     next();
@@ -366,8 +371,17 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 // Current session info
-app.get('/api/auth/me', requireLogin, (req, res) => {
-    res.json({ userId: req.session.userId, username: req.session.username, role: req.session.role });
+app.get('/api/auth/me', requireLogin, async (req, res) => {
+    const users = await loadUsers();
+    const user = users[req.session.userId];
+    res.json({
+        userId: req.session.userId,
+        username: req.session.username,
+        role: req.session.role,
+        gpsToken: user?.gpsToken || null,
+        allowedDevices: user?.allowedDevices || [],
+        dataWindow: user?.dataWindow || { from: null, to: null }
+    });
 });
 
 // =====================
@@ -380,6 +394,8 @@ app.get('/api/admin/users', requireLogin, requireAdmin, async (req, res) => {
     const sanitized = Object.values(users).map(u => ({
         id: u.id, username: u.username, role: u.role,
         allowedDevices: u.allowedDevices || [],
+        gpsToken: u.gpsToken || null,
+        dataWindow: u.dataWindow || { from: null, to: null },
         created: u.created, lastLogin: u.lastLogin || null
     }));
     res.json(sanitized);
@@ -387,7 +403,7 @@ app.get('/api/admin/users', requireLogin, requireAdmin, async (req, res) => {
 
 // Create user (admin only)
 app.post('/api/admin/users', requireLogin, requireAdmin, async (req, res) => {
-    const { username, password, role, allowedDevices } = req.body;
+    const { username, password, role, allowedDevices, gpsToken, dataWindow } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
     const users = await loadUsers();
@@ -402,6 +418,8 @@ app.post('/api/admin/users', requireLogin, requireAdmin, async (req, res) => {
         passwordHash: await bcrypt.hash(password, BCRYPT_ROUNDS),
         role: role === 'admin' ? 'admin' : 'viewer',
         allowedDevices: allowedDevices || [],
+        gpsToken: gpsToken || null,
+        dataWindow: dataWindow || { from: null, to: null },
         created: new Date().toISOString(),
         lastLogin: null
     };
@@ -421,6 +439,8 @@ app.put('/api/admin/users/:id', requireLogin, requireAdmin, async (req, res) => 
     }
     if (req.body.role) user.role = req.body.role === 'admin' ? 'admin' : 'viewer';
     if (req.body.allowedDevices !== undefined) user.allowedDevices = req.body.allowedDevices;
+    if (req.body.gpsToken !== undefined) user.gpsToken = req.body.gpsToken || null;
+    if (req.body.dataWindow !== undefined) user.dataWindow = req.body.dataWindow;
 
     await saveUsers(users);
     res.json({ success: true });
@@ -454,14 +474,18 @@ app.get('/api/health', (req, res) => {
 });
 
 // Token management for admin
-app.post('/api/admin/tokens', async (req, res) => {
+app.get('/api/admin/tokens', requireLogin, requireAdmin, async (req, res) => {
     try {
-        const { name, adminPassword } = req.body;
-        
-        // Simple admin protection (in production, use proper auth)
-        if (adminPassword !== (process.env.ADMIN_PASSWORD || 'admin123')) {
-            return res.status(403).json({ error: 'Invalid admin password' });
-        }
+        const tokens = await loadTokens();
+        res.json(tokens);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/admin/tokens', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const { name } = req.body;
         
         const newToken = crypto.randomBytes(32).toString('hex');
         const tokens = await loadTokens();
@@ -480,6 +504,19 @@ app.post('/api/admin/tokens', async (req, res) => {
             message: 'Token created successfully',
             tokenData: tokens[newToken]
         });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.delete('/api/admin/tokens/:token', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const { token } = req.params;
+        const tokens = await loadTokens();
+        if (!tokens[token]) return res.status(404).json({ error: 'Token not found' });
+        delete tokens[token];
+        await saveTokens(tokens);
+        res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -669,6 +706,21 @@ app.get('/api/routes/:routeId', requireLogin, validateToken, async (req, res) =>
         const routeData = await fs.readFile(routeFile, 'utf8');
         const route = JSON.parse(routeData);
         
+        // Apply data window filter if user has one
+        const users = await loadUsers();
+        const dw = users[req.session.userId]?.dataWindow;
+        if (dw && (dw.from || dw.to)) {
+            const from = dw.from ? new Date(dw.from).getTime() : null;
+            const to = dw.to ? new Date(dw.to + 'T23:59:59').getTime() : null;
+            route.points = route.points.filter(p => {
+                const t = new Date(p.timestamp).getTime();
+                if (isNaN(t)) return true;
+                if (from && t < from) return false;
+                if (to && t > to) return false;
+                return true;
+            });
+        }
+
         // Support different response formats
         const format = req.query.format || 'full';
         
@@ -718,10 +770,24 @@ app.get('/api/devices/:deviceId/routes', requireLogin, validateToken, async (req
             })
         );
         
-        res.json({
-            deviceId,
-            routes: routes.filter(r => r !== null)
-        });
+        let filtered = routes.filter(r => r !== null);
+
+        // Apply data window filter if user has one
+        const users = await loadUsers();
+        const dw = users[req.session.userId]?.dataWindow;
+        if (dw && (dw.from || dw.to)) {
+            const from = dw.from ? new Date(dw.from).getTime() : null;
+            const to = dw.to ? new Date(dw.to + 'T23:59:59').getTime() : null;
+            filtered = filtered.filter(r => {
+                const t = r.startTime ? new Date(r.startTime).getTime() : null;
+                if (!t || isNaN(t)) return true;
+                if (from && t < from) return false;
+                if (to && t > to) return false;
+                return true;
+            });
+        }
+
+        res.json({ deviceId, routes: filtered });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
