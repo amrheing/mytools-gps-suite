@@ -1,0 +1,127 @@
+
+services:
+  google-gpx-converter:
+    build: 
+      context: ./google-gpx-converter
+    container_name: google-gpx-converter
+    ports:
+      - "6010:80"
+    restart: unless-stopped
+    volumes:
+      # Mount shared styles directory
+      - ./shared:/usr/share/nginx/html/shared
+    networks:
+      - mytools-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.google-gpx-converter.rule=Host(`gpx-converter.local`)"
+      - "traefik.http.services.google-gpx-converter.loadbalancer.server.port=80"
+
+  extract-gpx-parts:
+    build:
+      context: ./extract-gpx-parts
+    container_name: extract-gpx-parts
+    ports:
+      - "6020:80"
+    restart: unless-stopped
+    volumes:
+      - ./extract-gpx-parts/data/uploads:/app/web/uploads
+      - ./extract-gpx-parts/data/processed:/app/web/processed
+      - ./extract-gpx-parts/data/metadata:/app/web/metadata
+      - ./extract-gpx-parts/web/static:/app/web/static
+      - ./shared:/app/shared
+      - ./extract-gpx-parts/web/templates:/app/web/templates
+    environment:
+      - FLASK_ENV=production
+      - PORT=80
+      - MAX_CONTENT_LENGTH_MB=1024
+    networks:
+      - mytools-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.extract-gpx-parts.rule=Host(`gpx-extractor.local`,`tools.amrhein.info`)"
+      - "traefik.http.routers.extract-gpx-parts.middlewares=extract-gpx-parts-buffering"
+      - "traefik.http.middlewares.extract-gpx-parts-buffering.buffering.maxRequestBodyBytes=1073741824"
+      - "traefik.http.services.extract-gpx-parts.loadbalancer.server.port=5000"
+
+  export-pois-by-pattern:
+    build:
+      context: ./export-pois-by-pattern
+    container_name: export-pois-by-pattern
+    ports:
+      - "6030:80"
+    restart: unless-stopped
+    volumes:
+      - ./export-pois-by-pattern/data/uploads:/app/web/uploads
+      - ./export-pois-by-pattern/data/processed:/app/web/processed
+      - ./export-pois-by-pattern/data/metadata:/app/web/metadata
+      - ./export-pois-by-pattern/web/static:/app/web/static
+      - ./export-pois-by-pattern/web/templates:/app/web/templates
+      - ./shared:/app/shared
+    environment:
+      - FLASK_ENV=production
+      - PORT=80
+      - MAX_CONTENT_LENGTH_MB=500
+    networks:
+      - mytools-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.export-pois-by-pattern.rule=Host(`poi-extractor.local`,`tools.amrhein.info`)"
+      - "traefik.http.routers.export-pois-by-pattern.middlewares=export-pois-buffering"
+      - "traefik.http.middlewares.export-pois-buffering.buffering.maxRequestBodyBytes=524288000"
+      - "traefik.http.services.export-pois-by-pattern.loadbalancer.server.port=80"
+
+  gpx-to-kml-converter:
+    build:
+      context: ./gpx-to-kml-converter
+    container_name: gpx-to-kml-converter
+    ports:
+      - "6040:80"
+    restart: unless-stopped
+    volumes:
+      - ./shared:/usr/share/nginx/html/shared
+    networks:
+      - mytools-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gpx-to-kml-converter.rule=Host(`gpx-to-kml.local`,`tools.amrhein.info`)"
+      - "traefik.http.services.gpx-to-kml-converter.loadbalancer.server.port=80"
+
+  route-tracker:
+    build:
+      context: ./route-tracker
+    container_name: route-tracker
+    ports:
+      - "6050:3000"
+    restart: unless-stopped
+    volumes:
+      - ./route-tracker:/app
+      - route-tracker-node-modules:/app/node_modules
+      - ./shared:/app/shared
+      - ./route-tracker/data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # Initial admin password — only used on first boot when users.json is empty.
+      # After first login, change the password via the admin panel and remove this variable.
+      - ADMIN_PASSWORD=changeme
+      # Session secret — used to sign session cookies. Must be a long random string.
+      # Generate one with: openssl rand -hex 32
+      - SESSION_SECRET=replace-with-output-of--openssl-rand-hex-32
+      # WebAuthn / Passkey settings — must match your public domain exactly
+      - RP_ID=your.domain.com
+      - ORIGIN=https://your.domain.com
+    networks:
+      - mytools-network
+
+# Network for inter-service communication
+networks:
+  mytools-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
+
+# Named volumes
+volumes:
+  route-tracker-node-modules:
