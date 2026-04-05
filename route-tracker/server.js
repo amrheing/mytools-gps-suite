@@ -1632,11 +1632,13 @@ const startServer = async () => {
     app.patch('/api/media/:deviceId/:id', requireLogin, requireAdmin, async (req, res) => {
         try {
             const { deviceId, id } = req.params;
-            const { description } = req.body;
+            const { description, lat, lng } = req.body;
             const entries = await loadMedia(deviceId);
             const entry = entries.find(e => e.id === id);
             if (!entry) return res.status(404).json({ error: 'Not found' });
-            entry.description = description !== undefined ? description : entry.description;
+            if (description !== undefined) entry.description = description;
+            if (lat !== undefined) entry.lat = parseFloat(lat);
+            if (lng !== undefined) entry.lng = parseFloat(lng);
             await saveMedia(deviceId, entries);
             res.json({ success: true });
         } catch (error) {

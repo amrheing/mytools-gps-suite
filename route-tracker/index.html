@@ -967,14 +967,20 @@
                     <label style="display:block;margin-bottom:6px;font-weight:500;">Photo file</label>
                     <input type="file" id="media-photo-file" accept="image/*" style="width:100%;" onchange="onMediaPhotoSelected()">
                 </div>
-                <div id="media-photo-no-gps" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px;margin-bottom:16px;font-size:0.9rem;">
-                    <i class="fas fa-exclamation-triangle" style="color:#e67e22;"></i>
-                    <strong>No GPS in photo.</strong> Click a point on the map to set coordinates.
-                    <div style="margin-top:8px;">
-                        <span id="media-picked-coords" style="font-family:monospace;color:#555;">No point selected yet</span>
-                        <button class="btn btn-sm btn-info" style="margin-left:8px;" onclick="startMapCoordPicker()">
-                            <i class="fas fa-map-pin"></i> Pick on map
-                        </button>
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;margin-bottom:6px;font-weight:500;">Location</label>
+                    <div id="media-photo-loc-gps" style="display:none;background:#d4edda;border:1px solid #c3e6cb;border-radius:8px;padding:10px 14px;font-size:0.9rem;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <i class="fas fa-map-marker-alt" style="color:#27ae60;"></i>
+                            <span id="media-photo-loc-text" style="font-family:monospace;flex:1;"></span>
+                        </div>
+                    </div>
+                    <div id="media-photo-loc-none" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;font-size:0.9rem;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <i class="fas fa-exclamation-triangle" style="color:#e67e22;"></i>
+                            <span style="flex:1;">No GPS data — place on map</span>
+                            <button class="btn btn-sm btn-info" onclick="startMapCoordPicker()"><i class="fas fa-map-pin"></i> Pick</button>
+                        </div>
                     </div>
                 </div>
                 <input type="hidden" id="media-photo-lat">

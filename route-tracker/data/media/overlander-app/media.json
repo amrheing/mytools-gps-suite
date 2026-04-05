@@ -1,0 +1,32 @@
+[
+  {
+    "id": "9c511f5ae94edf75",
+    "type": "photo",
+    "lat": 49.86864548652939,
+    "lng": 9.164936542510988,
+    "timestamp": "2026-04-05T08:27:55.151Z",
+    "description": "",
+    "filename": "9c511f5ae94edf75.jpg",
+    "createdAt": "2026-04-05T08:27:55.279Z"
+  },
+  {
+    "id": "f8ba12e053dc716f",
+    "type": "photo",
+    "lat": 49.86870596320401,
+    "lng": 9.164569079875948,
+    "timestamp": "2026-04-05T08:28:24.811Z",
+    "description": "besteck",
+    "filename": "f8ba12e053dc716f.jpg",
+    "createdAt": "2026-04-05T08:28:24.959Z"
+  },
+  {
+    "id": "2cff90e66f2433f4",
+    "type": "photo",
+    "lat": 49.86873363040299,
+    "lng": 9.164603948593141,
+    "timestamp": "2026-04-05T08:40:54.581Z",
+    "description": "tasse",
+    "filename": "2cff90e66f2433f4.jpg",
+    "createdAt": "2026-04-05T08:40:54.724Z"
+  }
+]

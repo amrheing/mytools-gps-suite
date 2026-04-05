@@ -1992,6 +1992,8 @@ const mediaState = {
     pickedLat: null,
     pickedLng: null,
     coordPickerHandler: null,
+    escHandler: null,
+    cancelCurrentPick: null,  // generic cancel fn for any active map-pick
 };
 
 // ── open/close upload dialog ──────────────────────────────
@@ -2006,13 +2008,13 @@ function resetMediaForm() {
     document.getElementById('media-photo-desc').value = '';
     document.getElementById('media-photo-lat').value = '';
     document.getElementById('media-photo-lng').value = '';
-    document.getElementById('media-photo-no-gps').style.display = 'none';
+    document.getElementById('media-photo-loc-gps').style.display = 'none';
+    document.getElementById('media-photo-loc-none').style.display = 'none';
     document.getElementById('media-yt-url').value = '';
     document.getElementById('media-yt-desc').value = '';
     document.getElementById('media-yt-lat').value = '';
     document.getElementById('media-yt-lng').value = '';
     document.getElementById('media-yt-coords').textContent = 'No point selected yet';
-    document.getElementById('media-picked-coords').textContent = 'No point selected yet';
     const status = document.getElementById('media-upload-status');
     status.style.display = 'none';
     mediaState.pickedLat = null;
@@ -2035,21 +2037,28 @@ function switchMediaTab(tab) {
 async function onMediaPhotoSelected() {
     const file = document.getElementById('media-photo-file').files[0];
     if (!file) return;
+    document.getElementById('media-photo-loc-gps').style.display = 'none';
+    document.getElementById('media-photo-loc-none').style.display = 'none';
     try {
         const gps = await exifr.gps(file);
         if (gps && gps.latitude && gps.longitude) {
             document.getElementById('media-photo-lat').value = gps.latitude;
             document.getElementById('media-photo-lng').value = gps.longitude;
-            document.getElementById('media-photo-no-gps').style.display = 'none';
+            document.getElementById('media-photo-loc-text').textContent =
+                `${gps.latitude.toFixed(6)}, ${gps.longitude.toFixed(6)}`;
+            document.getElementById('media-photo-loc-gps').style.display = '';
         } else {
             document.getElementById('media-photo-lat').value = '';
             document.getElementById('media-photo-lng').value = '';
-            document.getElementById('media-photo-no-gps').style.display = '';
+            document.getElementById('media-photo-loc-none').style.display = '';
+            // Auto-trigger map picking — slight delay so dialog can process the file-select event
+            setTimeout(() => startMapCoordPicker(), 300);
         }
     } catch {
         document.getElementById('media-photo-lat').value = '';
         document.getElementById('media-photo-lng').value = '';
-        document.getElementById('media-photo-no-gps').style.display = '';
+        document.getElementById('media-photo-loc-none').style.display = '';
+        setTimeout(() => startMapCoordPicker(), 300);
     }
 }
 
@@ -2069,32 +2078,47 @@ function startMapCoordPicker() {
         map.off('click', mediaState.coordPickerHandler);
     }
 
-    mediaState.coordPickerHandler = (e) => {
+    const cleanupUploadPick = () => {
         map.off('click', mediaState.coordPickerHandler);
         mediaState.coordPickerHandler = null;
-        mediaState.pickedLat = e.latlng.lat;
-        mediaState.pickedLng = e.latlng.lng;
         mediaState.pickingCoords = false;
         document.body.style.cursor = '';
-
-        const coordText = `${mediaState.pickedLat.toFixed(6)}, ${mediaState.pickedLng.toFixed(6)}`;
-        if (activeTab === 'photo') {
-            document.getElementById('media-photo-lat').value = mediaState.pickedLat;
-            document.getElementById('media-photo-lng').value = mediaState.pickedLng;
-            document.getElementById('media-picked-coords').textContent = coordText;
-        } else {
-            document.getElementById('media-yt-lat').value = mediaState.pickedLat;
-            document.getElementById('media-yt-lng').value = mediaState.pickedLng;
-            document.getElementById('media-yt-coords').textContent = coordText;
-        }
+        document.removeEventListener('keydown', mediaState.escHandler);
+        mediaState.escHandler = null;
+        mediaState.cancelCurrentPick = null;
         dlg.showModal();
     };
 
-    // Delay registration slightly so the button-click that triggered this
-    // doesn't immediately fire the map click handler
-    setTimeout(() => {
-        map.on('click', mediaState.coordPickerHandler);
-    }, 200);
+    const finishPick = (lat, lng) => {
+        mediaState.pickedLat = lat;
+        mediaState.pickedLng = lng;
+        const coordText = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+        if (activeTab === 'photo') {
+            document.getElementById('media-photo-lat').value = lat;
+            document.getElementById('media-photo-lng').value = lng;
+            document.getElementById('media-photo-loc-text').textContent = coordText;
+            document.getElementById('media-photo-loc-gps').style.display = '';
+            document.getElementById('media-photo-loc-none').style.display = 'none';
+        } else {
+            document.getElementById('media-yt-lat').value = lat;
+            document.getElementById('media-yt-lng').value = lng;
+            document.getElementById('media-yt-coords').textContent = coordText;
+        }
+        cleanupUploadPick(false);
+    };
+
+    mediaState.coordPickerHandler = (e) => finishPick(e.latlng.lat, e.latlng.lng);
+    mediaState.escHandler = (e) => { if (e.key === 'Escape') cancelMapCoordPicker(); };
+    mediaState.cancelCurrentPick = () => cleanupUploadPick();
+    document.addEventListener('keydown', mediaState.escHandler);
+    setTimeout(() => { map.on('click', mediaState.coordPickerHandler); }, 200);
+}
+
+function cancelMapCoordPicker() {
+    if (mediaState.cancelCurrentPick) {
+        mediaState.cancelCurrentPick();
+        mediaState.cancelCurrentPick = null;
+    }
 }
 
 // ── submit photo ──────────────────────────────────────────
@@ -2204,34 +2228,54 @@ async function loadMediaMarkers(deviceId) {
 }
 
 function createMediaMarker(entry, deviceId, map) {
+    const isAdmin = document.body.classList.contains('role-admin');
+    const cursor = isAdmin ? 'grab' : 'pointer';
+    const tipAttr = isAdmin ? ' title="Drag to reposition"' : '';
     if (entry.type === 'photo') {
         const thumbUrl = `/api/media/${deviceId}/${entry.id}/thumb`;
-        const icon = L.divIcon({
-            html: `<div style="width:44px;height:44px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);overflow:hidden;background:#eee;cursor:pointer;">
-                     <img src="${thumbUrl}" style="width:100%;height:100%;object-fit:cover;" onerror="mediaThumbError(this)">
-                   </div>`,
-            className: '',
-            iconSize: [44, 44],
-            iconAnchor: [22, 22],
-        });
-        const marker = L.marker([entry.lat, entry.lng], { icon }).addTo(map);
-        marker.on('click', () => openMediaViewer(entry, deviceId));
-        return marker;
-
+        iconHtml = `<div style="width:44px;height:44px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);overflow:hidden;background:#eee;cursor:${cursor};user-select:none;-webkit-user-select:none;"${tipAttr}>
+                      <img src="${thumbUrl}" style="width:100%;height:100%;object-fit:cover;pointer-events:none;" onerror="mediaThumbError(this)">
+                    </div>`;
     } else if (entry.type === 'youtube') {
-        const icon = L.divIcon({
-            html: `<div style="width:44px;height:44px;border-radius:50%;background:#FF0000;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;cursor:pointer;">
-                     <i class="fab fa-youtube" style="color:white;font-size:22px;"></i>
-                   </div>`,
-            className: '',
-            iconSize: [44, 44],
-            iconAnchor: [22, 22],
-        });
-        const marker = L.marker([entry.lat, entry.lng], { icon }).addTo(map);
-        marker.on('click', () => openMediaViewer(entry, deviceId));
-        return marker;
+        iconHtml = `<div style="width:44px;height:44px;border-radius:50%;background:#FF0000;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;cursor:${cursor};user-select:none;-webkit-user-select:none;"${tipAttr}>
+                      <i class="fab fa-youtube" style="color:white;font-size:22px;pointer-events:none;"></i>
+                    </div>`;
+    } else {
+        return null;
     }
-    return null;
+
+    const icon = L.divIcon({ html: iconHtml, className: '', iconSize: [44, 44], iconAnchor: [22, 22] });
+    const marker = L.marker([entry.lat, entry.lng], {
+        icon,
+        draggable: isAdmin,
+    }).addTo(map);
+
+    // Short click → open viewer (only if not just dragged)
+    let dragJustHappened = false;
+    marker.on('dragstart', () => { dragJustHappened = false; });
+    marker.on('drag',      () => { dragJustHappened = true; });
+    marker.on('dragend', async (e) => {
+        const { lat, lng } = e.target.getLatLng();
+        entry.lat = lat;
+        entry.lng = lng;
+        try {
+            const res = await fetch(`/api/media/${encodeURIComponent(deviceId)}/${encodeURIComponent(entry.id)}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lat, lng })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                console.error('Failed to save position:', err);
+            }
+        } catch (e) { console.error('PATCH error:', e); }
+    });
+    marker.on('click', () => {
+        if (dragJustHappened) { dragJustHappened = false; return; }
+        openMediaViewer(entry, deviceId);
+    });
+
+    return marker;
 }
 
 // ── media viewer overlay ──────────────────────────────────
