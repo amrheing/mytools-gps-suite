@@ -143,6 +143,16 @@
         .alert-success { background: rgba(46,204,113,0.15); border: 1px solid rgba(46,204,113,0.3); color: #2ecc71; }
         .alert-error { background: rgba(231,76,60,0.15); border: 1px solid rgba(231,76,60,0.3); color: #e74c3c; }
         .empty-state { text-align: center; color: rgba(255,255,255,0.3); padding: 40px; }
+        /* ---- TOKEN VALUE ---- */
+        .token-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #1f2235; gap: 12px; }
+        .token-row:last-child { border-bottom: none; }
+        .token-info { flex: 1; min-width: 0; }
+        .token-name { font-weight: 600; color: #eee; font-size: 0.9rem; margin-bottom: 4px; }
+        .token-meta { font-size: 0.75rem; color: rgba(255,255,255,0.35); margin-bottom: 6px; }
+        .token-value-row { display: flex; align-items: center; gap: 8px; }
+        .token-value { font-family: monospace; font-size: 0.75rem; background: #0f1117; border: 1px solid #2a2d3e; border-radius: 6px; padding: 5px 10px; color: #2ecc71; word-break: break-all; flex: 1; }
+        .copy-btn { white-space: nowrap; }
+        .copy-btn.copied { color: #2ecc71; border-color: rgba(46,204,113,0.3); }
     </style>
 </head>
 <body>
@@ -177,13 +187,15 @@
                 <tr>
                     <th>Username</th>
                     <th>Role</th>
+                    <th>GPS Token</th>
                     <th>Allowed Devices</th>
+                    <th>Date Window</th>
                     <th>Last Login</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody id="users-table-body">
-                <tr><td colspan="5" class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
+                <tr><td colspan="7" class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
             </tbody>
         </table>
     </div>
@@ -192,9 +204,9 @@
     <h2><i class="fas fa-key"></i> API Tokens</h2>
     <div class="card">
         <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;">
-            Tokens are used by GPS tracking apps (Overland, OwnTracks) to authenticate location data.
+            Tokens authenticate GPS apps (OwnTracks, Overland). Copy the full token value into your app's password or <code style="color:#2ecc71; background:#0f1117; padding:1px 5px; border-radius:3px;">?token=</code> URL parameter.
         </p>
-        <div id="tokens-list" style="margin-bottom:15px;"></div>
+        <div id="tokens-list" style="margin-bottom:20px;"><p class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</p></div>
         <div style="display:flex; gap:10px; align-items:flex-end;">
             <div class="form-group" style="flex:1; margin:0;">
                 <label>New Token Name</label>
@@ -242,6 +254,27 @@
             </div>
         </div>
 
+        <div class="form-row">
+            <div class="form-group">
+                <label>GPS Token <span style="color:rgba(255,255,255,0.3); font-size:0.78rem;">(?token= in OwnTracks URL)</span></label>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" id="modal-gps-token" placeholder="e.g. geralds-iphone" style="flex:1; font-family:monospace;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="generateGpsToken()" title="Generate random token">
+                        <i class="fas fa-dice"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:20px;">
+            <label>Data Window <span style="color:rgba(255,255,255,0.3); font-size:0.78rem;">(leave empty = all time)</span></label>
+            <div style="display:flex; gap:12px; align-items:center; margin-top:8px;">
+                <input type="date" id="modal-date-from" style="flex:1;">
+                <span style="color:rgba(255,255,255,0.4); flex-shrink:0;">to</span>
+                <input type="date" id="modal-date-to" style="flex:1;">
+            </div>
+        </div>
+
         <div class="form-actions">
             <button class="btn btn-primary" onclick="saveUser()">
                 <i class="fas fa-save"></i> Save
@@ -254,6 +287,7 @@
 <script>
 let allUsers = [];
 let allDevices = [];
+let allTokens = {};
 
 // ---- Init ----
 async function init() {
@@ -279,14 +313,23 @@ function renderUsers() {
     document.getElementById('user-count').textContent = `${allUsers.length} user${allUsers.length !== 1 ? 's' : ''}`;
 
     if (allUsers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No users yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No users yet.</td></tr>';
         return;
     }
 
-    tbody.innerHTML = allUsers.map(u => `
+    tbody.innerHTML = allUsers.map(u => {
+        const tokenBadge = u.gpsToken
+            ? `<code style="background:#0f1117; border:1px solid #2a2d3e; border-radius:4px; padding:2px 7px; color:#2ecc71; font-size:0.78rem;">${escHtml(u.gpsToken)}</code>`
+            : '<span style="color:rgba(255,255,255,0.3);">—</span>';
+        const dw = u.dataWindow;
+        const dwText = (dw && (dw.from || dw.to))
+            ? `<span style="font-size:0.78rem;color:#f39c12;">${dw.from || '∞'} → ${dw.to || '∞'}</span>`
+            : '<span style="color:rgba(255,255,255,0.3);">All time</span>';
+        return `
         <tr>
             <td><i class="fas fa-user" style="color:rgba(255,255,255,0.3); margin-right:8px;"></i>${escHtml(u.username)}</td>
             <td><span class="badge badge-${u.role}">${u.role}</span></td>
+            <td>${tokenBadge}</td>
             <td>
                 <div class="devices-list">
                     ${u.allowedDevices.length === 0
@@ -294,6 +337,7 @@ function renderUsers() {
                         : u.allowedDevices.map(d => `<span class="device-tag">${escHtml(d)}</span>`).join('')}
                 </div>
             </td>
+            <td>${dwText}</td>
             <td style="color:rgba(255,255,255,0.4); font-size:0.82rem;">${u.lastLogin ? new Date(u.lastLogin).toLocaleString() : 'Never'}</td>
             <td>
                 <button class="btn btn-success btn-sm" onclick="openEditModal('${escHtml(u.id)}')">
@@ -304,8 +348,8 @@ function renderUsers() {
                     <i class="fas fa-trash"></i>
                 </button>
             </td>
-        </tr>
-    `).join('');
+        </tr>`;
+    }).join('');
 }
 
 // ---- Devices ----
@@ -332,6 +376,17 @@ function renderDeviceCheckboxes(selectedDevices = []) {
 }
 
 // ---- Modal ----
+function generateGpsToken() {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+        .map(b => chars[b % chars.length]).join('');
+    document.getElementById('modal-gps-token').value = token;
+}
+
+function renderTokenSelect(selected = '') {
+    // kept for compat but no longer used in modal
+}
+
 function openCreateModal() {
     document.getElementById('modal-title').textContent = 'Add User';
     document.getElementById('edit-user-id').value = '';
@@ -341,6 +396,9 @@ function openCreateModal() {
     document.getElementById('password-label').textContent = 'Password';
     document.getElementById('modal-role').value = 'viewer';
     document.getElementById('modal-alert').classList.remove('show');
+    document.getElementById('modal-date-from').value = '';
+    document.getElementById('modal-date-to').value = '';
+    document.getElementById('modal-gps-token').value = '';
     renderDeviceCheckboxes([]);
     document.getElementById('user-modal').classList.add('show');
 }
@@ -357,6 +415,9 @@ function openEditModal(userId) {
     document.getElementById('password-label').textContent = 'New Password (leave blank to keep)';
     document.getElementById('modal-role').value = user.role;
     document.getElementById('modal-alert').classList.remove('show');
+    document.getElementById('modal-date-from').value = user.dataWindow?.from || '';
+    document.getElementById('modal-date-to').value = user.dataWindow?.to || '';
+    document.getElementById('modal-gps-token').value = user.gpsToken || '';
     renderDeviceCheckboxes(user.allowedDevices || []);
     document.getElementById('user-modal').classList.add('show');
 }
@@ -384,7 +445,15 @@ async function saveUser() {
         return;
     }
 
-    const body = { role, allowedDevices };
+    const body = {
+        role,
+        allowedDevices,
+        gpsToken: document.getElementById('modal-gps-token').value.trim() || null,
+        dataWindow: {
+            from: document.getElementById('modal-date-from').value || null,
+            to: document.getElementById('modal-date-to').value || null
+        }
+    };
     if (!id) { body.username = username; body.password = password; }
     else if (password) { body.password = password; }
 
@@ -419,12 +488,65 @@ async function deleteUser(id, username) {
 
 // ---- Tokens ----
 async function loadTokens() {
-    // Tokens are in the GPS token system — just show them via debug/status
-    const res = await fetch('./api/debug/status', { headers: { 'Authorization': 'Bearer default-token-123' } });
+    const res = await fetch('./api/admin/tokens');
     if (!res.ok) return;
-    const status = await res.json();
-    document.getElementById('tokens-list').innerHTML =
-        `<p style="color:rgba(255,255,255,0.4); font-size:0.82rem;"><i class="fas fa-info-circle"></i> ${status.data.tokens} token(s) active. Use the admin API endpoint to manage GPS tokens.</p>`;
+    allTokens = await res.json();
+    const entries = Object.entries(allTokens);
+    const container = document.getElementById('tokens-list');
+    if (entries.length === 0) {
+        container.innerHTML = '<p class="empty-state">No tokens yet. Create one below.</p>';
+        return;
+    }
+    container.innerHTML = entries.map(([value, data]) => `
+        <div class="token-row">
+            <div class="token-info">
+                <div class="token-name">${escHtml(data.name)}</div>
+                <div class="token-meta">
+                    Created: ${new Date(data.created).toLocaleDateString()}
+                    ${data.lastUsed ? ' &bull; Last used: ' + new Date(data.lastUsed).toLocaleString() : ' &bull; Never used'}
+                </div>
+                <div class="token-value-row">
+                    <span class="token-value" id="tv-${escHtml(value)}">${escHtml(value)}</span>
+                    <button class="btn btn-secondary btn-sm copy-btn" onclick="copyToken('${escHtml(value)}')">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                </div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="deleteToken('${escHtml(value)}', '${escHtml(data.name)}')">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `).join('');
+
+    // Refresh token dropdown in user modal
+    renderTokenSelect();
+}
+
+function copyToken(value) {
+    navigator.clipboard.writeText(value).then(() => {
+        const btns = document.querySelectorAll('.copy-btn');
+        btns.forEach(btn => {
+            if (btn.getAttribute('onclick')?.includes(value)) {
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                    btn.classList.remove('copied');
+                }, 2000);
+            }
+        });
+    });
+}
+
+async function deleteToken(value, name) {
+    if (!confirm(`Delete token "${name}"? GPS apps using it will stop working.`)) return;
+    const res = await fetch(`./api/admin/tokens/${encodeURIComponent(value)}`, { method: 'DELETE' });
+    if (res.ok) {
+        showAlert('Token deleted.', 'success');
+        loadTokens();
+    } else {
+        showAlert('Error deleting token.', 'error');
+    }
 }
 
 async function createToken() {
@@ -434,11 +556,11 @@ async function createToken() {
     const res = await fetch('./api/admin/tokens', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, adminPassword: 'admin123' })
+        body: JSON.stringify({ name })
     });
     const data = await res.json();
     if (res.ok) {
-        showAlert(`Token created: ${data.token}`, 'success');
+        showAlert(`Token created! Copy the value below and paste it into your GPS app.`, 'success');
         document.getElementById('new-token-name').value = '';
         loadTokens();
     } else {

@@ -25,6 +25,12 @@ class RouteTracker {
             }
             const me = await authRes.json();
 
+            // Use the GPS token assigned by admin (overrides localStorage)
+            if (me.gpsToken) {
+                this.apiToken = me.gpsToken;
+                localStorage.setItem('apiToken', me.gpsToken);
+            }
+
             // Show admin link for admins
             if (me.role === 'admin') {
                 const adminLink = document.getElementById('admin-link');
@@ -97,11 +103,15 @@ class RouteTracker {
                     const option = document.createElement('option');
                     option.value = device.id;
                     option.textContent = device.name || device.id;
-                    if (device.id === this.selectedDeviceId) {
-                        option.selected = true;
-                    }
                     selector.appendChild(option);
                 });
+                // If cached device isn't in the allowed list, fall back to first available
+                const ids = devices.map(d => d.id);
+                if (!ids.includes(this.selectedDeviceId) && ids.length > 0) {
+                    this.selectedDeviceId = ids[0];
+                    localStorage.setItem('selectedDeviceId', this.selectedDeviceId);
+                }
+                selector.value = this.selectedDeviceId;
             }
         } catch (error) {
             console.error('Error loading devices:', error);
@@ -835,9 +845,8 @@ function handleRegister(event) {
 }
 
 function logout() {
-    if (window.userManager) {
-        window.userManager.logout();
-    }
+    fetch('./api/auth/logout', { method: 'POST' })
+        .finally(() => { window.location.href = './login.html'; });
 }
 
 // Configuration Setup Helper

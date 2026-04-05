@@ -113,7 +113,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - ADMIN_PASSWORD=admin123
+      - ADMIN_PASSWORD=Alpha.55?!
+      - SESSION_SECRET=7100c016b22b23c9192af28176696ef15092a6cbecb76b12bf8223c993ceb4f6
     networks:
       - mytools-network
 
