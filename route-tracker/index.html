@@ -219,7 +219,10 @@
             gap: 10px;
         }
 
-        /* === DEVICE SELECTOR === */
+        /* === ROLE-BASED VISIBILITY === */
+        .role-viewer .admin-only { display: none !important; }
+        .role-admin .viewer-only { display: none !important; }
+        .role-viewer #gps-status-btn { pointer-events: none; cursor: default; opacity: 0.85; }
         .device-selector-panel {
             background: #f8f9fa;
             padding: 15px;
@@ -540,7 +543,7 @@
                     </div>
 
                     <!-- Token Setup (Initially visible) -->
-                    <div id="token-setup" class="status-panel">
+                    <div id="token-setup" class="status-panel admin-only">
                         <h3 style="margin-bottom: 15px; color: var(--primary-color);">
                             <i class="fas fa-key"></i> API Configuration
                         </h3>
@@ -555,13 +558,13 @@
                             </div>
                         </div>
                         <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
-                            <button class="btn btn-primary" onclick="setApiToken()">
+                            <button class="btn btn-primary admin-only" onclick="setApiToken()">
                                 <i class="fas fa-save"></i> Set Token
                             </button>
-                            <button class="btn btn-info" onclick="showOverlanderSetup()">
+                            <button class="btn btn-info admin-only" onclick="showOverlanderSetup()">
                                 <i class="fas fa-mobile-alt"></i> iPhone Setup
                             </button>
-                            <button class="btn btn-secondary" onclick="changeDevice()">
+                            <button class="btn btn-secondary admin-only" onclick="changeDevice()">
                                 <i class="fas fa-mobile-alt"></i> Change Device
                             </button>
                         </div>
@@ -573,7 +576,7 @@
                             <div class="status-panel">
                                 <h4><i class="fas fa-info-circle"></i> Status</h4>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
-                                    <div>
+                                    <div class="admin-only">
                                         <small>Token:</small><br>
                                         <span id="current-token" class="status-text">Not set</span>
                                     </div>
@@ -591,7 +594,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="status-panel">
+                            <div class="status-panel admin-only">
                                 <h4><i class="fas fa-cogs"></i> Controls</h4>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
                                     <button id="auto-refresh-btn" class="btn btn-warning" onclick="toggleAutoRefresh()">
@@ -614,6 +617,14 @@
                                     </select>
                                 </div>
                             </div>
+                            <div class="status-panel viewer-only">
+                                <h4><i class="fas fa-mobile-alt"></i> Device</h4>
+                                <div style="margin-top: 10px;">
+                                    <select id="device-selector-viewer" class="form-control" onchange="window.routeTracker && window.routeTracker.onDeviceSelectorChange(this.value)">
+                                        <option value="default-device">default-device</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -625,13 +636,13 @@
                             <i class="fas fa-map"></i> Live Route Tracking
                         </h3>
                         <div style="display: flex; gap: 10px;">
-                            <button class="btn btn-sm btn-info" onclick="testConnectivity()">
+                            <button class="btn btn-sm btn-info admin-only" onclick="testConnectivity()">
                                 <i class="fas fa-wifi"></i> Test Connection
                             </button>
-                            <button class="btn btn-sm btn-warning" onclick="showDebugPanel()">
+                            <button class="btn btn-sm btn-warning admin-only" onclick="showDebugPanel()">
                                 <i class="fas fa-cogs"></i> Debug
                             </button>
-                            <button class="btn btn-sm btn-danger" onclick="clearLiveRoute()">
+                            <button class="btn btn-sm btn-danger admin-only" onclick="clearLiveRoute()">
                                 <i class="fas fa-trash"></i> Clear Route
                             </button>
                         </div>
@@ -744,7 +755,7 @@
                 </section>
 
                 <!-- === 5. CONFIGURATION SECTION === -->
-                <section class="config-section">
+                <section class="config-section admin-only">
                     <div class="section-header">
                         <h3 class="section-title">
                             <i class="fas fa-mobile-alt"></i> Device Setup Instructions
@@ -763,7 +774,7 @@
                 </section>
 
                 <!-- === 6. TESTING TOOLS (Collapsible) === -->
-                <section class="testing-tools">
+                <section class="testing-tools admin-only">
                     <div class="tools-header" onclick="toggleTestingTools()">
                         <h3 style="margin: 0; color: var(--primary-color);">
                             <i class="fas fa-wrench"></i> Testing & Debugging Tools

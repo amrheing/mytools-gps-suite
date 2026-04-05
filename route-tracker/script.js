@@ -37,6 +37,9 @@ class RouteTracker {
                 if (adminLink) adminLink.style.display = 'inline-flex';
             }
 
+            // Apply role class to body for CSS-based UI filtering
+            document.body.classList.add('role-' + me.role);
+
             // Initialize map
             this.initMap();
             
@@ -97,13 +100,17 @@ class RouteTracker {
             const response = await this.apiCall(`/api/devices`);
             if (response.ok) {
                 const devices = await response.json();
-                const selector = document.getElementById('device-selector');
-                selector.innerHTML = '';
-                devices.forEach(device => {
-                    const option = document.createElement('option');
-                    option.value = device.id;
-                    option.textContent = device.name || device.id;
-                    selector.appendChild(option);
+                // Populate both selectors (admin controls panel + viewer panel)
+                ['device-selector', 'device-selector-viewer'].forEach(id => {
+                    const selector = document.getElementById(id);
+                    if (!selector) return;
+                    selector.innerHTML = '';
+                    devices.forEach(device => {
+                        const option = document.createElement('option');
+                        option.value = device.id;
+                        option.textContent = device.name || device.id;
+                        selector.appendChild(option);
+                    });
                 });
                 // If cached device isn't in the allowed list, fall back to first available
                 const ids = devices.map(d => d.id);
@@ -111,7 +118,10 @@ class RouteTracker {
                     this.selectedDeviceId = ids[0];
                     localStorage.setItem('selectedDeviceId', this.selectedDeviceId);
                 }
-                selector.value = this.selectedDeviceId;
+                const s1 = document.getElementById('device-selector');
+                const s2 = document.getElementById('device-selector-viewer');
+                if (s1) s1.value = this.selectedDeviceId;
+                if (s2) s2.value = this.selectedDeviceId;
             }
         } catch (error) {
             console.error('Error loading devices:', error);
@@ -119,13 +129,22 @@ class RouteTracker {
         }
     }
 
+    onDeviceSelectorChange(value) {
+        this.selectedDeviceId = value;
+        localStorage.setItem('selectedDeviceId', value);
+        // Keep both selectors in sync
+        const s1 = document.getElementById('device-selector');
+        const s2 = document.getElementById('device-selector-viewer');
+        if (s1) s1.value = value;
+        if (s2) s2.value = value;
+        this.showNotification(`Switched to device: ${value}`, 'info');
+        this.loadDevicesAndRoutes();
+    }
+
     setupDeviceSelector() {
         const selector = document.getElementById('device-selector');
-        selector.addEventListener('change', (event) => {
-            this.selectedDeviceId = event.target.value;
-            localStorage.setItem('selectedDeviceId', this.selectedDeviceId);
-            this.showNotification(`Switched to device: ${this.selectedDeviceId}`, 'info');
-            this.loadDevicesAndRoutes();
+        if (selector) selector.addEventListener('change', (event) => {
+            this.onDeviceSelectorChange(event.target.value);
         });
     }
 
