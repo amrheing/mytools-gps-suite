@@ -831,6 +831,44 @@ app.post('/api/devices/:deviceId/stop-route', requireLogin, validateToken, async
     }
 });
 
+// Rename a route
+app.patch('/api/routes/:routeId', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const { name } = req.body;
+        if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+        const routeFile = path.join(DATA_DIR, 'routes', `${req.params.routeId}.json`);
+        const route = JSON.parse(await fs.readFile(routeFile, 'utf8'));
+        route.name = name.trim();
+        await saveRoute(route);
+        res.json({ success: true, name: route.name });
+    } catch (error) {
+        res.status(404).json({ error: 'Route not found' });
+    }
+});
+
+// Delete a route
+app.delete('/api/routes/:routeId', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const routeId = req.params.routeId;
+        const routeFile = path.join(DATA_DIR, 'routes', `${routeId}.json`);
+        const route = JSON.parse(await fs.readFile(routeFile, 'utf8'));
+        const deviceId = route.deviceId;
+
+        // Remove route file
+        await fs.unlink(routeFile);
+
+        // Remove from device's route list and clear currentRoute if needed
+        const deviceData = await getDeviceData(deviceId);
+        deviceData.routes = deviceData.routes.filter(id => id !== routeId);
+        if (deviceData.currentRoute === routeId) deviceData.currentRoute = null;
+        await saveDeviceData(deviceId, deviceData);
+
+        res.json({ success: true });
+    } catch (error) {
+        res.status(404).json({ error: 'Route not found' });
+    }
+});
+
 // =====================
 // DEBUGGING ENDPOINTS
 // =====================

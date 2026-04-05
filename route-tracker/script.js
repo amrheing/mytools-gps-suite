@@ -328,8 +328,14 @@ class RouteTracker {
                     <button class="btn btn-sm btn-secondary" onclick="routeTracker.exportRoute('${route.id}')">
                         <i class="fas fa-download"></i> Export
                     </button>
+                    <button class="btn btn-sm btn-info admin-only" onclick="routeTracker.editRoute('${route.id}', '${route.name.replace(/'/g, "\\'")}')">
+                        <i class="fas fa-pencil-alt"></i> Rename
+                    </button>
+                    <button class="btn btn-sm btn-danger admin-only" onclick="routeTracker.deleteRoute('${route.id}')">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
                     ${route.status === 'active' ? `
-                        <button class="btn btn-sm btn-warning" onclick="routeTracker.stopRoute('${route.id}')">
+                        <button class="btn btn-sm btn-warning admin-only" onclick="routeTracker.stopRoute('${route.id}')">
                             <i class="fas fa-stop"></i> Stop
                         </button>
                     ` : ''}
@@ -367,6 +373,42 @@ class RouteTracker {
             }
         } catch (error) {
             this.showNotification('Error stopping route: ' + error.message, 'error');
+        }
+    }
+
+    async editRoute(routeId, currentName) {
+        const newName = prompt('Route name:', currentName);
+        if (!newName || newName.trim() === currentName) return;
+        try {
+            const response = await this.apiCall(`/api/routes/${routeId}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ name: newName.trim() })
+            });
+            if (response.ok) {
+                this.showNotification('Route renamed successfully', 'success');
+                await this.loadDevicesAndRoutes();
+            } else {
+                this.showNotification('Failed to rename route', 'error');
+            }
+        } catch (error) {
+            this.showNotification('Error renaming route: ' + error.message, 'error');
+        }
+    }
+
+    async deleteRoute(routeId) {
+        if (!confirm('Delete this route permanently? This cannot be undone.')) return;
+        try {
+            const response = await this.apiCall(`/api/routes/${routeId}`, {
+                method: 'DELETE'
+            });
+            if (response.ok) {
+                this.showNotification('Route deleted', 'success');
+                await this.loadDevicesAndRoutes();
+            } else {
+                this.showNotification('Failed to delete route', 'error');
+            }
+        } catch (error) {
+            this.showNotification('Error deleting route: ' + error.message, 'error');
         }
     }
 
