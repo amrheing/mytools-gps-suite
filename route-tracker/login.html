@@ -221,7 +221,9 @@
                 const data = await res.json();
 
                 if (res.ok) {
-                    window.location.href = data.role === 'admin' ? './index.html' : './index.html';
+                    const redirect = sessionStorage.getItem('redirectAfterLogin') || './index.html';
+                    sessionStorage.removeItem('redirectAfterLogin');
+                    window.location.href = redirect;
                 } else {
                     showError(data.error || 'Login failed');
                 }
@@ -266,7 +268,9 @@
 
                 const result = await verifyRes.json();
                 if (verifyRes.ok) {
-                    window.location.href = './index.html';
+                    const redirect = sessionStorage.getItem('redirectAfterLogin') || './index.html';
+                    sessionStorage.removeItem('redirectAfterLogin');
+                    window.location.href = redirect;
                 } else {
                     showError(result.error || 'Passkey authentication failed');
                 }

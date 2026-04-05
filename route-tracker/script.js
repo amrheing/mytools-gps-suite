@@ -17,9 +17,27 @@ class RouteTracker {
 
     async init() {
         try {
-            // Check authentication first
-            const authRes = await fetch('./api/auth/me');
+            // Check for share token in URL first
+            const urlParams = new URLSearchParams(window.location.search);
+            const shareToken = urlParams.get('share');
+
+            let authRes = await fetch('./api/auth/me');
+
+            // If not authenticated but a share token is present, try share auth
+            if (!authRes.ok && shareToken) {
+                const shareRes = await fetch('./api/auth/share', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ shareId: shareToken })
+                });
+                if (shareRes.ok) {
+                    authRes = await fetch('./api/auth/me');
+                }
+            }
+
             if (!authRes.ok) {
+                // Save current URL so login can redirect back (e.g. shared route link)
+                sessionStorage.setItem('redirectAfterLogin', window.location.href);
                 window.location.href = './login.html';
                 return;
             }
@@ -57,6 +75,14 @@ class RouteTracker {
                 this.setupDeviceSelector(); // New method
                 await this.loadDevicesAndRoutes();
                 this.startAutoRefresh();
+
+                // If a shared route link was used (?share=... or ?route=...), load that route directly
+                const urlParams = new URLSearchParams(window.location.search);
+                const sharedRoute = urlParams.get('route') || (me.role === 'share' ? me.shareRouteId : null);
+                if (sharedRoute) {
+                    await this.loadRoute(sharedRoute);
+                    this.showNotification('Loaded shared route', 'success');
+                }
                 
                 // Auto-start GPS monitoring
                 try {
@@ -839,24 +865,37 @@ function exportRoute(format) {
 }
 
 function shareRoute() {
-    const device = window.routeTracker.devices.get(window.routeTracker.selectedDeviceId);
-    if (device && device.currentRoute) {
-        const shareUrl = `${window.location.origin}/api/routes/${device.currentRoute}`;
-        
-        if (navigator.share) {
-            navigator.share({
-                title: 'GPS Route',
-                text: 'Check out this GPS route',
-                url: shareUrl
-            });
-        } else {
-            navigator.clipboard.writeText(shareUrl).then(() => {
-                window.routeTracker.showNotification('Route URL copied to clipboard', 'success');
-            });
-        }
-    } else {
-        window.routeTracker.showNotification('No route to share', 'warning');
+    const tracker = window.routeTracker;
+    const device = tracker.devices.get(tracker.selectedDeviceId);
+    if (!device || !device.currentRoute) {
+        tracker.showNotification('No active route to share', 'warning');
+        return;
     }
+
+    // Find current route name for the label
+    const routeId = device.currentRoute;
+    const deviceId = tracker.selectedDeviceId;
+
+    tracker.apiCall('/api/shares', {
+        method: 'POST',
+        body: JSON.stringify({ routeId, deviceId, label: `${deviceId} – ${new Date().toLocaleDateString()}` })
+    }).then(async res => {
+        const data = await res.json();
+        if (res.ok) {
+            // Construct URL client-side (server doesn't know the public base path behind proxy)
+            const base = window.location.href.split('?')[0];
+            const shareUrl = `${base}?share=${data.shareId}`;
+            if (navigator.share) {
+                navigator.share({ title: data.share.label, url: shareUrl });
+            } else {
+                navigator.clipboard.writeText(shareUrl).then(() => {
+                    tracker.showNotification('Share link copied to clipboard', 'success');
+                });
+            }
+        } else {
+            tracker.showNotification(`Failed to create share link: ${data.error || res.status}`, 'error');
+        }
+    }).catch(err => tracker.showNotification('Error creating share link: ' + err.message, 'error'));
 }
 
 // Authentication UI functions (kept for compatibility)

@@ -47,13 +47,25 @@ const saveUsers = async (users) => {
 };
 
 // Middleware: require web login session
-const requireLogin = (req, res, next) => {
+const requireLogin = async (req, res, next) => {
     if (req.session && req.session.userId) return next();
-    // API calls get 401, browser navigation gets redirect
+
+    // Share sessions: validate shareId still exists (revocation check)
+    if (req.session && req.session.role === 'share') {
+        const shares = await loadShares();
+        if (shares[req.session.shareId]) return next();
+        // Share was revoked — destroy session
+        req.session.destroy();
+        if (req.headers['accept']?.includes('application/json') || req.headers['content-type']?.includes('application/json')) {
+            return res.status(401).json({ error: 'Share link has been revoked' });
+        }
+        return res.redirect('./login.html');
+    }
+
     if (req.headers['content-type']?.includes('application/json') || req.headers['accept']?.includes('application/json')) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
-    return res.redirect('/login.html');
+    return res.redirect('./login.html');
 };
 
 // Middleware: require admin role
@@ -135,6 +147,26 @@ const saveTokens = async (tokens) => {
     }
 };
 
+// Share link management
+const loadShares = async () => {
+    try {
+        const sharesFile = path.join(DATA_DIR, 'shares.json');
+        const data = await fs.readFile(sharesFile, 'utf8');
+        return JSON.parse(data);
+    } catch {
+        return {};
+    }
+};
+
+const saveShares = async (shares) => {
+    try {
+        const sharesFile = path.join(DATA_DIR, 'shares.json');
+        await fs.writeFile(sharesFile, JSON.stringify(shares, null, 2));
+    } catch (error) {
+        console.error('Error saving shares:', error);
+    }
+};
+
 // Token validation middleware
 const validateToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -157,7 +189,8 @@ const validateToken = async (req, res, next) => {
         return res.status(401).json({ error: 'Access token required' });
     }
 
-    // --- PRIMARY: check user gpsToken (stored in users.json — always persistent) ---
+    // Share sessions bypass GPS token validation (read-only access controlled by canAccessDevice)
+    if (req.session?.role === 'share') return next();
     const users = await loadUsers();
     const userByToken = Object.values(users).find(u => u.gpsToken && u.gpsToken === raw);
     if (userByToken) {
@@ -372,6 +405,20 @@ app.post('/api/auth/logout', (req, res) => {
 
 // Current session info
 app.get('/api/auth/me', requireLogin, async (req, res) => {
+    // Share session
+    if (req.session.role === 'share') {
+        return res.json({
+            userId: null,
+            username: 'shared-link',
+            role: 'viewer',
+            shareId: req.session.shareId,
+            shareRouteId: req.session.shareRouteId,
+            shareDeviceId: req.session.shareDeviceId,
+            gpsToken: null,
+            allowedDevices: [req.session.shareDeviceId],
+            dataWindow: { from: null, to: null }
+        });
+    }
     const users = await loadUsers();
     const user = users[req.session.userId];
     res.json({
@@ -382,6 +429,35 @@ app.get('/api/auth/me', requireLogin, async (req, res) => {
         allowedDevices: user?.allowedDevices || [],
         dataWindow: user?.dataWindow || { from: null, to: null }
     });
+});
+
+// Authenticate with a share token (no password needed)
+app.post('/api/auth/share', async (req, res) => {
+    const { shareId } = req.body;
+    if (!shareId) return res.status(400).json({ error: 'shareId required' });
+
+    const shares = await loadShares();
+    const share = shares[shareId];
+    if (!share) return res.status(404).json({ error: 'Share link not found or revoked' });
+
+    // Check expiry
+    if (share.expiresAt && new Date() > new Date(share.expiresAt)) {
+        return res.status(410).json({ error: 'Share link has expired' });
+    }
+
+    // Establish limited share session
+    req.session.role = 'share';
+    req.session.shareId = shareId;
+    req.session.shareRouteId = share.routeId;
+    req.session.shareDeviceId = share.deviceId;
+
+    // Track access count
+    shares[shareId].accessCount = (shares[shareId].accessCount || 0) + 1;
+    shares[shareId].lastAccessed = new Date().toISOString();
+    await saveShares(shares);
+
+    console.log(`🔗 Share link accessed: ${shareId} → route ${share.routeId}`);
+    res.json({ success: true, routeId: share.routeId, deviceId: share.deviceId, label: share.label });
 });
 
 // =====================
@@ -516,6 +592,58 @@ app.delete('/api/admin/tokens/:token', requireLogin, requireAdmin, async (req, r
         if (!tokens[token]) return res.status(404).json({ error: 'Token not found' });
         delete tokens[token];
         await saveTokens(tokens);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// =====================
+// SHARE LINK MANAGEMENT
+// =====================
+
+app.post('/api/shares', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const { routeId, deviceId, label, expiresAt } = req.body;
+        if (!routeId || !deviceId) return res.status(400).json({ error: 'routeId and deviceId required' });
+
+        const shareId = crypto.randomBytes(12).toString('hex');
+        const shares = await loadShares();
+        shares[shareId] = {
+            id: shareId,
+            routeId,
+            deviceId,
+            label: label || routeId,
+            createdAt: new Date().toISOString(),
+            expiresAt: expiresAt || null,
+            accessCount: 0,
+            lastAccessed: null
+        };
+        await saveShares(shares);
+
+        const base = req.protocol + '://' + req.get('host') + req.baseUrl;
+        const shareUrl = `${base}/?share=${shareId}`;
+        res.json({ success: true, shareId, shareUrl, share: shares[shareId] });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/shares', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const shares = await loadShares();
+        res.json(Object.values(shares));
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.delete('/api/shares/:shareId', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const shares = await loadShares();
+        if (!shares[req.params.shareId]) return res.status(404).json({ error: 'Share not found' });
+        delete shares[req.params.shareId];
+        await saveShares(shares);
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -679,6 +807,8 @@ app.get('/api/devices', requireLogin, validateToken, async (req, res) => {
 // Helper: check if current session user can access a device
 const canAccessDevice = async (req, deviceId) => {
     if (req.session.role === 'admin') return true;
+    // Share sessions: only allow their specific device
+    if (req.session.role === 'share') return req.session.shareDeviceId === deviceId;
     const users = await loadUsers();
     const user = users[req.session.userId];
     if (!user) return false;
@@ -702,6 +832,12 @@ app.get('/api/devices/:deviceId', requireLogin, validateToken, async (req, res) 
 app.get('/api/routes/:routeId', requireLogin, validateToken, async (req, res) => {
     try {
         const routeId = req.params.routeId;
+
+        // Share sessions: only allow access to their specific route
+        if (req.session.role === 'share' && req.session.shareRouteId !== routeId) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
         const routeFile = path.join(DATA_DIR, 'routes', `${routeId}.json`);
         const routeData = await fs.readFile(routeFile, 'utf8');
         const route = JSON.parse(routeData);
