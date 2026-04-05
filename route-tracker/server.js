@@ -1620,6 +1620,21 @@ const startServer = async () => {
         }
     });
 
+    app.patch('/api/media/:deviceId/:id', requireLogin, requireAdmin, async (req, res) => {
+        try {
+            const { deviceId, id } = req.params;
+            const { description } = req.body;
+            const entries = await loadMedia(deviceId);
+            const entry = entries.find(e => e.id === id);
+            if (!entry) return res.status(404).json({ error: 'Not found' });
+            entry.description = description !== undefined ? description : entry.description;
+            await saveMedia(deviceId, entries);
+            res.json({ success: true });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    });
+
     // Helper: parse raw EXIF buffer for GPS (IFD GPS tags)
     function parseExifGPS(exifBuffer) {
         try {

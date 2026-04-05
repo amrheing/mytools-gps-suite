@@ -227,6 +227,15 @@
         <div id="shares-list" style="margin-bottom:20px;"><p class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</p></div>
     </div>
 
+    <!-- Media Management -->
+    <h2><i class="fas fa-photo-video"></i> Media Management</h2>
+    <div class="card">
+        <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;">
+            Photos and YouTube videos attached to device routes. Expand a device to view, edit or delete entries.
+        </p>
+        <div id="media-sections"><p class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</p></div>
+    </div>
+
 </div>
 
 <!-- Create/Edit User Modal -->
@@ -307,7 +316,7 @@ async function init() {
         return;
     }
     document.getElementById('nav-username').textContent = me.username;
-    await Promise.all([loadUsers(), loadDevices(), loadTokens(), loadShares()]);
+    await Promise.all([loadUsers(), loadDevices(), loadTokens(), loadShares(), loadMediaAdmin()]);
 }
 
 // ---- Users ----
@@ -655,6 +664,115 @@ document.getElementById('user-modal').addEventListener('click', e => {
 });
 
 init();
+</script>
+
+<script>
+// ---- Media Management ----
+async function loadMediaAdmin() {
+    const container = document.getElementById('media-sections');
+    const tokens = Object.keys(allTokens).length ? allTokens : await fetch('./api/admin/tokens').then(r => r.json()).catch(() => ({}));
+    const deviceIds = new Set();
+    Object.values(tokens).forEach(t => (t.deviceIds || []).forEach(id => deviceIds.add(id)));
+
+    if (deviceIds.size === 0) {
+        container.innerHTML = '<p class="empty-state">No devices found.</p>';
+        return;
+    }
+
+    container.innerHTML = '';
+    for (const deviceId of deviceIds) {
+        const section = document.createElement('div');
+        section.style.cssText = 'border:1px solid rgba(255,255,255,0.1);border-radius:8px;margin-bottom:12px;overflow:hidden;';
+        section.innerHTML = `
+            <div onclick="toggleMediaSection('${escHtml(deviceId)}')" style="cursor:pointer;padding:14px 18px;background:rgba(255,255,255,0.05);display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-weight:600;"><i class="fas fa-mobile-alt" style="margin-right:8px;color:#e74c3c;"></i>${escHtml(deviceId)}</span>
+                <i class="fas fa-chevron-down" id="ms-icon-${escHtml(deviceId)}" style="transition:transform 0.2s;color:rgba(255,255,255,0.4);"></i>
+            </div>
+            <div id="ms-${escHtml(deviceId)}" style="display:none;padding:16px;">
+                <p class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</p>
+            </div>`;
+        container.appendChild(section);
+    }
+}
+
+function toggleMediaSection(deviceId) {
+    const panel = document.getElementById('ms-' + deviceId);
+    const icon = document.getElementById('ms-icon-' + deviceId);
+    const isOpen = panel.style.display !== 'none';
+    panel.style.display = isOpen ? 'none' : '';
+    if (icon) icon.style.transform = isOpen ? '' : 'rotate(180deg)';
+    if (!isOpen) renderMediaForDevice(deviceId, panel);
+}
+
+async function renderMediaForDevice(deviceId, panel) {
+    panel.innerHTML = '<p class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</p>';
+    const res = await fetch('./api/media/' + encodeURIComponent(deviceId));
+    if (!res.ok) { panel.innerHTML = '<p class="empty-state">Failed to load.</p>'; return; }
+    const entries = await res.json();
+    if (!entries.length) { panel.innerHTML = '<p class="empty-state">No media yet.</p>'; return; }
+
+    panel.innerHTML = `<table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+            <th style="padding:8px;text-align:left;font-weight:500;color:rgba(255,255,255,0.5);width:50px;"></th>
+            <th style="padding:8px;text-align:left;font-weight:500;color:rgba(255,255,255,0.5);">Description</th>
+            <th style="padding:8px;text-align:left;font-weight:500;color:rgba(255,255,255,0.5);">Coords</th>
+            <th style="padding:8px;text-align:left;font-weight:500;color:rgba(255,255,255,0.5);">Date</th>
+            <th style="padding:8px;text-align:right;font-weight:500;color:rgba(255,255,255,0.5);">Actions</th>
+        </tr></thead>
+        <tbody>${entries.map(e => mediaRow(e, deviceId)).join('')}</tbody>
+    </table>`;
+}
+
+function mediaRow(e, deviceId) {
+    const typeIcon = e.type === 'photo'
+        ? `<i class="fas fa-image" style="color:#3498db;" title="Photo"></i>`
+        : `<i class="fab fa-youtube" style="color:#FF0000;" title="YouTube"></i>`;
+    const desc = escHtml(e.description || e.url || '—');
+    const coords = Number(e.lat).toFixed(4) + ', ' + Number(e.lng).toFixed(4);
+    const date = e.createdAt ? new Date(e.createdAt).toLocaleDateString() : '—';
+    const id = escHtml(e.id);
+    const dId = escHtml(deviceId);
+    const currentDesc = escHtml(e.description || '');
+    return `<tr id="media-row-${id}" style="border-bottom:1px solid rgba(255,255,255,0.05);">
+        <td style="padding:10px 8px;text-align:center;">${typeIcon}</td>
+        <td style="padding:10px 8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(e.description||e.url||'')}">${desc}</td>
+        <td style="padding:10px 8px;font-family:monospace;font-size:0.82rem;color:rgba(255,255,255,0.5);">${coords}</td>
+        <td style="padding:10px 8px;color:rgba(255,255,255,0.5);font-size:0.85rem;">${date}</td>
+        <td style="padding:10px 8px;text-align:right;">
+            <div style="display:flex;gap:6px;justify-content:flex-end;">
+                <button class="btn btn-success btn-sm" onclick="editMediaDesc('${dId}','${id}','${currentDesc}')"><i class="fas fa-pen"></i></button>
+                <button class="btn btn-danger btn-sm" onclick="deleteMedia('${dId}','${id}')"><i class="fas fa-trash"></i></button>
+            </div>
+        </td>
+    </tr>`;
+}
+
+async function deleteMedia(deviceId, id) {
+    if (!confirm('Delete this media entry?')) return;
+    const res = await fetch('./api/media/' + encodeURIComponent(deviceId) + '/' + encodeURIComponent(id), { method: 'DELETE' });
+    if (res.ok) {
+        const row = document.getElementById('media-row-' + id);
+        if (row) row.remove();
+    } else {
+        showAlert('Failed to delete media.', 'error');
+    }
+}
+
+async function editMediaDesc(deviceId, id, currentDesc) {
+    const newDesc = prompt('Edit description:', currentDesc);
+    if (newDesc === null) return;
+    const res = await fetch('./api/media/' + encodeURIComponent(deviceId) + '/' + encodeURIComponent(id), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: newDesc })
+    });
+    if (res.ok) {
+        const panel = document.getElementById('ms-' + deviceId);
+        if (panel && panel.style.display !== 'none') renderMediaForDevice(deviceId, panel);
+    } else {
+        showAlert('Failed to update description.', 'error');
+    }
+}
 </script>
 </body>
 </html>
