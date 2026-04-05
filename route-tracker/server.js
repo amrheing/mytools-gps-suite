@@ -7,6 +7,7 @@ const bcrypt = require('bcrypt');
 const session = require('express-session');
 const multer = require('multer');
 const sharp = require('sharp');
+const exifr = require('exifr');
 const {
     generateRegistrationOptions,
     verifyRegistrationResponse,
@@ -1507,15 +1508,13 @@ const startServer = async () => {
             let photoLng = parseFloat(lng);
             let photoTime = timestamp || new Date().toISOString();
 
-            // Try EXIF if no coords provided
-            if ((!photoLat || !photoLng) && metadata.exif) {
+            // Try exifr if no coords provided
+            if ((!photoLat || !photoLng) || isNaN(photoLat) || isNaN(photoLng)) {
                 try {
-                    // Parse EXIF manually — sharp exposes raw exif buffer
-                    const exifData = parseExifGPS(metadata.exif);
-                    if (exifData) {
-                        photoLat = exifData.lat;
-                        photoLng = exifData.lng;
-                        if (exifData.timestamp) photoTime = exifData.timestamp;
+                    const gps = await exifr.gps(req.file.buffer);
+                    if (gps && gps.latitude && gps.longitude) {
+                        photoLat = gps.latitude;
+                        photoLng = gps.longitude;
                     }
                 } catch (e) { /* no EXIF GPS */ }
             }
@@ -1646,81 +1645,6 @@ const startServer = async () => {
     });
 
     // Helper: parse raw EXIF buffer for GPS (IFD GPS tags)
-    function parseExifGPS(exifBuffer) {
-        try {
-            // Look for GPS IFD markers in raw EXIF — simple implementation
-            // GPS Latitude: tag 0x0002, Longitude: 0x0004
-            const buf = Buffer.isBuffer(exifBuffer) ? exifBuffer : Buffer.from(exifBuffer);
-
-            // Find Exif header
-            const exifHeader = buf.indexOf('Exif\0\0');
-            if (exifHeader === -1) return null;
-            const tiffStart = exifHeader + 6;
-
-            // Determine byte order
-            const byteOrder = buf.readUInt16BE(tiffStart);
-            const littleEndian = byteOrder === 0x4949;
-            const readUInt16 = (offset) => littleEndian ? buf.readUInt16LE(offset) : buf.readUInt16BE(offset);
-            const readUInt32 = (offset) => littleEndian ? buf.readUInt32LE(offset) : buf.readUInt32BE(offset);
-
-            // IFD0 offset
-            const ifd0Offset = tiffStart + readUInt32(tiffStart + 4);
-            const ifd0Count = readUInt16(ifd0Offset);
-
-            let gpsIFDOffset = null;
-            for (let i = 0; i < ifd0Count; i++) {
-                const entry = ifd0Offset + 2 + i * 12;
-                const tag = readUInt16(entry);
-                if (tag === 0x8825) { // GPS IFD pointer
-                    gpsIFDOffset = tiffStart + readUInt32(entry + 8);
-                    break;
-                }
-            }
-            if (!gpsIFDOffset) return null;
-
-            const gpsCount = readUInt16(gpsIFDOffset);
-            const gpsData = {};
-            for (let i = 0; i < gpsCount; i++) {
-                const entry = gpsIFDOffset + 2 + i * 12;
-                const tag = readUInt16(entry);
-                gpsData[tag] = { entry, type: readUInt16(entry + 2), count: readUInt32(entry + 4), valueOffset: entry + 8 };
-            }
-
-            // Tag 1=LatRef, 2=Lat, 3=LonRef, 4=Lon
-            if (!gpsData[2] || !gpsData[4]) return null;
-
-            const readRational = (offset) => {
-                const num = readUInt32(tiffStart + offset);
-                const den = readUInt32(tiffStart + offset + 4);
-                return den === 0 ? 0 : num / den;
-            };
-
-            const latOffset = readUInt32(gpsData[2].valueOffset);
-            const latDeg = readRational(latOffset);
-            const latMin = readRational(latOffset + 8);
-            const latSec = readRational(latOffset + 16);
-            let lat = latDeg + latMin / 60 + latSec / 3600;
-
-            const lonOffset = readUInt32(gpsData[4].valueOffset);
-            const lonDeg = readRational(lonOffset);
-            const lonMin = readRational(lonOffset + 8);
-            const lonSec = readRational(lonOffset + 16);
-            let lng = lonDeg + lonMin / 60 + lonSec / 3600;
-
-            // Apply S/W negative
-            if (gpsData[1]) {
-                const latRef = buf.toString('ascii', tiffStart + readUInt32(gpsData[1].valueOffset), tiffStart + readUInt32(gpsData[1].valueOffset) + 1);
-                if (latRef === 'S') lat = -lat;
-            }
-            if (gpsData[3]) {
-                const lonRef = buf.toString('ascii', tiffStart + readUInt32(gpsData[3].valueOffset), tiffStart + readUInt32(gpsData[3].valueOffset) + 1);
-                if (lonRef === 'W') lng = -lng;
-            }
-
-            return (lat !== 0 || lng !== 0) ? { lat, lng } : null;
-        } catch { return null; }
-    }
-
     // ─── END MEDIA ROUTES ─────────────────────────────────────────────────────
 
     app.listen(PORT, '0.0.0.0', () => {

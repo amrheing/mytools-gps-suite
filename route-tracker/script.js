@@ -2014,83 +2014,25 @@ function switchMediaTab(tab) {
 }
 
 // ── file selected: read EXIF GPS client-side ──────────────
-function onMediaPhotoSelected() {
+async function onMediaPhotoSelected() {
     const file = document.getElementById('media-photo-file').files[0];
     if (!file) return;
-    // Use FileReader to peek at EXIF bytes
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const coords = extractExifGPS(e.target.result);
-        if (coords) {
-            document.getElementById('media-photo-lat').value = coords.lat;
-            document.getElementById('media-photo-lng').value = coords.lng;
+    try {
+        const gps = await exifr.gps(file);
+        if (gps && gps.latitude && gps.longitude) {
+            document.getElementById('media-photo-lat').value = gps.latitude;
+            document.getElementById('media-photo-lng').value = gps.longitude;
             document.getElementById('media-photo-no-gps').style.display = 'none';
         } else {
             document.getElementById('media-photo-lat').value = '';
             document.getElementById('media-photo-lng').value = '';
             document.getElementById('media-photo-no-gps').style.display = '';
         }
-    };
-    reader.readAsArrayBuffer(file);
-}
-
-// Minimal client-side EXIF GPS parser
-function extractExifGPS(buffer) {
-    try {
-        const view = new DataView(buffer);
-        // Find JPEG EXIF marker 0xFFE1
-        let offset = 2;
-        while (offset < view.byteLength - 4) {
-            const marker = view.getUint16(offset);
-            const segLen = view.getUint16(offset + 2);
-            if (marker === 0xFFE1) {
-                // Check 'Exif\0\0'
-                const exifHeader = String.fromCharCode(
-                    view.getUint8(offset + 4), view.getUint8(offset + 5),
-                    view.getUint8(offset + 6), view.getUint8(offset + 7)
-                );
-                if (exifHeader === 'Exif') {
-                    const tiffStart = offset + 10;
-                    const byteOrder = view.getUint16(tiffStart);
-                    const le = byteOrder === 0x4949;
-                    const r16 = (o) => le ? view.getUint16(o, true) : view.getUint16(o, false);
-                    const r32 = (o) => le ? view.getUint32(o, true) : view.getUint32(o, false);
-
-                    const ifd0 = tiffStart + r32(tiffStart + 4);
-                    const cnt = r16(ifd0);
-                    let gpsOff = null;
-                    for (let i = 0; i < cnt; i++) {
-                        const e = ifd0 + 2 + i * 12;
-                        if (r16(e) === 0x8825) { gpsOff = tiffStart + r32(e + 8); break; }
-                    }
-                    if (!gpsOff) return null;
-                    const gcnt = r16(gpsOff);
-                    const gps = {};
-                    for (let i = 0; i < gcnt; i++) {
-                        const e = gpsOff + 2 + i * 12;
-                        gps[r16(e)] = r32(e + 8);
-                    }
-                    if (!gps[2] || !gps[4]) return null;
-                    const rat = (o) => { const n = r32(tiffStart + o); const d = r32(tiffStart + o + 4); return d ? n / d : 0; };
-                    const latRaw = [rat(gps[2]), rat(gps[2] + 8), rat(gps[2] + 16)];
-                    const lonRaw = [rat(gps[4]), rat(gps[4] + 8), rat(gps[4] + 16)];
-                    let lat = latRaw[0] + latRaw[1] / 60 + latRaw[2] / 3600;
-                    let lng = lonRaw[0] + lonRaw[1] / 60 + lonRaw[2] / 3600;
-                    if (gps[1]) {
-                        const ref = String.fromCharCode(view.getUint8(tiffStart + gps[1]));
-                        if (ref === 'S') lat = -lat;
-                    }
-                    if (gps[3]) {
-                        const ref = String.fromCharCode(view.getUint8(tiffStart + gps[3]));
-                        if (ref === 'W') lng = -lng;
-                    }
-                    if (lat !== 0 || lng !== 0) return { lat, lng };
-                }
-            }
-            offset += 2 + segLen;
-        }
-    } catch (e) { /* ignore */ }
-    return null;
+    } catch {
+        document.getElementById('media-photo-lat').value = '';
+        document.getElementById('media-photo-lng').value = '';
+        document.getElementById('media-photo-no-gps').style.display = '';
+    }
 }
 
 // ── map coord picker ──────────────────────────────────────
