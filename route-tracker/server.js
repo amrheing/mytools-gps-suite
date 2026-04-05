@@ -1407,7 +1407,8 @@ const startServer = async () => {
     // Bootstrap admin user if no users exist
     const users = await loadUsers();
     if (Object.keys(users).length === 0) {
-        const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+        const adminPassword = process.env.ADMIN_PASSWORD;
+        if (!adminPassword) throw new Error('ADMIN_PASSWORD environment variable is not set');
         const id = crypto.randomBytes(8).toString('hex');
         users[id] = {
             id,

@@ -103,7 +103,7 @@ services:
       - NODE_ENV=production
       - PORT=3000
       # Initial admin password — only used on first boot when users.json is empty.
-      # After first login, change the password via the admin panel and remove this variable.
+      # After first login and password change via admin panel, you can keep this set safely.
       - ADMIN_PASSWORD=changeme
       # Session secret — used to sign session cookies. Must be a long random string.
       # Generate one with: openssl rand -hex 32
