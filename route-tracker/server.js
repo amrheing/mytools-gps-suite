@@ -17,7 +17,7 @@ const {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const DATA_DIR = '/app/data';
+const DATA_DIR = process.env.DATA_DIR || '/app/data';
 const MEDIA_DIR = path.join(DATA_DIR, 'media');
 const RP_NAME = 'Route Tracker';
 const RP_ID = process.env.RP_ID || 'tools.amrhein.info';
@@ -35,8 +35,21 @@ function normalizeCredentialIDStr(raw) {
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+// Persist session secret across restarts so existing logins survive container rebuilds
+const SESSION_SECRET_FILE = path.join(DATA_DIR, '.session-secret');
+let sessionSecret;
+try {
+    sessionSecret = require('fs').readFileSync(SESSION_SECRET_FILE, 'utf8').trim();
+} catch {
+    sessionSecret = crypto.randomBytes(32).toString('hex');
+    try {
+        require('fs').mkdirSync(DATA_DIR, { recursive: true });
+        require('fs').writeFileSync(SESSION_SECRET_FILE, sessionSecret);
+    } catch { /* data dir not available (e.g. CI) — use in-memory secret */ }
+}
+
 app.use(session({
-    secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
+    secret: process.env.SESSION_SECRET || sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -96,6 +109,19 @@ const requireAdmin = (req, res, next) => {
     return res.status(403).json({ error: 'Admin access required' });
 };
 
+// Middleware: require admin + canViewLogs permission
+const requireLogAccess = async (req, res, next) => {
+    if (!req.session || req.session.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    const users = await loadUsers();
+    const user = users[req.session.userId];
+    if (!user || !user.canViewLogs) {
+        return res.status(403).json({ error: 'Log viewer access not granted' });
+    }
+    next();
+};
+
 // Store incoming request logs for debugging
 let requestLogs = [];
 const MAX_LOGS = 100;
@@ -145,36 +171,6 @@ const ensureDataDir = async () => {
     }
 };
 
-// Load or create access tokens
-const loadTokens = async () => {
-    try {
-        const tokensFile = path.join(DATA_DIR, 'tokens.json');
-        const data = await fs.readFile(tokensFile, 'utf8');
-        return JSON.parse(data);
-    } catch (error) {
-        // Create default token if file doesn't exist
-        const defaultTokens = {
-            'default-token-123': {
-                name: 'Default Device Token',
-                created: new Date().toISOString(),
-                lastUsed: null,
-                deviceIds: []
-            }
-        };
-        await saveTokens(defaultTokens);
-        return defaultTokens;
-    }
-};
-
-const saveTokens = async (tokens) => {
-    try {
-        const tokensFile = path.join(DATA_DIR, 'tokens.json');
-        await fs.writeFile(tokensFile, JSON.stringify(tokens, null, 2));
-    } catch (error) {
-        console.error('Error saving tokens:', error);
-    }
-};
-
 // Share link management
 const loadShares = async () => {
     try {
@@ -195,71 +191,44 @@ const saveShares = async (shares) => {
     }
 };
 
-// Token validation middleware
-const validateToken = async (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    
-    // Extract the raw token string from request (priority: Bearer > query > body > Basic Auth > topic)
-    let raw = null;
-    if (authHeader?.startsWith('Bearer ')) raw = authHeader.slice(7);
-    if (!raw) raw = req.query.token;
-    if (!raw) raw = req.body?.token;
-    if (!raw && authHeader?.startsWith('Basic ')) {
-        const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf8');
-        raw = decoded.split(':')[0];
-    }
-    if (!raw && req.body?.topic) {
-        const parts = req.body.topic.split('/');
-        if (parts.length >= 2) raw = parts[1];
-    }
-
-    if (!raw) {
-        return res.status(401).json({ error: 'Access token required' });
-    }
-
-    // Share sessions bypass GPS token validation (read-only access controlled by canAccessDevice)
-    if (req.session?.role === 'share') return next();
-    const users = await loadUsers();
-    const userByToken = Object.values(users).find(u => u.gpsToken && u.gpsToken === raw);
-    if (userByToken) {
-        console.log(`✅ GPS token validated for user: ${userByToken.username}`);
-        req.token = raw;
-        req.tokenData = { name: userByToken.username, userId: userByToken.id };
-        req.tokenUserId = userByToken.id;
-        return next();
-    }
-
-    // --- FALLBACK: check tokens.json (for shared/anonymous device tokens) ---
-    const tokens = await loadTokens();
-    let token = raw;
-
-    // Try by key, then by name
-    if (!tokens[token]) {
-        const byName = Object.entries(tokens).find(([, t]) => t.name === token);
-        if (byName) token = byName[0];
-    }
-    // Try topic parts[2] as last resort
-    if (!tokens[token] && req.body?.topic) {
-        const parts = req.body.topic.split('/');
-        if (parts.length >= 3) token = parts[2];
-        if (!tokens[token]) {
-            const byName = Object.entries(tokens).find(([, t]) => t.name === token);
-            if (byName) token = byName[0];
+// OwnTracks Basic Auth middleware — validates username:password from HTTP Basic Auth header.
+// If the request already has an active admin session (e.g. web testing tools), that is also accepted.
+const validateOwnTracksAuth = async (req, res, next) => {
+    // Admin session fallback — allows the web testing tools to work without Basic Auth
+    if (req.session?.userId) {
+        const users = await loadUsers();
+        const sessionUser = users[req.session.userId];
+        if (sessionUser) {
+            req.gpsUserId = sessionUser.id;
+            req.gpsUsername = sessionUser.username;
+            return next();
         }
     }
 
-    if (!tokens[token]) {
-        console.log(`❌ Token not found: ${raw}`);
-        return res.status(403).json({ error: 'Invalid access token' });
+    const authHeader = req.headers['authorization'];
+    if (!authHeader?.startsWith('Basic ')) {
+        return res.status(401).json({ error: 'Basic Auth required' });
     }
+    const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf8');
+    const colonIdx = decoded.indexOf(':');
+    if (colonIdx === -1) return res.status(401).json({ error: 'Invalid Basic Auth format' });
+    const username = decoded.slice(0, colonIdx).trim().toLowerCase();
+    const password = decoded.slice(colonIdx + 1);
 
-    console.log(`✅ Token validated: ${tokens[token].name}`);
-    tokens[token].lastUsed = new Date().toISOString();
-    await saveTokens(tokens);
-    req.token = token;
-    req.tokenData = tokens[token];
+    const users = await loadUsers();
+    const user = Object.values(users).find(u => u.username === username);
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+        console.log(`❌ OwnTracks auth failed for: ${username}`);
+        return res.status(403).json({ error: 'Invalid username or password' });
+    }
+    console.log(`✅ OwnTracks auth for user: ${username}`);
+    req.gpsUserId = user.id;
+    req.gpsUsername = user.username;
     next();
 };
+
+// Passthrough for endpoints that already use requireLogin session auth
+const validateToken = (req, res, next) => next();
 
 // Device management
 const getDeviceData = async (deviceId) => {
@@ -594,7 +563,6 @@ app.get('/api/auth/me', requireLogin, async (req, res) => {
             shareId: req.session.shareId,
             shareRouteId: req.session.shareRouteId,
             shareDeviceId: req.session.shareDeviceId,
-            gpsToken: null,
             allowedDevices: [req.session.shareDeviceId],
             dataWindow: { from: null, to: null }
         });
@@ -605,9 +573,9 @@ app.get('/api/auth/me', requireLogin, async (req, res) => {
         userId: req.session.userId,
         username: req.session.username,
         role: req.session.role,
-        gpsToken: user?.gpsToken || null,
         allowedDevices: user?.allowedDevices || [],
         dataWindow: user?.dataWindow || { from: null, to: null },
+        canViewLogs: user?.canViewLogs || false,
         passkeys: (user?.passkeys || []).map(pk => ({
             credentialID: normalizeCredentialIDStr(pk.credentialID),
             label: pk.label,
@@ -656,8 +624,9 @@ app.get('/api/admin/users', requireLogin, requireAdmin, async (req, res) => {
     const sanitized = Object.values(users).map(u => ({
         id: u.id, username: u.username, role: u.role,
         allowedDevices: u.allowedDevices || [],
-        gpsToken: u.gpsToken || null,
+        devices: u.devices || [],
         dataWindow: u.dataWindow || { from: null, to: null },
+        canViewLogs: u.canViewLogs || false,
         created: u.created, lastLogin: u.lastLogin || null
     }));
     res.json(sanitized);
@@ -665,7 +634,7 @@ app.get('/api/admin/users', requireLogin, requireAdmin, async (req, res) => {
 
 // Create user (admin only)
 app.post('/api/admin/users', requireLogin, requireAdmin, async (req, res) => {
-    const { username, password, role, allowedDevices, gpsToken, dataWindow } = req.body;
+    const { username, password, role, allowedDevices, dataWindow } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
     const users = await loadUsers();
@@ -680,7 +649,8 @@ app.post('/api/admin/users', requireLogin, requireAdmin, async (req, res) => {
         passwordHash: await bcrypt.hash(password, BCRYPT_ROUNDS),
         role: role === 'admin' ? 'admin' : 'viewer',
         allowedDevices: allowedDevices || [],
-        gpsToken: gpsToken || null,
+        devices: [],
+        canViewLogs: false,
         dataWindow: dataWindow || { from: null, to: null },
         created: new Date().toISOString(),
         lastLogin: null
@@ -701,8 +671,8 @@ app.put('/api/admin/users/:id', requireLogin, requireAdmin, async (req, res) => 
     }
     if (req.body.role) user.role = req.body.role === 'admin' ? 'admin' : 'viewer';
     if (req.body.allowedDevices !== undefined) user.allowedDevices = req.body.allowedDevices;
-    if (req.body.gpsToken !== undefined) user.gpsToken = req.body.gpsToken || null;
     if (req.body.dataWindow !== undefined) user.dataWindow = req.body.dataWindow;
+    if (req.body.canViewLogs !== undefined) user.canViewLogs = !!req.body.canViewLogs;
 
     await saveUsers(users);
     res.json({ success: true });
@@ -735,60 +705,11 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Token management for admin
-app.get('/api/admin/tokens', requireLogin, requireAdmin, async (req, res) => {
-    try {
-        const tokens = await loadTokens();
-        res.json(tokens);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
 app.get('/api/admin/media-devices', requireLogin, requireAdmin, async (req, res) => {
     try {
         const entries = await fs.readdir(MEDIA_DIR, { withFileTypes: true }).catch(() => []);
         const deviceIds = entries.filter(e => e.isDirectory()).map(e => e.name);
         res.json(deviceIds);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.post('/api/admin/tokens', requireLogin, requireAdmin, async (req, res) => {
-    try {
-        const { name } = req.body;
-        
-        const newToken = crypto.randomBytes(32).toString('hex');
-        const tokens = await loadTokens();
-        
-        tokens[newToken] = {
-            name: name || 'New Device Token',
-            created: new Date().toISOString(),
-            lastUsed: null,
-            deviceIds: []
-        };
-        
-        await saveTokens(tokens);
-        
-        res.json({ 
-            token: newToken, 
-            message: 'Token created successfully',
-            tokenData: tokens[newToken]
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.delete('/api/admin/tokens/:token', requireLogin, requireAdmin, async (req, res) => {
-    try {
-        const { token } = req.params;
-        const tokens = await loadTokens();
-        if (!tokens[token]) return res.status(404).json({ error: 'Token not found' });
-        delete tokens[token];
-        await saveTokens(tokens);
-        res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -847,7 +768,7 @@ app.delete('/api/shares/:shareId', requireLogin, requireAdmin, async (req, res) 
 });
 
 // Receive GPS data from OwnTracks app (HTTP mode)
-app.post('/api/gps', validateToken, async (req, res) => {
+app.post('/api/gps', validateOwnTracksAuth, async (req, res) => {
     try {
         // OwnTracks sends all message types to the same endpoint.
         // Non-location types must be acknowledged with HTTP 200 and an empty array.
@@ -856,13 +777,22 @@ app.post('/api/gps', validateToken, async (req, res) => {
         }
 
         // Extract deviceId from OwnTracks topic (owntracks/<user>/<device>)
-        // or fall back to query param / header.
-        let deviceId = req.query.deviceId;
-        if (!deviceId && req.body?.topic) {
+        let deviceId = null;
+        if (req.body?.topic) {
             const parts = req.body.topic.split('/');
             if (parts.length >= 3) deviceId = parts[2];
         }
-        if (!deviceId) deviceId = req.body?.tid || req.headers['device-id'] || 'default-device';
+        if (!deviceId) deviceId = req.body?.tid || 'default-device';
+
+        // Auto-register device to the authenticated user
+        const users = await loadUsers();
+        const gpsUser = users[req.gpsUserId];
+        if (gpsUser && !gpsUser.devices) gpsUser.devices = [];
+        if (gpsUser && !gpsUser.devices.includes(deviceId)) {
+            gpsUser.devices.push(deviceId);
+            await saveUsers(users);
+            console.log(`📱 Registered device '${deviceId}' to user '${gpsUser.username}'`);
+        }
 
         const routeName = req.body.routeName || req.headers['route-name'];
 
@@ -1213,8 +1143,22 @@ app.delete('/api/routes/:routeId', requireLogin, requireAdmin, async (req, res) 
 // DEBUGGING ENDPOINTS
 // =====================
 
-// Debug endpoint - view recent requests
-app.get('/api/debug/requests', requireLogin, validateToken, (req, res) => {
+// Admin log viewer endpoint - requires canViewLogs permission
+app.get('/api/admin/logs', requireLogin, requireLogAccess, (req, res) => {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const gpsOnly = req.query.gpsOnly === 'true';
+    const logs = gpsOnly
+        ? requestLogs.filter(log => log.path === '/api/gps' && log.method === 'POST')
+        : requestLogs;
+    res.json({
+        total: requestLogs.length,
+        gpsTotal: requestLogs.filter(l => l.path === '/api/gps' && l.method === 'POST').length,
+        logs: logs.slice(0, limit)
+    });
+});
+
+// Debug endpoint - view recent requests (session auth, used by GPS monitoring loop)
+app.get('/api/debug/requests', requireLogin, (req, res) => {
     res.json({
         total: requestLogs.length,
         requests: requestLogs.slice(0, 20), // Last 20 requests
@@ -1274,8 +1218,6 @@ app.get('/api/debug/status', requireLogin, requireAdmin, validateToken, async (r
             routeCount = routes.filter(f => f.endsWith('.json')).length;
         } catch (e) { /* ignore */ }
         
-        const tokens = await loadTokens();
-        
         res.json({
             status: 'running',
             timestamp: new Date().toISOString(),
@@ -1284,7 +1226,6 @@ app.get('/api/debug/status', requireLogin, requireAdmin, validateToken, async (r
             data: {
                 devices: deviceCount,
                 routes: routeCount,
-                tokens: Object.keys(tokens).length,
                 requestLogs: requestLogs.length
             },
             recentActivity: {
@@ -1340,7 +1281,6 @@ app.use((error, req, res, next) => {
 // Initialize and start server
 const startServer = async () => {
     await ensureDataDir();
-    await loadTokens(); // Initialize tokens
 
     // Bootstrap admin user if no users exist
     const users = await loadUsers();
@@ -1354,6 +1294,7 @@ const startServer = async () => {
             passwordHash: await bcrypt.hash(adminPassword, BCRYPT_ROUNDS),
             role: 'admin',
             allowedDevices: [],
+            devices: [],
             created: new Date().toISOString(),
             lastLogin: null
         };

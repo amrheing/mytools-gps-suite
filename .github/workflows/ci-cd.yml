@@ -22,21 +22,18 @@ jobs:
     
     - name: Install Python dependencies
       run: |
-        cd extract-gpx-parts/web
-        pip install -r requirements.txt
+        pip install -r extract-gpx-parts/web/requirements.txt
         pip install pytest coverage
-    
+
     - name: Run Python tests
       run: |
-        cd extract-gpx-parts/web
+        cd extract-gpx-parts
         python -m pytest --cov=. --cov-report=xml
-    
+
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
-        file: ./extract-gpx-parts/web/coverage.xml
-        flags: python
-        name: codecov-python
+        file: ./extract-gpx-parts/coverage.xml
     
     - name: Set up Node.js
       uses: actions/setup-node@v4
@@ -47,10 +44,14 @@ jobs:
       run: |
         cd route-tracker
         npm install
-        node -e "require('./server.js')" &
-        sleep 3
+        DATA_DIR=/tmp/route-tracker-data node server.js &
+        SERVER_PID=$!
+        for i in $(seq 1 10); do
+          curl -sf http://localhost:3000/api/health && break
+          sleep 1
+        done
         curl -f http://localhost:3000/api/health || exit 1
-        kill %1 2>/dev/null || true
+        kill $SERVER_PID 2>/dev/null || true
 
     - name: Test JavaScript components
       run: |
