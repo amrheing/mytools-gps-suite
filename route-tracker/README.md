@@ -41,6 +41,8 @@ A comprehensive web application for real-time GPS route tracking, route history 
 - **Real-time notifications** for tracking events
 - **Route history viewer** with detailed analytics
 - **Export format customization** for different use cases
+- **GPS data point overlay** — toggle small dot markers per recorded point with per-point popups (speed, altitude, timestamp)
+- **Route point editing** (admin) — add, delete, and drag-to-move individual GPS points via right-click context menu; changes saved back to server with distance recalculation
 
 ## 🛠️ Technology Stack
 

@@ -24,10 +24,6 @@ RUN mkdir -p ./shared
 RUN mkdir -p /app/data/routes /app/data/devices && \
     chown -R node:node /app/data
 
-# Copy static files to a location the server can serve
-RUN mkdir -p /usr/share/nginx/html && \
-    cp index.html script.js user-manager.js export-manager.js login.html admin.html README.md QUICKSTART.md /usr/share/nginx/html/
-
 # Expose port 3000 (will be mapped to 6050)
 EXPOSE 3000
 

@@ -36,6 +36,7 @@ The map shows the current route as a polyline with a start marker and a current-
 
 - **Zoom / Pan** freely — the map will not reset its view after you interact with it.
 - **Reset View** button (top right of map) — fits the map back to the full route.
+- **Show Points** button (top right of map) — toggles small dots on the route line for every recorded GPS point. Click a dot to see its coordinates, speed, altitude, and timestamp.
 - Clicking a **photo thumbnail** or **YouTube icon** on the map opens the media viewer.
 
 ### Statistics Dashboard

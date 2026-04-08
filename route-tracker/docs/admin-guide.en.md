@@ -32,7 +32,42 @@ Create and manage user accounts.
 
 ---
 
-### 2 · API Tokens
+### 2 · GPS Incoming Log
+
+The **GPS Incoming Log** section is visible only to admin users who have the **Log Viewer Access** permission enabled on their account.
+
+It shows a real-time record of every HTTP request received by the server, with full details of each incoming GPS push from OwnTracks or any other client.
+
+#### Controls
+
+| Control | Description |
+|---|---|
+| **Refresh** button | Reloads the log from the server (last 50 entries) |
+| **GPS pushes only** checkbox | When checked, filters the log to show only `POST /api/gps` requests — hides all other API calls |
+| Summary line | Shows total requests in the log and how many are GPS pushes |
+
+#### Log Entry Fields
+
+Each entry shows:
+
+- **Timestamp** — date and time the request was received
+- **Method + Path** — e.g. `POST /api/gps`
+- **Status code** — HTTP response sent back (200 = success, 401 = auth failure, etc.)
+- **User / Device** — which user and device ID the push was attributed to
+- **Payload summary** — latitude, longitude, speed, altitude, accuracy if present
+- **Response time** — how long the server took to process the request
+
+#### Enabling Log Access for a User
+
+1. Go to **User Management** → edit an admin user.
+2. Check **Log Viewer Access**.
+3. Save. The GPS Incoming Log section will appear for that user on next page load.
+
+> Only admin role users can be granted log access. The setting has no effect on viewer accounts.
+
+---
+
+### 3 · API Tokens
 
 API tokens link an incoming GPS webhook to a specific device and user.
 
@@ -49,7 +84,7 @@ https://your-domain.com/route-tracker/api/gps?token=YOUR_TOKEN
 
 ---
 
-### 3 · Shared Links
+### 4 · Shared Links
 
 Create time-limited public links to share a route view with people who have no account.
 
@@ -63,7 +98,7 @@ Copy the generated link and send it. It opens a read-only map view without requi
 
 ---
 
-### 4 · Media Management
+### 5 · Media Management
 
 View, edit descriptions, reposition, and delete all media entries per device.
 
@@ -110,6 +145,30 @@ As an admin, all media markers on the map have a **grab cursor**. Simply **drag*
 | **Debug** | Opens the system debug panel with session info and live GPS monitor |
 | **Clear Route** | Removes the current live route from the map (does not delete from server) |
 | **Reset View** | Fits the map back to the full route extent |
+| **Show Points** | Toggles small dot markers on the route line for every GPS point. Click a dot for details (coords, speed, altitude, timestamp) |
+| **Edit Points** | Enters route point editing mode — see below |
+
+---
+
+### Route Point Editing (admin-only)
+
+Click **Edit Points** in the map header to enter editing mode. A yellow toolbar appears above the map.
+
+#### Interactions
+
+| Action | How |
+|---|---|
+| **Move a point** | Click and hold a dot, then drag it to the new position. The route line updates live |
+| **Add a point** | Right-click a dot → **Add point after**. A new point (shown in blue) is inserted as a midpoint between that point and the next. Drag it to the correct location |
+| **Delete a point** | Right-click a dot → **Delete point**. At least 2 points must remain |
+| **Dismiss menu** | Click elsewhere on the map, or press **Esc** |
+
+#### Saving
+
+- **Save** — writes the edited points to the server and recalculates the total distance and timestamps. Returns to normal view.
+- **Discard** — discards all changes and reloads the original route from the server.
+
+> Edits are **not** auto-saved. You must click Save explicitly.
 
 ---
 

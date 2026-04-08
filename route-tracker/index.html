@@ -73,6 +73,22 @@
             border: 1px solid #e9ecef;
         }
 
+        /* Fullscreen overlay during point-edit mode */
+        .map-section.map-edit-fullscreen {
+            position: fixed;
+            inset: 0;
+            z-index: 5000;
+            border-radius: 0;
+            border: none;
+            display: flex;
+            flex-direction: column;
+        }
+        .map-edit-fullscreen .map-container {
+            flex: 1;
+            height: unset;
+            min-height: unset;
+        }
+
         .map-header {
             background: #f8f9fa;
             padding: 15px 20px;
@@ -187,12 +203,11 @@
         /* === ROUTE ITEMS === */
         .route-item {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 18px;
+            flex-direction: column;
+            padding: 14px 18px;
             border: 1px solid #e9ecef;
             border-radius: var(--border-radius);
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             background: #fafbfc;
             transition: all 0.2s ease;
         }
@@ -203,20 +218,32 @@
             transform: translateY(-1px);
         }
 
+        .route-item-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
         .route-info h4 {
-            margin: 0 0 5px 0;
+            margin: 0;
             color: var(--primary-color);
-            font-size: 1.1rem;
+            font-size: 1rem;
         }
 
         .route-meta {
             color: var(--text-light);
-            font-size: 0.9em;
+            font-size: 0.82em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .route-actions {
             display: flex;
-            gap: 10px;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
         }
 
         /* === ROLE-BASED VISIBILITY === */
@@ -239,32 +266,6 @@
             border-left: 4px solid #6f42c1;
         }
 
-        /* === TESTING TOOLS === */
-        .testing-tools {
-            background: white;
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow);
-            border: 1px solid #e9ecef;
-        }
-
-        .tools-header {
-            background: #f8f9fa;
-            padding: 15px 20px;
-            border-bottom: 1px solid #e9ecef;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .tools-content {
-            padding: 20px;
-            display: none;
-        }
-
-        .tools-content.expanded {
-            display: block;
-        }
 
         /* === RESPONSIVE DESIGN === */
         @media (max-width: 768px) {
@@ -495,12 +496,66 @@
             font-size: 0.85em;
         }
 
-        #token-setup {
-            border: 2px solid var(--warning-color);
-        }
-
         #main-app {
             border: 2px solid var(--success-color);
+        }
+
+        /* === ROUTE POINT EDITING === */
+        .edit-point-dot {
+            width: 14px; height: 14px;
+            border-radius: 50%;
+            border: 2px solid;
+            cursor: grab;
+            box-shadow: 0 0 5px rgba(0,0,0,0.4);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .edit-point-dot:active { cursor: grabbing; }
+        .edit-point-new {
+            font-size: 10px; font-weight: bold; color: white; line-height: 1;
+        }
+
+        #route-context-menu {
+            display: none;
+            position: absolute;
+            z-index: 10000;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+            overflow: hidden;
+            min-width: 170px;
+        }
+        .ctx-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 0.9em;
+            display: flex; align-items: center; gap: 8px;
+            transition: background 0.15s;
+        }
+        .ctx-item:hover { background: #f0f4ff; }
+        .ctx-item.ctx-danger:hover { background: #fff0f0; color: #c0392b; }
+        .ctx-separator { height: 1px; background: #eee; margin: 0; }
+
+        #edit-toolbar {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            background: #fff3cd;
+            border-bottom: 2px solid #ffc107;
+            padding: 8px 20px;
+            font-size: 0.9em;
+        }
+        #edit-toolbar span { flex: 1; color: #856404; }
+
+        .route-merge-check {
+            display: flex;
+            align-items: center;
+            padding: 0 6px 0 2px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .route-merge-check input[type="checkbox"] {
+            width: 16px; height: 16px; cursor: pointer;
         }
     </style>
 </head>
@@ -546,44 +601,13 @@
                     </div>
 
                     <!-- Token Setup (Initially visible) -->
-                    <div id="token-setup" class="status-panel admin-only">
-                        <h3 style="margin-bottom: 15px; color: var(--primary-color);">
-                            <i class="fas fa-key"></i> API Configuration
-                        </h3>
-                        <div class="control-grid">
-                            <div>
-                                <label for="api-token">API Access Token:</label>
-                                <input type="text" id="api-token" placeholder="Enter your API token..." class="form-control">
-                            </div>
-                            <div>
-                                <label for="device-id">Device ID:</label>
-                                <input type="text" id="device-id" placeholder="default-device" class="form-control">
-                            </div>
-                        </div>
-                        <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
-                            <button class="btn btn-primary admin-only" onclick="setApiToken()">
-                                <i class="fas fa-save"></i> Set Token
-                            </button>
-                            <button class="btn btn-info admin-only" onclick="showOverlanderSetup()">
-                                <i class="fas fa-mobile-alt"></i> iPhone Setup
-                            </button>
-                            <button class="btn btn-secondary admin-only" onclick="changeDevice()">
-                                <i class="fas fa-mobile-alt"></i> Change Device
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Main GPS Controls (Hidden initially) -->
+                    <!-- Main GPS Controls -->
                     <div id="main-app" style="display: none;">
                         <div class="control-grid">
                             <div class="status-panel">
                                 <h4><i class="fas fa-info-circle"></i> Status</h4>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
-                                    <div class="admin-only">
-                                        <small>Token:</small><br>
-                                        <span id="current-token" class="status-text">Not set</span>
-                                    </div>
-                                    <div>
+                                    <div class="admin-only" style="margin-bottom:4px;">
                                         <small>Device:</small><br>
                                         <span id="device-name" class="status-text">Unknown</span>
                                     </div>
@@ -639,26 +663,43 @@
                             <i class="fas fa-map"></i> Live Route Tracking
                         </h3>
                         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                            <button class="btn btn-sm btn-info admin-only" onclick="testConnectivity()">
-                                <i class="fas fa-wifi"></i> Test Connection
-                            </button>
-                            <button class="btn btn-sm btn-warning admin-only" onclick="showDebugPanel()">
-                                <i class="fas fa-cogs"></i> Debug
-                            </button>
                             <button class="btn btn-sm btn-danger admin-only" onclick="clearLiveRoute()">
                                 <i class="fas fa-trash"></i> Clear Route
                             </button>
                             <button class="btn btn-sm btn-success admin-only" onclick="openMediaUpload()">
                                 <i class="fas fa-camera"></i> Add Media
                             </button>
+                            <button class="btn btn-sm btn-secondary" onclick="zoomToFit()">
+                                <i class="fas fa-compress-arrows-alt"></i> Zoom to Fit
+                            </button>
                             <button class="btn btn-sm btn-secondary" onclick="resetMapView()">
                                 <i class="fas fa-expand-arrows-alt"></i> Reset View
                             </button>
+                            <button id="data-points-btn" class="btn btn-sm btn-secondary" onclick="toggleDataPoints()">
+                                <i class="fas fa-circle"></i><span> Show Points</span>
+                            </button>
+                            <button id="edit-mode-btn" class="btn btn-sm btn-secondary admin-only" onclick="toggleEditMode()">
+                                <i class="fas fa-pencil-alt"></i> Edit Points
+                            </button>
                         </div>
+                    </div>
+                    <!-- Edit mode toolbar (shown while in edit mode) -->
+                    <div id="edit-toolbar">
+                        <span><i class="fas fa-info-circle"></i> Edit mode — right-click a point to add/delete · drag to move</span>
+                        <button class="btn btn-sm btn-success" onclick="saveRouteEdits()">
+                            <i class="fas fa-save"></i> Save
+                        </button>
+                        <button class="btn btn-sm btn-secondary" onclick="discardRouteEdits()">
+                            <i class="fas fa-times"></i> Discard
+                        </button>
                     </div>
                     <div class="map-container">
                         <div id="map"></div>
                     </div>
+                    <p style="margin: 4px 0 0; font-size: 0.78em; color: #888; text-align: center;">
+                        <i class="fas fa-info-circle"></i>
+                        Use the <kbd style="font-size:0.9em;padding:1px 4px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">+</kbd> / <kbd style="font-size:0.9em;padding:1px 4px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">−</kbd> controls to zoom &nbsp;·&nbsp; or hold <kbd style="font-size:0.9em;padding:1px 4px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">Alt</kbd> and scroll
+                    </p>
                 </section>
 
                 <!-- === 3. STATISTICS DASHBOARD === -->
@@ -725,6 +766,9 @@
                             <h3 class="section-title">
                                 <i class="fas fa-history"></i> Route History
                             </h3>
+                            <button id="merge-routes-btn" class="btn btn-sm btn-warning admin-only" onclick="mergeSelectedRoutes()" style="display:none;">
+                                <i class="fas fa-compress-arrows-alt"></i> Merge Routes
+                            </button>
                         </div>
                         <div id="route-list">
                             <div class="route-item">
@@ -767,122 +811,23 @@
                 <section class="config-section admin-only">
                     <div class="section-header">
                         <h3 class="section-title">
-                            <i class="fas fa-mobile-alt"></i> Device Setup Instructions
+                            <i class="fas fa-mobile-alt"></i> OwnTracks Setup
                         </h3>
                     </div>
                     <div class="status-panel">
-                        <p><strong>Configure your Overlander iPhone app:</strong></p>
+                        <p><strong>Configure OwnTracks (HTTP mode):</strong></p>
                         <ol style="margin: 15px 0;">
-                            <li>Set <strong>Endpoint URL</strong>: <code id="endpoint-url">[Set token first]</code></li>
-                            <li>Set <strong>Access Token</strong>: <code id="display-token">[Set token first]</code></li>
-                            <li>Set <strong>Device ID</strong>: <code id="display-device-id">default-device</code></li>
-                            <li>Choose data format: <strong>all</strong>, <strong>latest</strong>, or <strong>owntracks</strong></li>
-                            <li>Enable GPS tracking in Overlander app</li>
+                            <li>Set <strong>Mode</strong>: <code>HTTP</code></li>
+                            <li>Set <strong>URL</strong>: <code id="endpoint-url">Loading...</code></li>
+                            <li>Enable <strong>Authentication</strong> and <strong>Password</strong></li>
+                            <li>Set <strong>UserID</strong>: your username</li>
+                            <li>Set <strong>Password</strong>: your app password</li>
+                            <li>Set <strong>DeviceID</strong>: any name (e.g. <code>iphone</code>) — auto-registers on first push</li>
                         </ol>
+                        <p style="color: var(--text-light); font-size: 0.9em;">The DeviceID you set becomes the device name visible on the map.</p>
                     </div>
                 </section>
 
-                <!-- === 6. TESTING TOOLS (Collapsible) === -->
-                <section class="testing-tools admin-only">
-                    <div class="tools-header" onclick="toggleTestingTools()">
-                        <h3 style="margin: 0; color: var(--primary-color);">
-                            <i class="fas fa-wrench"></i> Testing & Debugging Tools
-                        </h3>
-                        <i id="tools-chevron" class="fas fa-chevron-down"></i>
-                    </div>
-                    <div class="tools-content" id="testing-tools-content">
-                        <!-- GPS Test Client -->
-                        <div style="margin-bottom: 20px; padding: 15px; border: 1px solid #28a745; border-radius: 8px; background: #f8fff8;">
-                            <h4 style="margin: 0 0 15px 0; color: #28a745;">
-                                <i class="fas fa-broadcast-tower"></i> GPS Data Sender (Test Client)
-                            </h4>
-                            <div class="control-grid">
-                                <div>
-                                    <button id="gps-sender-btn" class="btn btn-success" onclick="toggleGPSSender()">
-                                        <i class="fas fa-play"></i> Start Sending GPS
-                                    </button>
-                                </div>
-                                <div>
-                                    <button class="btn btn-info" onclick="sendSingleGPS()">
-                                        <i class="fas fa-location-arrow"></i> Send Current Location
-                                    </button>
-                                </div>
-                                <div>
-                                    <button class="btn btn-secondary" onclick="sendFakeGPS()">
-                                        <i class="fas fa-map-marker"></i> Send Test Location
-                                    </button>
-                                </div>
-                                <div>
-                                    <button class="btn btn-warning" onclick="sendRandomNearbyGPS()">
-                                        <i class="fas fa-random"></i> Send Random Nearby
-                                    </button>
-                                </div>
-                            </div>
-                            <div id="gps-client-status" style="margin-top: 15px; padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #28a745; display: none;">
-                                <div style="font-weight: bold; margin-bottom: 5px;">GPS Client Status</div>
-                                <div id="gps-status-content">Ready to send GPS data...</div>
-                            </div>
-                        </div>
-
-                        <!-- Debug Panels -->
-                        <div id="debug-panels-container">
-                            <!-- Connectivity Test Panel -->
-                            <div id="connectivity-panel" class="debug-panel" style="display: none; margin-bottom: 20px; padding: 20px; background: white; border-radius: 8px; box-shadow: var(--shadow);">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                                    <h5 style="margin: 0; color: var(--primary-color);">
-                                        <i class="fas fa-wifi"></i> Connectivity Test Results
-                                    </h5>
-                                    <button class="btn btn-sm btn-secondary" onclick="hidePanel('connectivity-panel')">
-                                        <i class="fas fa-times"></i>
-                                    </button>
-                                </div>
-                                <div id="connectivity-results">
-                                    <p style="color: #6c757d;">Click "Test Connection" to run connectivity tests...</p>
-                                </div>
-                            </div>
-                            
-                            <!-- Debug Panel -->
-                            <div id="system-debug-panel" class="debug-panel" style="display: none; margin-bottom: 20px; padding: 20px; background: white; border-radius: 8px; box-shadow: var(--shadow);">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                                    <h5 style="margin: 0; color: var(--primary-color);">
-                                        <i class="fas fa-cogs"></i> System Debug Information
-                                    </h5>
-                                    <div>
-                                        <button class="btn btn-sm btn-info" onclick="refreshDebugPanel()" style="margin-right: 10px;">
-                                            <i class="fas fa-sync-alt"></i> Refresh
-                                        </button>
-                                        <button class="btn btn-sm btn-secondary" onclick="hidePanel('system-debug-panel')">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div id="debug-panel-content">
-                                    <p style="color: #6c757d;">Click "Debug Panel" to load system information...</p>
-                                </div>
-                            </div>
-                            
-                            <!-- GPS Monitor Panel -->
-                            <div id="gps-monitor-panel" class="debug-panel" style="display: none; margin-bottom: 20px; padding: 20px; background: white; border-radius: 8px; box-shadow: var(--shadow);">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                                    <h5 style="margin: 0; color: var(--primary-color);">
-                                        <i class="fas fa-satellite"></i> GPS Data Monitor
-                                    </h5>
-                                    <div>
-                                        <button id="gps-monitor-toggle" class="btn btn-sm btn-success" onclick="toggleGPSMonitor()">
-                                            <i class="fas fa-play"></i> Start Monitoring
-                                        </button>
-                                        <button class="btn btn-sm btn-secondary" onclick="hidePanel('gps-monitor-panel')" style="margin-left: 10px;">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div id="gps-monitor-content">
-                                    <p style="color: #6c757d;">Click "Start Monitoring" to begin real-time GPS data monitoring...</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
             </div>
         </main>
     </div>
@@ -1033,6 +978,51 @@
             <div id="media-viewer-footer" style="background:#111;color:#eee;padding:12px 18px;border-radius:0 0 12px 12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                 <span id="media-viewer-desc" style="font-size:0.95rem;"></span>
                 <div id="media-viewer-actions" style="display:flex;gap:8px;"></div>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Route point editing context menu -->
+    <div id="route-context-menu">
+        <div class="ctx-item" onclick="contextMenuAddAfter()">
+            <i class="fas fa-plus-circle" style="color:#3498db;"></i> Add point after
+        </div>
+        <div class="ctx-separator"></div>
+        <div class="ctx-item ctx-danger" onclick="contextMenuDelete()">
+            <i class="fas fa-trash-alt" style="color:#e74c3c;"></i> Delete point
+        </div>
+    </div>
+
+    <!-- Route edit dialog (name + color) -->
+    <dialog id="route-edit-dialog" style="border:none;border-radius:12px;padding:0;max-width:360px;width:95%;box-shadow:0 8px 40px rgba(0,0,0,0.3);">
+        <div style="background:var(--primary-color);padding:16px 20px;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;">
+            <span style="color:white;font-weight:700;font-size:1rem;"><i class="fas fa-pencil-alt"></i> Edit Route</span>
+            <button onclick="document.getElementById('route-edit-dialog').close()" style="background:none;border:none;color:white;font-size:1.4rem;cursor:pointer;line-height:1;">×</button>
+        </div>
+        <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+            <input type="hidden" id="route-edit-id">
+            <div>
+                <label style="font-size:0.85em;font-weight:600;color:#555;display:block;margin-bottom:4px;">Name</label>
+                <input type="text" id="route-edit-name" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95em;box-sizing:border-box;">
+            </div>
+            <div>
+                <label style="font-size:0.85em;font-weight:600;color:#555;display:block;margin-bottom:4px;">Route colour</label>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <input type="color" id="route-edit-color" style="width:44px;height:36px;padding:2px;border:1px solid #ddd;border-radius:6px;cursor:pointer;">
+                    <div id="route-color-presets" style="display:flex;gap:6px;flex-wrap:wrap;">
+                        <span onclick="document.getElementById('route-edit-color').value='#e74c3c'" style="width:24px;height:24px;border-radius:50%;background:#e74c3c;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #ccc;" title="Red"></span>
+                        <span onclick="document.getElementById('route-edit-color').value='#e67e22'" style="width:24px;height:24px;border-radius:50%;background:#e67e22;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #ccc;" title="Orange"></span>
+                        <span onclick="document.getElementById('route-edit-color').value='#f1c40f'" style="width:24px;height:24px;border-radius:50%;background:#f1c40f;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #ccc;" title="Yellow"></span>
+                        <span onclick="document.getElementById('route-edit-color').value='#27ae60'" style="width:24px;height:24px;border-radius:50%;background:#27ae60;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #ccc;" title="Green"></span>
+                        <span onclick="document.getElementById('route-edit-color').value='#2980b9'" style="width:24px;height:24px;border-radius:50%;background:#2980b9;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #ccc;" title="Blue"></span>
+                        <span onclick="document.getElementById('route-edit-color').value='#8e44ad'" style="width:24px;height:24px;border-radius:50%;background:#8e44ad;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #ccc;" title="Purple"></span>
+                        <span onclick="document.getElementById('route-edit-color').value='#2c3e50'" style="width:24px;height:24px;border-radius:50%;background:#2c3e50;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #ccc;" title="Dark"></span>
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+                <button onclick="document.getElementById('route-edit-dialog').close()" class="btn btn-sm btn-secondary">Cancel</button>
+                <button onclick="saveRouteEdit()" class="btn btn-sm btn-primary"><i class="fas fa-save"></i> Save</button>
             </div>
         </div>
     </dialog>

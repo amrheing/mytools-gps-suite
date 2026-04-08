@@ -6,7 +6,7 @@ class RouteTracker {
         this.activeRoutes = new Map(); // Store multiple device routes
         this.devices = new Map(); // Store device information
         this.refreshInterval = null;
-        this.apiToken = localStorage.getItem('apiToken') || 'default-token-123';
+        this.apiToken = null; // no longer used for web UI
         this.selectedDeviceId = localStorage.getItem('selectedDeviceId') || 'default-device';
         this.autoRefresh = true;
         this.refreshRate = 5000; // 5 seconds default
@@ -43,13 +43,7 @@ class RouteTracker {
             }
             const me = await authRes.json();
 
-            // Use the GPS token assigned by admin (overrides localStorage)
-            if (me.gpsToken) {
-                this.apiToken = me.gpsToken;
-                localStorage.setItem('apiToken', me.gpsToken);
-            }
-
-            // Show admin link for admins
+            // Use the username from session for display
             if (me.role === 'admin') {
                 const adminLink = document.getElementById('admin-link');
                 if (adminLink) adminLink.style.display = 'inline-flex';
@@ -66,19 +60,22 @@ class RouteTracker {
                 window.userManager.init();
             }
             
-            // Check API token and initialize UI
-            this.initTokenUI();
-            
-            // Load initial data if token available
-            if (this.apiToken) {
-                await this.loadAndPopulateDevices(); // New method
-                this.setupDeviceSelector(); // New method
-                await this.loadDevicesAndRoutes();
-                this.startAutoRefresh();
+            // Show main app immediately (no token gate)
+            const mainApp = document.getElementById('main-app');
+            if (mainApp) mainApp.style.display = 'block';
 
-                // If a shared route link was used (?share=... or ?route=...), load that route directly
-                const urlParams = new URLSearchParams(window.location.search);
-                const sharedRoute = urlParams.get('route') || (me.role === 'share' ? me.shareRouteId : null);
+            // Set OwnTracks endpoint URL in config section (admin only)
+            const epEl = document.getElementById('endpoint-url');
+            if (epEl) epEl.textContent = window.location.origin + '/route-tracker/api/gps';
+            
+            await this.loadAndPopulateDevices();
+            this.setupDeviceSelector();
+            await this.loadDevicesAndRoutes();
+            this.startAutoRefresh();
+
+                // If a shared route link was used, load that route directly
+                const urlParams2 = new URLSearchParams(window.location.search);
+                const sharedRoute = urlParams2.get('route') || (me.role === 'share' ? me.shareRouteId : null);
                 if (sharedRoute) {
                     await this.loadRoute(sharedRoute);
                     this.showNotification('Loaded shared route', 'success');
@@ -91,33 +88,11 @@ class RouteTracker {
                 } catch (error) {
                     console.error('Failed to auto-start GPS monitoring:', error);
                 }
-            }
             
             console.log('Route Tracker GPS Receiver initialized successfully');
         } catch (error) {
             console.error('Failed to initialize Route Tracker:', error);
             this.showNotification('Failed to initialize: ' + error.message, 'error');
-        }
-    }
-
-    initTokenUI() {
-        // Update UI based on token availability
-        const tokenSection = document.getElementById('token-setup');
-        const mainApp = document.getElementById('main-app');
-        
-        if (this.apiToken) {
-            if (tokenSection) tokenSection.style.display = 'none';
-            if (mainApp) mainApp.style.display = 'block';
-            document.getElementById('current-token').textContent = this.apiToken.substring(0, 8) + '...';
-        } else {
-            if (tokenSection) tokenSection.style.display = 'block';
-            if (mainApp) mainApp.style.display = 'none';
-        }
-        
-        // Setup token input
-        const tokenInput = document.getElementById('api-token');
-        if (tokenInput && this.apiToken) {
-            tokenInput.value = this.apiToken;
         }
     }
 
@@ -176,6 +151,9 @@ class RouteTracker {
     }
 
     async loadDevicesAndRoutes() {
+        // Don't interrupt route editing with a background refresh
+        if (this.editMode) return;
+
         try {
             // Get device information
             const deviceResponse = await this.apiCall(`/api/devices/${this.selectedDeviceId}`);
@@ -210,6 +188,8 @@ class RouteTracker {
             const response = await this.apiCall(`/api/routes/${routeId}`);
             if (response.ok) {
                 const routeData = await response.json();
+                this.currentRouteData = routeData;
+                this.currentRouteId = routeId;
                 this.displayRoute(routeData);
                 this.updateRouteStats(routeData);
                 return routeData;
@@ -233,6 +213,9 @@ class RouteTracker {
     }
 
     displayRoute(routeData) {
+        // Exit edit mode before loading a new route
+        if (this.editMode) this.exitEditMode(false);
+
         // Clear existing layers
         if (this.currentRoute) {
             this.map.removeLayer(this.currentRoute);
@@ -248,19 +231,27 @@ class RouteTracker {
             const latLngs = routeData.points.map(p => [p.lat, p.lng]);
             
             this.currentRoute = L.polyline(latLngs, {
-                color: '#e74c3c',
+                color: routeData.color || '#e74c3c',
                 weight: 4,
                 opacity: 0.8
             }).addTo(this.map);
+
+            // Build data-point dots layer
+            this.buildRouteDataPoints(routeData);
             
             // Add start/end markers
             const startPoint = routeData.points[0];
             const endPoint = routeData.points[routeData.points.length - 1];
             
             L.marker([startPoint.lat, startPoint.lng], {
-                icon: L.icon({
-                    iconUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="green"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>',
-                    iconSize: [25, 25]
+                icon: L.divIcon({
+                    className: '',
+                    html: `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;">
+                        <div style="background:#27ae60;color:white;font-size:10px;font-weight:700;padding:1px 5px;border-radius:3px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.4);line-height:1.4;">START</div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="#27ae60" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,0.5));"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                    </div>`,
+                    iconSize: [50, 44],
+                    iconAnchor: [25, 44]
                 })
             })
             .bindPopup(`Start: ${routeData.name}<br>Time: ${new Date(startPoint.timestamp).toLocaleString()}`)
@@ -268,9 +259,14 @@ class RouteTracker {
             
             if (routeData.points.length > 1) {
                 L.marker([endPoint.lat, endPoint.lng], {
-                    icon: L.icon({
-                        iconUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="red"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>',
-                        iconSize: [25, 25]
+                    icon: L.divIcon({
+                        className: '',
+                        html: `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;">
+                            <div style="background:#c0392b;color:white;font-size:10px;font-weight:700;padding:1px 5px;border-radius:3px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.4);line-height:1.4;">END</div>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="#c0392b" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,0.5));"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                        </div>`,
+                        iconSize: [50, 44],
+                        iconAnchor: [25, 44]
                     })
                 })
                 .bindPopup(`Current: ${routeData.name}<br>Time: ${new Date(endPoint.timestamp).toLocaleString()}<br>Speed: ${endPoint.speed ? (endPoint.speed * 3.6).toFixed(1) + ' km/h' : 'N/A'}`)
@@ -282,6 +278,263 @@ class RouteTracker {
                 this.map.fitBounds(latLngs, { padding: [20, 20], maxZoom: 17 });
             }
         }
+    }
+
+    buildRouteDataPoints(routeData) {
+        this.dataPointsLayerGroup.clearLayers();
+        if (this.map.hasLayer(this.dataPointsLayerGroup)) {
+            this.map.removeLayer(this.dataPointsLayerGroup);
+        }
+        if (!routeData || !routeData.points) return;
+        routeData.points.forEach(p => {
+            const popup = `<div style="font-size:12px;">
+                📍 ${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}<br>
+                ${p.speed !== undefined && p.speed !== null ? `🚀 ${(p.speed * 3.6).toFixed(1)} km/h<br>` : ''}
+                ${p.alt !== undefined && p.alt !== null ? `⛰️ ${p.alt}m<br>` : ''}
+                🕒 ${new Date(p.timestamp).toLocaleTimeString()}
+            </div>`;
+            L.circleMarker([p.lat, p.lng], {
+                radius: 4,
+                color: '#c0392b',
+                fillColor: '#e74c3c',
+                fillOpacity: 0.85,
+                weight: 1.5
+            }).bindPopup(popup).addTo(this.dataPointsLayerGroup);
+        });
+        if (this.showDataPoints) {
+            this.dataPointsLayerGroup.addTo(this.map);
+        }
+    }
+
+    // =========================================================
+    // ROUTE POINT EDITING
+    // =========================================================
+
+    toggleEditMode() {
+        if (this.editMode) {
+            this.exitEditMode(true);
+        } else {
+            this.enterEditMode();
+        }
+    }
+
+    enterEditMode() {
+        if (!this.currentRouteData || !this.currentRouteData.points) {
+            this.showNotification('Load a route first to edit its points', 'warning');
+            return;
+        }
+        this.editMode = true;
+        // Record when editing started — used to preserve GPS points that arrive during the session
+        this._editSnapshotTime = this.currentRouteData.points.length > 0
+            ? this.currentRouteData.points[this.currentRouteData.points.length - 1].timestamp
+            : new Date().toISOString();
+
+        // Hide regular data point dots
+        if (this.map.hasLayer(this.dataPointsLayerGroup)) {
+            this.map.removeLayer(this.dataPointsLayerGroup);
+        }
+
+        this.buildEditMarkers();
+
+        // Expand map to full window and lock page scroll
+        const section = document.querySelector('.map-section');
+        if (section) section.classList.add('map-edit-fullscreen');
+        document.body.style.overflow = 'hidden';
+        this.map.invalidateSize();
+
+        document.getElementById('edit-toolbar').style.display = 'flex';
+        const btn = document.getElementById('edit-mode-btn');
+        if (btn) {
+            btn.classList.remove('btn-secondary');
+            btn.classList.add('btn-warning');
+            btn.innerHTML = '<i class="fas fa-times"></i> Exit Edit';
+        }
+        this.showNotification('Edit mode — right-click a point to add/delete · drag to move · Esc or "Exit Edit" to leave', 'info');
+    }
+
+    exitEditMode(restorePoints = true) {
+        this.editMode = false;
+        this.hideEditContextMenu();
+
+        // Remove edit markers
+        this.editMarkersGroup.clearLayers();
+        if (this.map.hasLayer(this.editMarkersGroup)) {
+            this.map.removeLayer(this.editMarkersGroup);
+        }
+
+        // Restore read-only data points
+        if (restorePoints && this.currentRouteData) {
+            this.buildRouteDataPoints(this.currentRouteData);
+        }
+
+        document.getElementById('edit-toolbar').style.display = 'none';
+
+        // Restore map to normal size and re-enable page scroll
+        const section = document.querySelector('.map-section');
+        if (section) section.classList.remove('map-edit-fullscreen');
+        document.body.style.overflow = '';
+        this.map.invalidateSize();
+
+        const btn = document.getElementById('edit-mode-btn');
+        if (btn) {
+            btn.classList.remove('btn-warning');
+            btn.classList.add('btn-secondary');
+            btn.innerHTML = '<i class="fas fa-pencil-alt"></i> Edit Points';
+        }
+    }
+
+    buildEditMarkers() {
+        this.editMarkersGroup.clearLayers();
+        if (this.map.hasLayer(this.editMarkersGroup)) {
+            this.map.removeLayer(this.editMarkersGroup);
+        }
+
+        const points = this.currentRouteData.points;
+
+        points.forEach((p, i) => {
+            const isNew = p._new === true;
+            const bg = isNew ? '#3498db' : '#e74c3c';
+            const border = isNew ? '#2471a3' : '#c0392b';
+
+            const marker = L.marker([p.lat, p.lng], {
+                draggable: true,
+                zIndexOffset: 500,
+                icon: L.divIcon({
+                    className: '',
+                    html: `<div class="edit-point-dot" style="background:${bg};border-color:${border};">${isNew ? '<span class="edit-point-new">+</span>' : ''}</div>`,
+                    iconSize: [14, 14],
+                    iconAnchor: [7, 7]
+                })
+            });
+
+            // Drag → update coordinates + redraw polyline
+            marker.on('dragend', (e) => {
+                const ll = e.target.getLatLng();
+                this.currentRouteData.points[i].lat = +ll.lat.toFixed(7);
+                this.currentRouteData.points[i].lng = +ll.lng.toFixed(7);
+                this.redrawEditPolyline();
+            });
+
+            // Right-click → context menu
+            marker.on('contextmenu', (e) => {
+                L.DomEvent.preventDefault(e.originalEvent);
+                L.DomEvent.stopPropagation(e.originalEvent);
+                this.showEditContextMenu(e.originalEvent, i);
+            });
+
+            this.editMarkersGroup.addLayer(marker);
+        });
+
+        this.editMarkersGroup.addTo(this.map);
+        this.redrawEditPolyline();
+    }
+
+    redrawEditPolyline() {
+        if (this.currentRoute && this.currentRouteData) {
+            this.currentRoute.setLatLngs(
+                this.currentRouteData.points.map(p => [p.lat, p.lng])
+            );
+        }
+    }
+
+    showEditContextMenu(event, pointIndex) {
+        const menu = document.getElementById('route-context-menu');
+        if (!menu) return;
+        // Position near cursor but keep inside viewport
+        const x = Math.min(event.clientX, window.innerWidth - 180);
+        const y = Math.min(event.clientY, window.innerHeight - 90);
+        menu.style.left = x + window.scrollX + 'px';
+        menu.style.top  = y + window.scrollY + 'px';
+        menu.style.display = 'block';
+        menu.dataset.pointIndex = pointIndex;
+        event.preventDefault();
+    }
+
+    hideEditContextMenu() {
+        const menu = document.getElementById('route-context-menu');
+        if (menu) menu.style.display = 'none';
+    }
+
+    contextMenuAddAfter() {
+        this.hideEditContextMenu();
+        const menu = document.getElementById('route-context-menu');
+        const i = parseInt(menu.dataset.pointIndex);
+        const pts = this.currentRouteData.points;
+
+        let newPt;
+        if (i < pts.length - 1) {
+            // Midpoint between i and i+1
+            const tA = new Date(pts[i].timestamp).getTime();
+            const tB = new Date(pts[i + 1].timestamp).getTime();
+            newPt = {
+                lat:       +((pts[i].lat + pts[i + 1].lat) / 2).toFixed(7),
+                lng:       +((pts[i].lng + pts[i + 1].lng) / 2).toFixed(7),
+                timestamp: new Date((tA + tB) / 2).toISOString(),
+                alt:       (pts[i].alt !== null && pts[i + 1].alt !== null)
+                               ? (pts[i].alt + pts[i + 1].alt) / 2
+                               : pts[i].alt,
+                speed:     null,
+                accuracy:  null,
+                _new:      true
+            };
+        } else {
+            // Last point — copy it with a tiny offset so it's visible
+            newPt = { ...pts[i], lat: +(pts[i].lat + 0.00005).toFixed(7), _new: true };
+        }
+
+        pts.splice(i + 1, 0, newPt);
+        this.buildEditMarkers();
+        this.showNotification('New point added in blue — drag it to the right location', 'info');
+    }
+
+    contextMenuDelete() {
+        this.hideEditContextMenu();
+        const menu = document.getElementById('route-context-menu');
+        const i = parseInt(menu.dataset.pointIndex);
+        const pts = this.currentRouteData.points;
+
+        if (pts.length <= 2) {
+            this.showNotification('Cannot delete: route needs at least 2 points', 'warning');
+            return;
+        }
+        pts.splice(i, 1);
+        this.buildEditMarkers();
+        this.showNotification('Point deleted', 'info');
+    }
+
+    async saveRouteEdits() {
+        if (!this.currentRouteData || !this.currentRouteId) return;
+
+        // Strip internal _new flags before saving
+        const points = this.currentRouteData.points.map(({ _new, ...p }) => p);
+        // Pass snapshot time so the server can preserve GPS points that arrived during the edit
+        const editSnapshotTime = this._editSnapshotTime || null;
+
+        try {
+            const res = await this.apiCall(`/api/routes/${this.currentRouteId}/points`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ points, editSnapshotTime })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                this.showNotification(`Route saved — ${data.totalPoints} points, ${data.totalDistance.toFixed(2)} km`, 'success');
+                await this.loadRoute(this.currentRouteId);
+                this.exitEditMode(false);
+            } else {
+                const err = await res.json().catch(() => ({}));
+                this.showNotification('Save failed: ' + (err.error || res.status), 'error');
+            }
+        } catch (e) {
+            this.showNotification('Save failed: ' + e.message, 'error');
+        }
+    }
+
+    async discardRouteEdits() {
+        const id = this.currentRouteId;
+        this.exitEditMode(false);
+        if (id) await this.loadRoute(id);
+        this.showNotification('Changes discarded', 'info');
     }
 
     updateDeviceInfo(deviceData) {
@@ -333,21 +586,43 @@ class RouteTracker {
     updateRoutesList(routes) {
         const routeList = document.getElementById('route-list');
         if (!routeList || !routes) return;
+
+        // Preserve currently checked route IDs so a background refresh doesn't lose the selection
+        const previouslyChecked = new Set(
+            [...document.querySelectorAll('.merge-checkbox:checked')].map(cb => cb.dataset.routeId)
+        );
         
         if (routes.length === 0) {
             routeList.innerHTML = '<div class="route-item"><div class="route-info"><p>No routes received yet. Configure your Overlander app to send GPS data to this server.</p></div></div>';
+            this._updateMergeButton();
             return;
         }
 
-        routeList.innerHTML = routes.map(route => `
-            <div class="route-item">
-                <div class="route-info">
-                    <h4>${route.name}</h4>
-                    <div class="route-meta">
-                        <span>${new Date(route.startTime).toLocaleDateString()} • 
-                        ${route.totalDistance.toFixed(2)} km • 
-                        ${route.totalPoints} points • 
-                        ${route.status}</span>
+routeList.innerHTML = routes.map(route => {
+            const start = route.startTime ? new Date(route.startTime) : null;
+            const end   = route.endTime   ? new Date(route.endTime)   : null;
+            const fmt = (d) => d ? d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '—';
+            const statusBadge = route.status === 'active'
+                ? `<span style="background:#27ae60;color:#fff;font-size:0.74em;padding:1px 6px;border-radius:10px;font-weight:600;">LIVE</span>`
+                : '';
+            const routeColor = route.color || '#e74c3c';
+            const colorDot = `<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${routeColor};border:1px solid rgba(0,0,0,0.18);flex-shrink:0;margin-right:4px;vertical-align:middle;"></span>`;
+            const metaParts = [
+                `<i class="fas fa-hdd" style="margin-right:3px;"></i>${route.deviceId || this.selectedDeviceId}`,
+                `<i class="fas fa-play" style="margin-right:3px;"></i>${fmt(start)}`,
+                end ? `<i class="fas fa-stop" style="margin-right:3px;"></i>${fmt(end)}` : null,
+                `<i class="fas fa-road" style="margin-right:3px;"></i>${route.totalDistance.toFixed(2)}&thinsp;km`,
+                `<i class="fas fa-map-pin" style="margin-right:3px;"></i>${route.totalPoints}&thinsp;pts`,
+            ].filter(Boolean).join('<span style="color:#ccc;margin:0 5px;">|</span>');
+            return `
+            <div class="route-item" style="border-left:4px solid ${routeColor};">
+                <div class="route-item-header">
+                    <label class="route-merge-check admin-only" title="Select to merge" style="margin:0;">
+                        <input type="checkbox" class="merge-checkbox" data-route-id="${route.id}" data-route-name="${route.name.replace(/"/g,'&quot;')}" data-route-start="${route.startTime}" onchange="routeTracker._updateMergeButton()">
+                    </label>
+                    <div class="route-info" style="flex:1;min-width:0;">
+                        <h4>${colorDot}${route.name} ${statusBadge}</h4>
+                        <div class="route-meta">${metaParts}</div>
                     </div>
                 </div>
                 <div class="route-actions">
@@ -357,7 +632,7 @@ class RouteTracker {
                     <button class="btn btn-sm btn-secondary" onclick="routeTracker.exportRoute('${route.id}')">
                         <i class="fas fa-download"></i> Export
                     </button>
-                    <button class="btn btn-sm btn-info admin-only" onclick="routeTracker.editRoute('${route.id}', '${route.name.replace(/'/g, "\\'")}')">
+                    <button class="btn btn-sm btn-info admin-only" onclick="routeTracker.editRoute('${route.id}', '${route.name.replace(/'/g, "\\'") }', '${route.color || '#e74c3c'}')">
                         <i class="fas fa-pencil-alt"></i> Rename
                     </button>
                     <button class="btn btn-sm btn-danger admin-only" onclick="routeTracker.deleteRoute('${route.id}')">
@@ -367,16 +642,100 @@ class RouteTracker {
                         <button class="btn btn-sm btn-warning admin-only" onclick="routeTracker.stopRoute('${route.id}')">
                             <i class="fas fa-stop"></i> Stop
                         </button>
-                    ` : ''}
+                    ` : `
+                        <button class="btn btn-sm btn-success admin-only" onclick="routeTracker.activateRoute('${route.id}')" title="Set as active — GPS will append here">
+                            <i class="fas fa-play"></i> Set Active
+                        </button>
+                    `}
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
+
+        // Restore checkbox selections from before the re-render
+        if (previouslyChecked.size > 0) {
+            document.querySelectorAll('.merge-checkbox').forEach(cb => {
+                if (previouslyChecked.has(cb.dataset.routeId)) cb.checked = true;
+            });
+        }
+        this._updateMergeButton();
+    }
+
+    _updateMergeButton() {
+        const btn = document.getElementById('merge-routes-btn');
+        if (!btn) return;
+        const checked = document.querySelectorAll('.merge-checkbox:checked').length;
+        if (checked >= 2) {
+            btn.style.display = 'inline-flex';
+            btn.innerHTML = `<i class="fas fa-compress-arrows-alt"></i>&nbsp;Merge ${checked} Routes`;
+        } else {
+            btn.style.display = 'none';
+        }
+    }
+
+    async mergeSelectedRoutes() {
+        const checked = [...document.querySelectorAll('.merge-checkbox:checked')];
+        const routeIds = checked.map(cb => cb.dataset.routeId);
+        if (routeIds.length < 2) return;
+
+        // Find the oldest selected route's name as default
+        const oldest = checked.reduce((a, b) =>
+            new Date(a.dataset.routeStart) <= new Date(b.dataset.routeStart) ? a : b
+        );
+        const defaultName = oldest.dataset.routeName || '';
+
+        const name = prompt('Name for merged route:', defaultName);
+        if (name === null) return; // cancelled
+
+        if (!confirm(`Merge ${routeIds.length} routes into one? This cannot be undone.`)) return;
+
+        try {
+            const response = await this.apiCall(`/api/devices/${this.selectedDeviceId}/routes/merge`, {
+                method: 'POST',
+                body: JSON.stringify({ routeIds, name: name.trim() })
+            });
+            if (response.ok) {
+                const result = await response.json();
+                this.showNotification(`Merged into "${result.route.name}" — ${result.route.totalPoints} pts, ${result.route.totalDistance.toFixed(2)} km`, 'success');
+                await this.loadDevicesAndRoutes();
+            } else {
+                const err = await response.json();
+                this.showNotification('Merge failed: ' + (err.error || 'Unknown error'), 'error');
+            }
+        } catch (error) {
+            this.showNotification('Error merging routes: ' + error.message, 'error');
+        }
     }
 
     async viewRoute(routeId) {
         const routeData = await this.loadRoute(routeId);
-        if (routeData) {
-            this.showNotification(`Viewing route: ${routeData.name}`, 'success');
+        if (!routeData) return;
+        // Pause auto-refresh so the history route stays on screen
+        this._historyViewMode = true;
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+            this.refreshInterval = null;
+        }
+        this._setResetBtnMode('history');
+        // Load only media belonging to this route
+        loadMediaMarkers(this.selectedDeviceId, routeId);
+        // Zoom map to fit the loaded route
+        if (this.currentRoute) {
+            this.map.fitBounds(this.currentRoute.getBounds(), { padding: [30, 30], maxZoom: 17 });
+        }
+        this.showNotification(`Viewing: ${routeData.name} — click "Back to Live" to return`, 'info');
+    }
+
+    _setResetBtnMode(mode) {
+        const btn = document.querySelector('button[onclick="resetMapView()"]');
+        if (!btn) return;
+        if (mode === 'history') {
+            btn.innerHTML = '<i class="fas fa-broadcast-tower"></i> Back to Live';
+            btn.classList.remove('btn-secondary');
+            btn.classList.add('btn-warning');
+        } else {
+            btn.innerHTML = '<i class="fas fa-expand-arrows-alt"></i> Reset View';
+            btn.classList.remove('btn-warning');
+            btn.classList.add('btn-secondary');
         }
     }
 
@@ -384,6 +743,27 @@ class RouteTracker {
         const routeData = await this.loadRoute(routeId);
         if (routeData && window.exportManager) {
             window.exportManager.exportRoute(routeData, 'gpx');
+        }
+    }
+
+    async activateRoute(routeId) {
+        if (!confirm('Set this route as the active route? New GPS points will be appended to it. Any currently active route will be stopped.')) return;
+        try {
+            const response = await this.apiCall(`/api/devices/${this.selectedDeviceId}/routes/${routeId}/activate`, { method: 'POST' });
+            if (response.ok) {
+                const result = await response.json();
+                this.showNotification(`"${result.name}" is now the active route — GPS will append here`, 'success');
+                // Return to live view
+                this._historyViewMode = false;
+                this._setResetBtnMode('live');
+                await this.loadDevicesAndRoutes();
+                this.startAutoRefresh();
+            } else {
+                const err = await response.json();
+                this.showNotification('Failed: ' + (err.error || 'unknown error'), 'error');
+            }
+        } catch (error) {
+            this.showNotification('Error: ' + error.message, 'error');
         }
     }
 
@@ -405,22 +785,40 @@ class RouteTracker {
         }
     }
 
-    async editRoute(routeId, currentName) {
+    async editRoute(routeId, currentName, currentColor) {
+        // Open the inline edit dialog
+        const dlg = document.getElementById('route-edit-dialog');
+        if (dlg) {
+            document.getElementById('route-edit-id').value = routeId;
+            document.getElementById('route-edit-name').value = currentName;
+            document.getElementById('route-edit-color').value = currentColor || '#e74c3c';
+            dlg.showModal();
+            return;
+        }
+        // Fallback: prompt only
         const newName = prompt('Route name:', currentName);
         if (!newName || newName.trim() === currentName) return;
+        await this._saveRouteEdit(routeId, newName.trim(), currentColor);
+    }
+
+    async _saveRouteEdit(routeId, name, color) {
         try {
             const response = await this.apiCall(`/api/routes/${routeId}`, {
                 method: 'PATCH',
-                body: JSON.stringify({ name: newName.trim() })
+                body: JSON.stringify({ name, color })
             });
             if (response.ok) {
-                this.showNotification('Route renamed successfully', 'success');
+                this.showNotification('Route updated', 'success');
                 await this.loadDevicesAndRoutes();
+                // Re-apply color live if this is the currently displayed route
+                if (routeId === this.currentRouteId && this.currentRoute) {
+                    this.currentRoute.setStyle({ color });
+                }
             } else {
-                this.showNotification('Failed to rename route', 'error');
+                this.showNotification('Failed to update route', 'error');
             }
         } catch (error) {
-            this.showNotification('Error renaming route: ' + error.message, 'error');
+            this.showNotification('Error: ' + error.message, 'error');
         }
     }
 
@@ -456,20 +854,24 @@ class RouteTracker {
     async apiCall(endpoint, options = {}) {
         // Use relative path since we're served from the same context  
         const url = '.' + endpoint;
-        
         const defaultOptions = {
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.apiToken}`
-            }
+            headers: { 'Content-Type': 'application/json' }
         };
-        
         return fetch(url, { ...defaultOptions, ...options });
     }
 
     initMap() {
-        // Initialize Leaflet map
-        this.map = L.map('map').setView([49.4875, 8.466], 13); // Default to Mannheim, Germany
+        // Initialize Leaflet map — scroll wheel zoom disabled; use Alt+scroll or the +/- controls
+        this.map = L.map('map', { scrollWheelZoom: false }).setView([49.4875, 8.466], 13); // Default to Mannheim, Germany
+
+        // Enable zoom only while Alt/Option is held
+        this.map.getContainer().addEventListener('wheel', (e) => {
+            if (e.altKey) {
+                this.map.scrollWheelZoom.enable();
+            } else {
+                this.map.scrollWheelZoom.disable();
+            }
+        }, { passive: true });
 
         // Add tile layer
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -489,6 +891,20 @@ class RouteTracker {
         this.liveTrail = [];
         this.trailLayerGroup = L.layerGroup().addTo(this.map);
 
+        // Data points (small dots on route lines) - off by default
+        this.showDataPoints = false;
+        this.dataPointsLayerGroup = L.layerGroup();
+
+        // Route point editing state
+        this.editMode = false;
+        this.currentRouteData = null;
+        this.currentRouteId = null;
+        this.editMarkersGroup = L.layerGroup();
+
+        // Hide context menu when clicking elsewhere
+        document.addEventListener('click', () => this.hideEditContextMenu());
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.hideEditContextMenu(); });
+
         console.log('Map initialized');
     }
 
@@ -497,6 +913,23 @@ class RouteTracker {
 
         // Add point to trail
         this.liveTrail.push([lat, lng]);
+
+        // Add live data point dot
+        L.circleMarker([lat, lng], {
+            radius: 4,
+            color: '#0056b3',
+            fillColor: '#007bff',
+            fillOpacity: 0.85,
+            weight: 1.5
+        }).bindPopup(`<div style="font-size:12px;">
+            📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}<br>
+            ${data.speed ? `🚀 ${(data.speed * 3.6).toFixed(1)} km/h<br>` : ''}
+            ${data.alt ? `⛰️ ${data.alt}m<br>` : ''}
+            🕒 ${new Date().toLocaleTimeString()}
+        </div>`).addTo(this.dataPointsLayerGroup);
+        if (this.showDataPoints && !this.map.hasLayer(this.dataPointsLayerGroup)) {
+            this.dataPointsLayerGroup.addTo(this.map);
+        }
 
         // Remove old marker
         if (this.liveMarker) {
@@ -566,6 +999,25 @@ class RouteTracker {
         console.log(`Live position updated: ${lat}, ${lng} (${this.liveTrail.length} points total)`);
     }
 
+    toggleDataPoints() {
+        this.showDataPoints = !this.showDataPoints;
+        if (this.showDataPoints) {
+            this.dataPointsLayerGroup.addTo(this.map);
+        } else {
+            if (this.map.hasLayer(this.dataPointsLayerGroup)) {
+                this.map.removeLayer(this.dataPointsLayerGroup);
+            }
+        }
+        // Update button appearance
+        const btn = document.getElementById('data-points-btn');
+        if (btn) {
+            btn.classList.toggle('btn-info', this.showDataPoints);
+            btn.classList.toggle('btn-secondary', !this.showDataPoints);
+            btn.querySelector('i').className = this.showDataPoints ? 'fas fa-dot-circle' : 'fas fa-circle';
+            btn.querySelector('span').textContent = this.showDataPoints ? ' Hide Points' : ' Show Points';
+        }
+    }
+
     clearLiveRoute() {
         // Clear trail data
         this.liveTrail = [];
@@ -591,6 +1043,12 @@ class RouteTracker {
         
         // Clear live trail layer group
         this.trailLayerGroup.clearLayers();
+
+        // Clear data point dots
+        this.dataPointsLayerGroup.clearLayers();
+        if (this.map.hasLayer(this.dataPointsLayerGroup)) {
+            this.map.removeLayer(this.dataPointsLayerGroup);
+        }
         
         console.log('Route cleared');
         this.showNotification('Route cleared', 'info');
@@ -637,12 +1095,6 @@ class RouteTracker {
     }
 
     startGPSMonitoringLoop() {
-        const apiToken = this.apiToken;
-        if (!apiToken) {
-            console.error('No API token available for GPS monitoring');
-            return;
-        }
-
         // Clear any existing interval
         if (window.gpsMonitorInterval) {
             clearInterval(window.gpsMonitorInterval);
@@ -653,9 +1105,7 @@ class RouteTracker {
         // Update GPS log function
         const updateGPSLog = async () => {
             try {
-                const response = await fetch('./api/debug/requests', {
-                    headers: { 'Authorization': `Bearer ${apiToken}` }
-                });
+                const response = await fetch('./api/debug/requests');
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
@@ -746,78 +1196,6 @@ function toggleTestingTools() {
         chevron.classList.remove('fa-chevron-down');
         chevron.classList.add('fa-chevron-up');
     }
-}
-
-// Token Management Functions
-function setApiToken() {
-    const tokenInput = document.getElementById('api-token');
-    const token = tokenInput.value.trim();
-    
-    if (!token) {
-        alert('Please enter an API token');
-        return;
-    }
-    
-    window.routeTracker.apiToken = token;
-    localStorage.setItem('apiToken', token);
-    window.routeTracker.initTokenUI();
-    
-    // Update setup display elements
-    updateSetupDisplay();
-    
-    // Test the token by loading data
-    window.routeTracker.loadDevicesAndRoutes()
-        .then(() => {
-            window.routeTracker.showNotification('API token set successfully', 'success');
-            window.routeTracker.startAutoRefresh();
-        })
-        .catch((error) => {
-            window.routeTracker.showNotification('Invalid API token: ' + error.message, 'error');
-            clearApiToken();
-        });
-}
-
-function updateSetupDisplay() {
-    const endpointUrl = document.getElementById('endpoint-url');
-    const displayToken = document.getElementById('display-token');
-    const displayDeviceId = document.getElementById('display-device-id');
-    
-    if (endpointUrl) {
-        endpointUrl.textContent = `${window.location.origin}/api/gps`;
-    }
-    
-    if (displayToken && window.routeTracker.apiToken) {
-        displayToken.textContent = window.routeTracker.apiToken;
-    }
-    
-    if (displayDeviceId) {
-        displayDeviceId.textContent = window.routeTracker.selectedDeviceId;
-    }
-}
-
-function clearApiToken() {
-    window.routeTracker.apiToken = null;
-    localStorage.removeItem('apiToken');
-    window.routeTracker.initTokenUI();
-    
-    if (window.routeTracker.refreshInterval) {
-        clearInterval(window.routeTracker.refreshInterval);
-    }
-}
-
-function changeDevice() {
-    const deviceInput = document.getElementById('device-id');
-    const deviceId = deviceInput.value.trim() || 'default-device';
-    
-    window.routeTracker.selectedDeviceId = deviceId;
-    localStorage.setItem('selectedDeviceId', deviceId);
-    
-    // Update setup display
-    updateSetupDisplay();
-    
-    // Reload data for new device
-    window.routeTracker.loadDevicesAndRoutes();
-    window.routeTracker.showNotification(`Switched to device: ${deviceId}`, 'success');
 }
 
 function toggleAutoRefresh() {
@@ -952,984 +1330,33 @@ function logout() {
         .finally(() => { window.location.href = './login.html'; });
 }
 
-// Configuration Setup Helper
-function showOverlanderSetup() {
-    const setupInfo = `
-📱 Overlander iPhone App Configuration:
-
-🔗 Endpoint URL: ${window.location.origin}/api/gps
-🔑 Access Token: ${window.routeTracker.apiToken || 'Set your token first!'}
-🆔 Device ID: ${window.routeTracker.selectedDeviceId}
-
-📁 Data Format Options:
-• "all" - Send complete route data
-• "latest" - Send only recent points  
-• "owntracks" - OwnTracks compatible format
-
-📡 HTTP Method: POST
-📋 Content-Type: application/json
-
-Example JSON payload:
-{
-  "deviceId": "${window.routeTracker.selectedDeviceId}",
-  "routeName": "My Route",
-  "lat": 49.4875,
-  "lng": 8.466,
-  "alt": 150,
-  "speed": 25,
-  "timestamp": "${new Date().toISOString()}"
-}
-    `;
-    
-    alert(setupInfo);
-}
-
-// =====================
-// DEBUGGING FUNCTIONS
-// =====================
-
-// Test connectivity to server
-async function testConnectivity() {
-    const results = {
-        timestamp: new Date().toISOString(),
-        tests: []
-    };
-    
-    try {
-        // Test 1: Basic connectivity
-        const connectTest = await fetch('./api/debug/connectivity');
-        results.tests.push({
-            name: 'Basic Connectivity',
-            status: connectTest.ok ? 'PASS' : 'FAIL',
-            details: connectTest.ok ? await connectTest.json() : `HTTP ${connectTest.status}`
-        });
-        
-        // Test 2: Ping endpoint
-        const pingTest = await fetch('./api/debug/ping', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ test: 'connectivity' })
-        });
-        results.tests.push({
-            name: 'Ping Test',
-            status: pingTest.ok ? 'PASS' : 'FAIL',
-            details: pingTest.ok ? await pingTest.json() : `HTTP ${pingTest.status}`
-        });
-        
-        // Test 3: Token validation (if token available)
-        const apiToken = window.routeTracker?.apiToken || localStorage.getItem('apiToken');
-        if (apiToken) {
-            const tokenTest = await fetch('./api/debug/status', {
-                headers: { 'Authorization': `Bearer ${apiToken}` }
-            });
-            results.tests.push({
-                name: 'Token Validation',
-                status: tokenTest.ok ? 'PASS' : 'FAIL',
-                details: tokenTest.ok ? 'Token valid' : `HTTP ${tokenTest.status} - Invalid token`
-            });
-        }
-        
-        // Test 4: GPS endpoint (simulated)
-        if (apiToken) {
-            const gpsTest = await fetch('./api/gps', {
-                method: 'POST',
-                headers: { 
-                    'Authorization': `Bearer ${apiToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    deviceId: 'test-device',
-                    lat: 49.4875,
-                    lng: 8.466,
-                    timestamp: new Date().toISOString(),
-                    test: true
-                })
-            });
-            results.tests.push({
-                name: 'GPS Endpoint Test',
-                status: gpsTest.ok ? 'PASS' : 'FAIL',
-                details: gpsTest.ok ? 'GPS endpoint accepting data' : `HTTP ${gpsTest.status}`
-            });
-        }
-        
-    } catch (error) {
-        results.tests.push({
-            name: 'Connectivity Error',
-            status: 'ERROR',
-            details: error.message
-        });
-    }
-    
-    // Display results
-    showConnectivityResults(results);
-}
-
-// Display connectivity test results
-function showConnectivityResults(results) {
-    const panel = document.getElementById('connectivity-panel');
-    const container = document.getElementById('connectivity-results');
-    
-    if (!panel || !container) {
-        console.error('Connectivity panel elements not found');
-        return;
-    }
-    
-    const resultHTML = `
-        <div style="font-family: monospace; background: #f8f9fa; padding: 20px; border-radius: 8px;">
-            <div style="display: flex; align-items: center; margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 4px;">
-                <i class="fas fa-clock" style="color: #1976d2; margin-right: 10px;"></i>
-                <strong>Timestamp:</strong>&nbsp;${results.timestamp}
-            </div>
-            <div style="margin: 15px 0;">
-                ${results.tests.map(test => `
-                    <div style="margin: 10px 0; padding: 15px; background: ${test.status === 'PASS' ? '#d4edda' : test.status === 'FAIL' ? '#f8d7da' : '#fff3cd'}; border-radius: 4px; border-left: 4px solid ${test.status === 'PASS' ? '#28a745' : test.status === 'FAIL' ? '#dc3545' : '#ffc107'};">
-                        <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                            <i class="fas fa-${test.status === 'PASS' ? 'check-circle' : test.status === 'FAIL' ? 'times-circle' : 'exclamation-circle'}" style="color: ${test.status === 'PASS' ? '#28a745' : test.status === 'FAIL' ? '#dc3545' : '#ffc107'}; margin-right: 10px;"></i>
-                            <strong>${test.name}: ${test.status}</strong>
-                        </div>
-                        <div style="background: rgba(255,255,255,0.7); padding: 8px; border-radius: 3px; font-size: 11px; max-height: 120px; overflow-y: auto;">
-                            ${typeof test.details === 'object' ? JSON.stringify(test.details, null, 2) : test.details}
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-            <div style="padding: 10px; background: #fff3cd; border-radius: 4px; border-left: 4px solid #ffc107;">
-                <small style="color: #856404;">
-                    <i class="fas fa-lightbulb"></i> If tests fail, check your network connection and token configuration.
-                </small>
-            </div>
-        </div>
-    `;
-    
-    container.innerHTML = resultHTML;
-    panel.style.display = 'block';
-    
-    // Scroll panel into view
-    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-// Debug function to check token status
-function debugTokenStatus() {
-    console.log('=== TOKEN DEBUG ===');
-    console.log('window.routeTracker exists:', !!window.routeTracker);
-    console.log('window.routeTracker.apiToken:', window.routeTracker?.apiToken ? window.routeTracker.apiToken.substring(0, 10) + '...' : 'none');
-    console.log('localStorage apiToken:', localStorage.getItem('apiToken') ? localStorage.getItem('apiToken').substring(0, 10) + '...' : 'none');
-    console.log('==================');
-}
-
-// View incoming requests and debug data
-async function showDebugPanel() {
-    // Ensure we have an API token
-    const apiToken = window.routeTracker?.apiToken || localStorage.getItem('apiToken');
-    if (!apiToken) {
-        alert('Please set an API token first to view debug information.');
-        return;
-    }
-    
-    console.log('Debug panel - using token:', apiToken ? apiToken.substring(0, 10) + '...' : 'none');
-    
-    try {
-        // Get debug data from server
-        const [requestsRes, statusRes, devicesRes] = await Promise.all([
-            fetch('./api/debug/requests', { headers: { 'Authorization': `Bearer ${apiToken}` } }),
-            fetch('./api/debug/status', { headers: { 'Authorization': `Bearer ${apiToken}` } }),
-            fetch('./api/debug/devices', { headers: { 'Authorization': `Bearer ${apiToken}` } })
-        ]);
-        
-        // Check if all requests succeeded
-        if (!requestsRes.ok || !statusRes.ok || !devicesRes.ok) {
-            throw new Error(`API calls failed: requests:${requestsRes.status}, status:${statusRes.status}, devices:${devicesRes.status}`);
-        }
-        
-        const requests = await requestsRes.json();
-        const status = await statusRes.json();
-        const devices = await devicesRes.json();
-        
-        // Validate response structure
-        if (!requests || !status || !devices) {
-            throw new Error('Invalid response structure from debug APIs');
-        }
-        if (!devices.devices) {
-            throw new Error('Invalid devices response structure');
-        }
-        
-        // Build devices HTML separately to avoid nested template literals
-        let devicesHTML = '<p>No devices found. Send GPS data to create a device.</p>';
-        if (devices && devices.devices && Array.isArray(devices.devices) && devices.devices.length > 0) {
-            devicesHTML = devices.devices.map(device => {
-                const statusColor = device.hasActiveRoute ? '#28a745' : '#6c757d';
-                const statusText = device.hasActiveRoute ? 'Active Route' : 'Inactive';
-                const lastUpdate = device.lastUpdate ? new Date(device.lastUpdate).toLocaleString() : 'Never';
-                
-                return '<div style="margin: 10px 0; padding: 10px; background: white; border-radius: 4px; border-left: 4px solid ' + statusColor + ';">' +
-                    '<strong>' + (device.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</strong> (' + (device.deviceId || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + ')<br>' +
-                    '<small>Points: ' + (device.totalPoints || 0) + ' | Routes: ' + (device.routeCount || 0) + ' | ' + 
-                    'Last update: ' + lastUpdate + ' | Status: ' + statusText + '</small>' +
-                    '</div>';
-            }).join('');
-        }
-        
-        // Build requests HTML separately
-        let requestsHTML = '<p>No requests logged yet.</p>';
-        if (requests && requests.requests && Array.isArray(requests.requests) && requests.requests.length > 0) {
-            requestsHTML = requests.requests.slice(0, 10).map(req => {
-                const methodColor = req.method === 'POST' ? '#007bff' : '#28a745';
-                const bodyHTML = req.body ? '<div style="background: #f8f9fa; padding: 5px; border-radius: 3px; margin-top: 5px; max-height: 100px; overflow-y: auto;"><pre>' + JSON.stringify(req.body, null, 2).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') + '</pre></div>' : '';
-                const queryHTML = Object.keys(req.query).length > 0 ? '<div style="color: #6c757d; margin-top: 5px;">Query: ' + JSON.stringify(req.query).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') + '</div>' : '';
-                
-                return '<div style="margin: 10px 0; padding: 10px; background: white; border-radius: 4px; font-family: monospace; font-size: 12px; border-left: 4px solid ' + methodColor + ';">' +
-                    '<div style="margin-bottom: 5px;">' +
-                    '<strong>' + (req.method || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + ' ' + (req.path || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</strong> ' +
-                    '<span style="float: right; color: #6c757d;">' + new Date(req.timestamp).toLocaleTimeString() + '</span>' +
-                    '</div>' +
-                    bodyHTML + queryHTML +
-                    '</div>';
-            }).join('');
-        }
-        
-        // Create debug panel HTML using string concatenation
-        const debugHTML = 
-            '<div style="font-family: Arial, sans-serif;">' +
-                '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">' +
-                    '<div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">' +
-                        '<h3>📊 System Status</h3>' +
-                        '<ul style="margin: 0; padding-left: 20px;">' +
-                            '<li><strong>Status:</strong> ' + (status.status || 'Unknown') + '</li>' +
-                            '<li><strong>Uptime:</strong> ' + Math.floor((status.uptime || 0) / 3600) + 'h ' + Math.floor(((status.uptime || 0) % 3600) / 60) + 'm</li>' +
-                            '<li><strong>Devices:</strong> ' + ((status.data && status.data.devices) || 0) + '</li>' +
-                            '<li><strong>Routes:</strong> ' + ((status.data && status.data.routes) || 0) + '</li>' +
-                            '<li><strong>Tokens:</strong> ' + ((status.data && status.data.tokens) || 0) + '</li>' +
-                            '<li><strong>Request logs:</strong> ' + ((status.data && status.data.requestLogs) || 0) + '</li>' +
-                        '</ul>' +
-                    '</div>' +
-                    
-                    '<div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">' +
-                        '<h3>📡 Recent Activity</h3>' +
-                        '<ul style="margin: 0; padding-left: 20px;">' +
-                            '<li><strong>Last request:</strong> ' + ((status.recentActivity && status.recentActivity.lastRequest) || 'None') + '</li>' +
-                            '<li><strong>Last GPS data:</strong> ' + ((status.recentActivity && status.recentActivity.lastGpsData) || 'None') + '</li>' +
-                            '<li><strong>Requests/hour:</strong> ' + ((status.recentActivity && status.recentActivity.requestsInLastHour) || 0) + '</li>' +
-                        '</ul>' +
-                    '</div>' +
-                '</div>' +
-                
-                '<div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">' +
-                    '<h3>📱 Devices (' + (devices && devices.devices ? devices.devices.length : 0) + ')</h3>' +
-                    devicesHTML +
-                '</div>' +
-                
-                '<div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">' +
-                    '<h3>📥 Recent Requests (Last ' + (requests && requests.requests ? Math.min(requests.requests.length, 10) : 0) + ')</h3>' +
-                    requestsHTML +
-                '</div>' +
-            '</div>';
-        
-        // Display in inline panel instead of popup
-        const panel = document.getElementById('system-debug-panel');
-        const container = document.getElementById('debug-panel-content');
-        
-        if (panel && container) {
-            container.innerHTML = debugHTML;
-            panel.style.display = 'block';
-            panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        } else {
-            console.error('Debug panel elements not found');
-        }
-        
-    } catch (error) {
-        alert('Error loading debug panel: ' + error.message);
-        console.error('Debug panel error:', error);
-    }
-}
-
-// Monitor GPS data in real-time
-// Global variable to track GPS monitoring state
-let gpsMonitorInterval = null;
-let lastGPSRequestCount = 0;
-
-function startGPSMonitor() {
-    // Ensure we have an API token
-    const apiToken = window.routeTracker?.apiToken || localStorage.getItem('apiToken');
-    if (!apiToken) {
-        alert('Please set an API token first to monitor GPS data.');
-        return;
-    }
-    
-    // Show the GPS monitor panel
-    const panel = document.getElementById('gps-monitor-panel');
-    const container = document.getElementById('gps-monitor-content');
-    
-    if (!panel || !container) {
-        console.error('GPS monitor panel elements not found');
-        return;
-    }
-    
-    // Initialize the monitor display
-    container.innerHTML = `
-        <div style="text-align: center; padding: 15px; background: #d4edda; border-radius: 4px; margin-bottom: 20px;">
-            <i class="fas fa-satellite"></i> Ready to monitor GPS data... (Updates every 5 seconds)
-        </div>
-        <div id="inline-gps-log">
-            <div style="padding: 20px; text-align: center; color: #6c757d;">
-                <i class="fas fa-satellite fa-2x" style="margin-bottom: 10px;"></i><br>
-                No GPS data received yet. Send data from your device to see it here.
-            </div>
-        </div>
-    `;
-    
-    panel.style.display = 'block';
-    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-// Toggle GPS monitoring function
-function toggleGPSMonitor() {
-    const button = document.getElementById('gps-monitor-toggle');
-    const apiToken = window.routeTracker?.apiToken || localStorage.getItem('apiToken');
-    
-    if (!apiToken) {
-        alert('Please set an API token first to monitor GPS data.');
-        return;
-    }
-    
-    if (gpsMonitorInterval) {
-        // Stop monitoring
-        clearInterval(gpsMonitorInterval);
-        gpsMonitorInterval = null;
-        
-        button.innerHTML = '<i class="fas fa-play"></i> Start Monitoring';
-        button.className = 'btn btn-sm btn-success';
-        
-        document.getElementById('inline-gps-log').innerHTML = `
-            <div style="padding: 20px; text-align: center; color: #6c757d;">
-                <i class="fas fa-pause-circle fa-2x" style="margin-bottom: 10px;"></i><br>
-                GPS monitoring stopped. Click "Start Monitoring" to resume.
-            </div>
-        `;
-    } else {
-        // Start monitoring
-        button.innerHTML = '<i class="fas fa-stop"></i> Stop Monitoring';
-        button.className = 'btn btn-sm btn-danger';
-        
-        // Update GPS log function
-        const updateGPSLog = async () => {
-            try {
-                const response = await fetch('./api/debug/requests', {
-                    headers: { 'Authorization': `Bearer ${apiToken}` }
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                
-                const data = await response.json();
-                const gpsRequests = data.requests.filter(req => 
-                    req.path === '/api/gps' && req.method === 'POST'
-                );
-                
-                const logDiv = document.getElementById('inline-gps-log');
-                if (logDiv && gpsRequests.length !== lastGPSRequestCount) {
-                    if (gpsRequests.length === 0) {
-                        logDiv.innerHTML = `
-                            <div style="padding: 20px; text-align: center; color: #6c757d;">
-                                <i class="fas fa-satellite fa-2x" style="margin-bottom: 10px;"></i><br>
-                                Monitoring active... No GPS data received yet.
-                            </div>
-                        `;
-                    } else {
-                        // Update map with latest GPS position
-                        const latestRequest = gpsRequests[0];
-                        if (latestRequest && latestRequest.body && latestRequest.body.lat && latestRequest.body.lng) {
-                            window.routeTracker.updateLivePosition(
-                                latestRequest.body.lat, 
-                                latestRequest.body.lng, 
-                                latestRequest.body
-                            );
-                        }
-                        
-                        logDiv.innerHTML = gpsRequests.slice(0, 10).map(req => {
-                            const body = req.body || {};
-                            const timestamp = new Date(req.timestamp).toLocaleString();
-                            
-                            return `
-                                <div style="margin: 10px 0; padding: 15px; background: #f8f9fa; border-radius: 4px; border-left: 4px solid #007bff;">
-                                    <div style="color: #6c757d; font-size: 12px; margin-bottom: 5px;">
-                                        <i class="fas fa-clock"></i> ${timestamp}
-                                    </div>
-                                    <div style="font-family: monospace; margin: 5px 0;">
-                                        <div style="margin-bottom: 5px;">
-                                            <i class="fas fa-map-marker-alt" style="color: #dc3545;"></i> 
-                                            <strong>Lat:</strong> ${body.lat || 'N/A'}, 
-                                            <strong>Lng:</strong> ${body.lng || 'N/A'}
-                                        </div>
-                                        <div style="font-size: 11px; color: #6c757d;">
-                                            <i class="fas fa-mobile-alt"></i> ${body.deviceId || 'Unknown Device'}
-                                            ${body.speed ? `&nbsp;•&nbsp;<i class="fas fa-tachometer-alt"></i> ${(body.speed * 3.6).toFixed(1)} km/h` : ''}
-                                            ${body.alt ? `&nbsp;•&nbsp;<i class="fas fa-mountain"></i> ${body.alt}m` : ''}
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
-                        }).join('');
-                    }
-                    
-                    lastGPSRequestCount = gpsRequests.length;
-                }
-            } catch (error) {
-                console.error('GPS monitor error:', error);
-                const logDiv = document.getElementById('inline-gps-log');
-                if (logDiv) {
-                    logDiv.innerHTML = `
-                        <div style="padding: 15px; background: #f8d7da; border-radius: 4px; color: #721c24; text-align: center;">
-                            <i class="fas fa-exclamation-triangle"></i> Error loading GPS data: ${error.message}
-                        </div>
-                    `;
-                }
-            }
-        };
-        
-        // Initial load and start interval
-        updateGPSLog();
-        gpsMonitorInterval = setInterval(updateGPSLog, 5000);
-    }
-}
-
-// Helper functions for panel management
-function hidePanel(panelId) {
-    const panel = document.getElementById(panelId);
-    if (panel) {
-        panel.style.display = 'none';
-    }
-    
-    // Stop GPS monitoring if closing GPS panel
-    if (panelId === 'gps-monitor-panel' && gpsMonitorInterval) {
-        clearInterval(gpsMonitorInterval);
-        gpsMonitorInterval = null;
-        
-        const button = document.getElementById('gps-monitor-toggle');
-        if (button) {
-            button.innerHTML = '<i class="fas fa-play"></i> Start Monitoring';
-            button.className = 'btn btn-sm btn-success';
-        }
-    }
-}
-
-// Refresh debug panel function
-function refreshDebugPanel() {
-    showDebugPanel();
-}
-
-// =====================
-// GPS CLIENT FUNCTIONS
-// =====================
-
-// Global variables for GPS client
-let gpsClientInterval = null;
-let gpsClientWatchId = null;
-
-// Toggle GPS sender function
-function toggleGPSSender() {
-    const button = document.getElementById('gps-sender-btn');
-    const statusPanel = document.getElementById('gps-client-status');
-    const statusContent = document.getElementById('gps-status-content');
-    
-    // Debug token retrieval
-    const apiToken = window.routeTracker?.apiToken || localStorage.getItem('apiToken');
-    console.log('GPS Client - Token check:', {
-        'window.routeTracker exists': !!window.routeTracker,
-        'window.routeTracker.apiToken': window.routeTracker?.apiToken ? 'EXISTS' : 'NOT_SET',
-        'localStorage apiToken': localStorage.getItem('apiToken') ? 'EXISTS' : 'NOT_SET',
-        'final token': apiToken ? apiToken.substring(0, 10) + '...' : 'NONE'
-    });
-    
-    if (!apiToken) {
-        alert('Please set an API token first to send GPS data. Click "Set Token" and enter: default-token-123');
-        return;
-    }
-    
-    if (!navigator.geolocation) {
-        alert('Geolocation is not supported by this browser.');
-        return;
-    }
-    
-    if (gpsClientInterval) {
-        // Stop GPS sending
-        clearInterval(gpsClientInterval);
-        gpsClientInterval = null;
-        
-        if (gpsClientWatchId) {
-            navigator.geolocation.clearWatch(gpsClientWatchId);
-            gpsClientWatchId = null;
-        }
-        
-        button.innerHTML = '<i class="fas fa-play"></i> Start Sending GPS';
-        button.className = 'btn btn-success';
-        
-        statusContent.innerHTML = 'GPS sending stopped. Click "Start Sending GPS" to resume.';
-        statusPanel.style.display = 'block';
-    } else {
-        // Start GPS sending
-        button.innerHTML = '<i class="fas fa-stop"></i> Stop Sending GPS';
-        button.className = 'btn btn-danger';
-        
-        statusContent.innerHTML = `
-            <div style="color: #17a2b8;">
-                <i class="fas fa-spinner fa-spin"></i> Starting GPS tracking... Please allow location access.
-            </div>
-            <div style="font-size: 12px; margin-top: 5px; color: #6c757d;">
-                Using token: ${apiToken.substring(0, 15)}...
-            </div>
-        `;
-        statusPanel.style.display = 'block';
-        
-        let sendCount = 0;
-        
-        // Watch position with high accuracy
-        gpsClientWatchId = navigator.geolocation.watchPosition(
-            async (position) => {
-                sendCount++;
-                
-                const gpsData = {
-                    deviceId: `web-client-${window.routeTracker?.selectedDeviceId || 'default'}`,
-                    routeName: `Web Client Route ${new Date().toDateString()}`,
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude,
-                    timestamp: new Date().toISOString(),
-                    speed: position.coords.speed || 0,
-                    alt: position.coords.altitude || 0,
-                    accuracy: position.coords.accuracy,
-                    source: 'web-gps-client'
-                };
-                
-                console.log('Sending GPS data:', gpsData);
-                console.log('Using token:', apiToken.substring(0, 15) + '...');
-                
-                try {
-                    const response = await fetch('./api/gps', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${apiToken}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(gpsData)
-                    });
-                    
-                    console.log('GPS API response:', response.status, response.statusText);
-                    
-                    if (response.ok) {
-                        const result = await response.json();
-                        console.log('GPS API success:', result);
-                        
-                        statusContent.innerHTML = `
-                            <div style="color: #28a745;">
-                                <i class="fas fa-check-circle"></i> GPS data sent successfully! 
-                            </div>
-                            <div style="font-size: 12px; margin-top: 5px; color: #6c757d;">
-                                Sent ${sendCount} updates | Last: ${new Date().toLocaleTimeString()}<br>
-                                📍 ${gpsData.lat.toFixed(6)}, ${gpsData.lng.toFixed(6)}<br>
-                                🎯 Accuracy: ${Math.round(gpsData.accuracy)}m
-                                ${gpsData.speed > 0 ? ` | 🚀 ${(gpsData.speed * 3.6).toFixed(1)} km/h` : ''}<br>
-                                📊 Route: ${result.routeId} | Points: ${result.totalPoints}
-                            </div>
-                        `;
-                    } else {
-                        const errorText = await response.text();
-                        console.error('GPS API error:', response.status, errorText);
-                        throw new Error(`HTTP ${response.status}: ${errorText}`);
-                    }
-                } catch (error) {
-                    console.error('GPS send error:', error);
-                    statusContent.innerHTML = `
-                        <div style="color: #dc3545;">
-                            <i class="fas fa-exclamation-triangle"></i> Error sending GPS data: ${error.message}
-                        </div>
-                        <div style="font-size: 12px; margin-top: 5px; color: #6c757d;">
-                            Check console for details. Try refreshing the page and setting token again.
-                        </div>
-                    `;
-                }
-            },
-            (error) => {
-                console.error('Geolocation error:', error);
-                statusContent.innerHTML = `
-                    <div style="color: #dc3545;">
-                        <i class="fas fa-exclamation-triangle"></i> GPS Error: ${error.message}
-                    </div>
-                    <div style="font-size: 12px; margin-top: 5px; color: #6c757d;">
-                        Please enable location services and try again.
-                    </div>
-                `;
-            },
-            {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 5000
-            }
-        );
-    }
-}
-
-// Send single GPS location
-function sendSingleGPS() {
-    const statusPanel = document.getElementById('gps-client-status');
-    const statusContent = document.getElementById('gps-status-content');
-    
-    // Debug token retrieval
-    const apiToken = window.routeTracker?.apiToken || localStorage.getItem('apiToken');
-    console.log('Single GPS - Token check:', {
-        'window.routeTracker exists': !!window.routeTracker,
-        'final token': apiToken ? apiToken.substring(0, 10) + '...' : 'NONE'
-    });
-    
-    if (!apiToken) {
-        alert('Please set an API token first to send GPS data. Click "Set Token" and enter: default-token-123');
-        return;
-    }
-    
-    if (!navigator.geolocation) {
-        alert('Geolocation is not supported by this browser.');
-        return;
-    }
-    
-    statusContent.innerHTML = `
-        <div style="color: #17a2b8;">
-            <i class="fas fa-spinner fa-spin"></i> Getting current location...
-        </div>
-        <div style="font-size: 12px; margin-top: 5px; color: #6c757d;">
-            Using token: ${apiToken.substring(0, 15)}...
-        </div>
-    `;
-    statusPanel.style.display = 'block';
-    
-    navigator.geolocation.getCurrentPosition(
-        async (position) => {
-            const gpsData = {
-                deviceId: `web-single-${window.routeTracker?.selectedDeviceId || 'default'}`,
-                routeName: `Single Location ${new Date().toLocaleString()}`,
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-                timestamp: new Date().toISOString(),
-                speed: position.coords.speed || 0,
-                alt: position.coords.altitude || 0,
-                accuracy: position.coords.accuracy,
-                source: 'web-single-gps'
-            };
-            
-            console.log('Sending single GPS:', gpsData);
-            
-            try {
-                const response = await fetch('./api/gps', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${apiToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(gpsData)
-                });
-                
-                console.log('Single GPS response:', response.status, response.statusText);
-                
-                if (response.ok) {
-                    const result = await response.json();
-                    console.log('Single GPS success:', result);
-                    
-                    statusContent.innerHTML = `
-                        <div style="color: #28a745;">
-                            <i class="fas fa-check-circle"></i> Single GPS location sent successfully!
-                        </div>
-                        <div style="font-size: 12px; margin-top: 5px; color: #6c757d;">
-                            📍 ${gpsData.lat.toFixed(6)}, ${gpsData.lng.toFixed(6)}<br>
-                            🎯 Accuracy: ${Math.round(gpsData.accuracy)}m<br>
-                            🕐 ${new Date().toLocaleString()}<br>
-                            📊 Route: ${result.routeId} | Points: ${result.totalPoints}
-                        </div>
-                    `;
-                } else {
-                    const errorText = await response.text();
-                    console.error('Single GPS error:', response.status, errorText);
-                    throw new Error(`HTTP ${response.status}: ${errorText}`);
-                }
-            } catch (error) {
-                console.error('Single GPS send error:', error);
-                statusContent.innerHTML = `
-                    <div style="color: #dc3545;">
-                        <i class="fas fa-exclamation-triangle"></i> Error sending GPS data: ${error.message}
-                    </div>
-                    <div style="font-size: 12px; margin-top: 5px; color: #6c757d;">
-                        Check console for details. Try refreshing the page and setting token again.
-                    </div>
-                `;
-            }
-        },
-        (error) => {
-            console.error('Single GPS geolocation error:', error);
-            statusContent.innerHTML = `
-                <div style="color: #dc3545;">
-                    <i class="fas fa-exclamation-triangle"></i> GPS Error: ${error.message}
-                </div>
-                <div style="font-size: 12px; margin-top: 5px; color: #6c757d;">
-                    Please enable location services and try again.
-                </div>
-            `;
-        },
-        {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 60000
-        }
-    );
-}
-
-// Send fake GPS location for testing
-function sendFakeGPS() {
-    const statusPanel = document.getElementById('gps-client-status');
-    const statusContent = document.getElementById('gps-status-content');
-    
-    // Debug token retrieval
-    const apiToken = window.routeTracker?.apiToken || localStorage.getItem('apiToken');
-    console.log('Fake GPS - Token check:', {
-        'window.routeTracker exists': !!window.routeTracker,
-        'final token': apiToken ? apiToken.substring(0, 10) + '...' : 'NONE'
-    });
-    
-    if (!apiToken) {
-        alert('Please set an API token first to send GPS data. Click "Set Token" and enter: default-token-123');
-        return;
-    }
-    
-    // Generate random coordinates around Mannheim, Germany (default map center)
-    const baseLat = 49.4875;
-    const baseLng = 8.466;
-    const randomOffset = 0.01; // ~1km radius
-    
-    const fakeGpsData = {
-        deviceId: `web-fake-${window.routeTracker?.selectedDeviceId || 'default'}`,
-        routeName: `Test Route ${new Date().toDateString()}`,
-        lat: baseLat + (Math.random() - 0.5) * randomOffset,
-        lng: baseLng + (Math.random() - 0.5) * randomOffset,
-        timestamp: new Date().toISOString(),
-        speed: Math.random() * 15, // 0-15 m/s (0-54 km/h)
-        alt: 100 + Math.random() * 50, // 100-150m elevation
-        accuracy: 5 + Math.random() * 10, // 5-15m accuracy
-        source: 'web-fake-gps'
-    };
-    
-    statusContent.innerHTML = `
-        <div style="color: #17a2b8;">
-            <i class="fas fa-spinner fa-spin"></i> Sending test GPS location...
-        </div>
-        <div style="font-size: 12px; margin-top: 5px; color: #6c757d;">
-            Using token: ${apiToken.substring(0, 15)}...
-        </div>
-    `;
-    statusPanel.style.display = 'block';
-    
-    console.log('Sending fake GPS:', fakeGpsData);
-    
-    fetch('./api/gps', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${apiToken}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(fakeGpsData)
-    })
-    .then(response => {
-        console.log('Fake GPS response:', response.status, response.statusText);
-        
-        if (response.ok) {
-            return response.json().then(result => {
-                console.log('Fake GPS success:', result);
-                
-                statusContent.innerHTML = `
-                    <div style="color: #28a745;">
-                        <i class="fas fa-check-circle"></i> Test GPS location sent successfully!
-                    </div>
-                    <div style="font-size: 12px; margin-top: 5px; color: #6c757d;">
-                        📍 ${fakeGpsData.lat.toFixed(6)}, ${fakeGpsData.lng.toFixed(6)}<br>
-                        🚀 Speed: ${(fakeGpsData.speed * 3.6).toFixed(1)} km/h<br>
-                        ⛰️ Altitude: ${Math.round(fakeGpsData.alt)}m<br>
-                        🕐 ${new Date().toLocaleString()}<br>
-                        📊 Route: ${result.routeId} | Points: ${result.totalPoints}
-                    </div>
-                `;
-            });
-        } else {
-            return response.text().then(errorText => {
-                console.error('Fake GPS error:', response.status, errorText);
-                throw new Error(`HTTP ${response.status}: ${errorText}`);
-            });
-        }
-    })
-    .catch(error => {
-        console.error('Fake GPS send error:', error);
-        statusContent.innerHTML = `
-            <div style="color: #dc3545;">
-                <i class="fas fa-exclamation-triangle"></i> Error sending test GPS: ${error.message}
-            </div>
-            <div style="font-size: 12px; margin-top: 5px; color: #6c757d;">
-                Check console for details. Try refreshing the page and setting token again.
-            </div>
-        `;
-    });
-}
-
-// Send random GPS location within 1km of actual position
-function sendRandomNearbyGPS() {
-    const statusPanel = document.getElementById('gps-client-status');
-    const statusContent = document.getElementById('gps-status-content');
-    
-    // Debug token retrieval
-    const apiToken = window.routeTracker?.apiToken || localStorage.getItem('apiToken');
-    console.log('Random Nearby GPS - Token check:', {
-        'window.routeTracker exists': !!window.routeTracker,
-        'final token': apiToken ? apiToken.substring(0, 10) + '...' : 'NONE'
-    });
-    
-    if (!apiToken) {
-        alert('Please set an API token first to send GPS data. Click "Set Token" and enter: default-token-123');
-        return;
-    }
-    
-    if (!navigator.geolocation) {
-        alert('Geolocation is not supported by this browser. Using default location.');
-        // Fall back to default location
-        sendRandomAroundCoordinates(49.4875, 8.466, 'default location');
-        return;
-    }
-    
-    statusContent.innerHTML = `
-        <div style="color: #17a2b8;">
-            <i class="fas fa-spinner fa-spin"></i> Getting your location for random nearby GPS...
-        </div>
-        <div style="font-size: 12px; margin-top: 5px; color: #6c757d;">
-            Using token: ${apiToken.substring(0, 15)}...
-        </div>
-    `;
-    statusPanel.style.display = 'block';
-    
-    // Get current position first
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            // Use actual position as base for random coordinates
-            console.log('Got actual position:', position.coords.latitude, position.coords.longitude);
-            sendRandomAroundCoordinates(
-                position.coords.latitude, 
-                position.coords.longitude, 
-                'your location'
-            );
-        },
-        (error) => {
-            console.log('Geolocation error, using default location:', error);
-            // Fall back to default location if geolocation fails
-            statusContent.innerHTML = `
-                <div style="color: #f39c12;">
-                    <i class="fas fa-exclamation-circle"></i> Could not get your location, using default area...
-                </div>
-            `;
-            setTimeout(() => {
-                sendRandomAroundCoordinates(49.4875, 8.466, 'default location (Mannheim, Germany)');
-            }, 1000);
-        },
-        {
-            enableHighAccuracy: false, // Don't need high accuracy for this
-            timeout: 5000,
-            maximumAge: 300000 // 5 minutes
-        }
-    );
-    
-    // Helper function to send random coordinates around a base position
-    function sendRandomAroundCoordinates(baseLat, baseLng, locationName) {
-        // Generate random coordinates within ~1km radius
-        // 1km ≈ 0.009 degrees latitude, 0.011 degrees longitude (at ~50° latitude)
-        const latOffset = 0.009; 
-        const lngOffset = 0.011;
-        
-        // Generate random point within circular area (not just square)
-        const angle = Math.random() * 2 * Math.PI;
-        const radius = Math.random(); // 0-1 for uniform distribution in circle
-        const distance = Math.sqrt(radius); // Square root for uniform area distribution
-        
-        const randomLat = baseLat + (distance * Math.cos(angle) * latOffset);
-        const randomLng = baseLng + (distance * Math.sin(angle) * lngOffset);
-        
-        const randomGpsData = {
-            deviceId: `web-random-${window.routeTracker?.selectedDeviceId || 'default'}`,
-            routeName: `Random Route ${new Date().toDateString()}`,
-            lat: randomLat,
-            lng: randomLng,
-            timestamp: new Date().toISOString(),
-            speed: Math.random() * 20, // 0-20 m/s (0-72 km/h)
-            alt: 80 + Math.random() * 100, // 80-180m elevation
-            accuracy: 3 + Math.random() * 12, // 3-15m accuracy
-            source: 'web-random-nearby-gps'
-        };
-        
-        console.log('Sending random nearby GPS:', randomGpsData);
-        console.log(`Base location was: ${baseLat.toFixed(6)}, ${baseLng.toFixed(6)} (${locationName})`);
-        console.log(`Random offset: ${((randomLat - baseLat) * 111000).toFixed(0)}m north, ${((randomLng - baseLng) * 111000 * Math.cos(baseLat * Math.PI / 180)).toFixed(0)}m east`);
-        
-        fetch('./api/gps', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(randomGpsData)
-        })
-        .then(response => {
-            console.log('Random GPS response:', response.status, response.statusText);
-            
-            if (response.ok) {
-                return response.json().then(result => {
-                    console.log('Random GPS success:', result);
-                    
-                    // Calculate distance from base
-                    const distanceMeters = Math.round(
-                        Math.sqrt(
-                            Math.pow((randomLat - baseLat) * 111000, 2) + 
-                            Math.pow((randomLng - baseLng) * 111000 * Math.cos(baseLat * Math.PI / 180), 2)
-                        )
-                    );
-                    
-                    statusContent.innerHTML = `
-                        <div style="color: #28a745;">
-                            <i class="fas fa-check-circle"></i> Random nearby GPS sent successfully!
-                        </div>
-                        <div style="font-size: 12px; margin-top: 5px; color: #6c757d;">
-                            📍 ${randomGpsData.lat.toFixed(6)}, ${randomGpsData.lng.toFixed(6)}<br>
-                            📏 ${distanceMeters}m from ${locationName}<br>
-                            🚀 Speed: ${(randomGpsData.speed * 3.6).toFixed(1)} km/h<br>
-                            ⛰️ Altitude: ${Math.round(randomGpsData.alt)}m<br>
-                            🕐 ${new Date().toLocaleString()}<br>
-                            📊 Route: ${result.routeId} | Points: ${result.totalPoints}
-                        </div>
-                    `;
-                });
-            } else {
-                return response.text().then(errorText => {
-                    console.error('Random GPS error:', response.status, errorText);
-                    throw new Error(`HTTP ${response.status}: ${errorText}`);
-                });
-            }
-        })
-        .catch(error => {
-            console.error('Random GPS send error:', error);
-            statusContent.innerHTML = `
-                <div style="color: #dc3545;">
-                    <i class="fas fa-exclamation-triangle"></i> Error sending random GPS: ${error.message}
-                </div>
-                <div style="font-size: 12px; margin-top: 5px; color: #6c757d;">
-                    Check console for details. Try refreshing the page and setting token again.
-                </div>
-            `;
-        });
-    }
-}
-
 // Clear live GPS route function
+function zoomToFit() {
+    const rt = window.routeTracker;
+    if (!rt || !rt.map) return;
+    if (rt.currentRoute) {
+        rt.map.fitBounds(rt.currentRoute.getBounds(), { padding: [30, 30], maxZoom: 17 });
+    } else if (rt.liveTrail && rt.liveTrail.length > 1) {
+        rt.map.fitBounds(L.latLngBounds(rt.liveTrail).pad(0.1), { maxZoom: 16, padding: [20, 20] });
+    } else if (rt.liveTrail && rt.liveTrail.length === 1) {
+        rt.map.setView(rt.liveTrail[0], 15);
+    }
+}
+
 function resetMapView() {
     const rt = window.routeTracker;
     if (!rt || !rt.map) return;
+
+    // If we were browsing a history route, resume live tracking first
+    if (rt._historyViewMode) {
+        rt._historyViewMode = false;
+        rt._setResetBtnMode('live');
+        rt.loadDevicesAndRoutes().then(() => {
+            rt.startAutoRefresh();
+        });
+        return;
+    }
+
     rt.userHasMovedMap = false;
     // Fit to live trail if available, otherwise current route layer, otherwise default
     if (rt.liveTrail && rt.liveTrail.length > 1) {
@@ -1950,6 +1377,43 @@ function clearLiveRoute() {
         console.error('Route tracker not available');
         alert('Route tracker not available');
     }
+}
+
+function toggleDataPoints() {
+    if (window.routeTracker) window.routeTracker.toggleDataPoints();
+}
+
+function toggleEditMode() {
+    if (window.routeTracker) window.routeTracker.toggleEditMode();
+}
+
+function saveRouteEdits() {
+    if (window.routeTracker) window.routeTracker.saveRouteEdits();
+}
+
+function discardRouteEdits() {
+    if (window.routeTracker) window.routeTracker.discardRouteEdits();
+}
+
+function contextMenuAddAfter() {
+    if (window.routeTracker) window.routeTracker.contextMenuAddAfter();
+}
+
+function contextMenuDelete() {
+    if (window.routeTracker) window.routeTracker.contextMenuDelete();
+}
+
+function mergeSelectedRoutes() {
+    if (window.routeTracker) window.routeTracker.mergeSelectedRoutes();
+}
+
+function saveRouteEdit() {
+    const id    = document.getElementById('route-edit-id').value;
+    const name  = document.getElementById('route-edit-name').value.trim();
+    const color = document.getElementById('route-edit-color').value;
+    if (!name) return;
+    document.getElementById('route-edit-dialog').close();
+    if (window.routeTracker) window.routeTracker._saveRouteEdit(id, name, color);
 }
 
 // Toggle GPS monitoring function
@@ -2141,13 +1605,15 @@ async function submitPhotoUpload() {
 
     showMediaStatus('<i class="fas fa-spinner fa-spin"></i> Uploading...', 'info');
     try {
-        const res = await fetch(`/api/media/${deviceId}/photo`, { method: 'POST', body: formData });
+        const routeId = window.routeTracker?.currentRouteId || '';
+        if (routeId) formData.append('routeId', routeId);
+        const res = await fetch(`./api/media/${deviceId}/photo`, { method: 'POST', body: formData });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || data.error);
         showMediaStatus('<i class="fas fa-check"></i> Photo uploaded!', 'success');
         setTimeout(() => {
             document.getElementById('media-upload-dialog').close();
-            loadMediaMarkers(deviceId);
+            loadMediaMarkers(deviceId, window.routeTracker?.currentRouteId);
         }, 1000);
     } catch (e) {
         showMediaStatus('Upload failed: ' + e.message, 'error');
@@ -2168,17 +1634,18 @@ async function submitYoutubeAdd() {
 
     showMediaStatus('<i class="fas fa-spinner fa-spin"></i> Saving...', 'info');
     try {
-        const res = await fetch(`/api/media/${deviceId}/youtube`, {
+        const routeId = window.routeTracker?.currentRouteId || undefined;
+        const res = await fetch(`./api/media/${deviceId}/youtube`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, description: desc, lat, lng })
+            body: JSON.stringify({ url, description: desc, lat, lng, ...(routeId ? { routeId } : {}) })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         showMediaStatus('<i class="fas fa-check"></i> Video added!', 'success');
         setTimeout(() => {
             document.getElementById('media-upload-dialog').close();
-            loadMediaMarkers(deviceId);
+            loadMediaMarkers(deviceId, window.routeTracker?.currentRouteId);
         }, 1000);
     } catch (e) {
         showMediaStatus('Failed: ' + e.message, 'error');
@@ -2205,7 +1672,7 @@ window.mediaThumbError = function(img) {
 };
 
 // ── load & render media markers on map ───────────────────
-async function loadMediaMarkers(deviceId) {
+async function loadMediaMarkers(deviceId, routeId) {
     const map = window.routeTracker?.map;
     if (!map || !deviceId) return;
 
@@ -2214,7 +1681,8 @@ async function loadMediaMarkers(deviceId) {
     mediaState.markers = [];
 
     try {
-        const res = await fetch(`/api/media/${deviceId}`);
+        const qs = routeId ? `?routeId=${encodeURIComponent(routeId)}` : '';
+        const res = await fetch(`./api/media/${deviceId}${qs}`);
         if (!res.ok) return;
         const entries = await res.json();
 
@@ -2232,7 +1700,7 @@ function createMediaMarker(entry, deviceId, map) {
     const cursor = isAdmin ? 'grab' : 'pointer';
     const tipAttr = isAdmin ? ' title="Drag to reposition"' : '';
     if (entry.type === 'photo') {
-        const thumbUrl = `/api/media/${deviceId}/${entry.id}/thumb`;
+        const thumbUrl = `./api/media/${deviceId}/${entry.id}/thumb`;
         iconHtml = `<div style="width:44px;height:44px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);overflow:hidden;background:#eee;cursor:${cursor};user-select:none;-webkit-user-select:none;"${tipAttr}>
                       <img src="${thumbUrl}" style="width:100%;height:100%;object-fit:cover;pointer-events:none;" onerror="mediaThumbError(this)">
                     </div>`;
@@ -2259,7 +1727,7 @@ function createMediaMarker(entry, deviceId, map) {
         entry.lat = lat;
         entry.lng = lng;
         try {
-            const res = await fetch(`/api/media/${encodeURIComponent(deviceId)}/${encodeURIComponent(entry.id)}`, {
+            const res = await fetch(`./api/media/${encodeURIComponent(deviceId)}/${encodeURIComponent(entry.id)}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ lat, lng })
@@ -2290,7 +1758,7 @@ function openMediaViewer(entry, deviceId) {
     actions.innerHTML = '';
 
     if (entry.type === 'photo') {
-        const photoUrl = `/api/media/${deviceId}/${entry.id}/photo`;
+        const photoUrl = `./api/media/${deviceId}/${entry.id}/photo`;
         content.innerHTML = `<img src="${photoUrl}" style="width:100%;max-height:75vh;object-fit:contain;display:block;background:#000;">`;
         actions.innerHTML = `<a href="${photoUrl}" download class="btn btn-success btn-sm"><i class="fas fa-download"></i> Download</a>`;
 
@@ -2319,7 +1787,7 @@ function extractYoutubeId(url) {
 const _origLoadDevicesAndRoutes = RouteTracker.prototype.loadDevicesAndRoutes;
 RouteTracker.prototype.loadDevicesAndRoutes = async function() {
     await _origLoadDevicesAndRoutes.call(this);
-    loadMediaMarkers(this.selectedDeviceId);
+    loadMediaMarkers(this.selectedDeviceId, this.currentRouteId);
 };
 
 console.log('Route Tracker GPS Receiver script loaded - Debug functions available');

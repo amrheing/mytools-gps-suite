@@ -36,6 +36,7 @@ Die Karte zeigt die aktuelle Route als Linie mit Start-Markierung und aktueller 
 
 - **Zoomen / Verschieben** ist jederzeit möglich – die Karte setzt die Ansicht nicht automatisch zurück, nachdem du sie bewegt hast.
 - Schaltfläche **Reset View** (oben rechts auf der Karte) – passt die Karte wieder an die gesamte Route an.
+- Schaltfläche **Punkte anzeigen** (oben rechts auf der Karte) – blendet kleine Punkte auf der Routenlinie für jeden aufgezeichneten GPS-Punkt ein oder aus. Ein Klick auf einen Punkt zeigt Koordinaten, Geschwindigkeit, Höhe und Zeitstempel.
 - Ein Klick auf ein **Foto-Thumbnail** oder **YouTube-Symbol** auf der Karte öffnet den Medien-Viewer.
 
 ### Statistik-Dashboard

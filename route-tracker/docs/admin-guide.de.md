@@ -32,7 +32,42 @@ Benutzerkonten erstellen und verwalten.
 
 ---
 
-### 2 · API-Tokens
+### 2 · GPS Eingangsprotokoll
+
+Der Bereich **GPS Eingangsprotokoll** ist nur für Admin-Benutzer sichtbar, bei denen die Berechtigung **Log Viewer Access** aktiviert ist.
+
+Er zeigt eine Echtzeit-Aufzeichnung aller HTTP-Anfragen, die der Server empfangen hat, mit vollständigen Details zu jedem eingehenden GPS-Push von OwnTracks oder einem anderen Client.
+
+#### Steuerelemente
+
+| Steuerelement | Beschreibung |
+|---|---|
+| Schaltfläche **Refresh** | Lädt das Protokoll vom Server neu (letzte 50 Einträge) |
+| Checkbox **GPS pushes only** | Wenn aktiviert, werden nur `POST /api/gps`-Anfragen angezeigt – alle anderen API-Aufrufe werden ausgeblendet |
+| Zusammenfassungszeile | Zeigt Gesamtanzahl der Anfragen im Protokoll und wie viele GPS-Pushes darunter sind |
+
+#### Felder eines Protokolleintrags
+
+Jeder Eintrag zeigt:
+
+- **Zeitstempel** — Datum und Uhrzeit des Eingangs
+- **Methode + Pfad** — z. B. `POST /api/gps`
+- **Status-Code** — gesendete HTTP-Antwort (200 = Erfolg, 401 = Auth-Fehler usw.)
+- **Benutzer / Gerät** — welchem Benutzer und welcher Geräte-ID der Push zugeordnet wurde
+- **Payload-Zusammenfassung** — Breitengrad, Längengrad, Geschwindigkeit, Höhe, Genauigkeit (falls vorhanden)
+- **Antwortzeit** — wie lange der Server für die Verarbeitung gebraucht hat
+
+#### Log-Zugriff für einen Benutzer aktivieren
+
+1. Zu **Benutzerverwaltung** gehen → Admin-Benutzer bearbeiten.
+2. **Log Viewer Access** aktivieren.
+3. Speichern. Der GPS-Eingangsprotokoll-Bereich erscheint für diesen Benutzer beim nächsten Laden der Seite.
+
+> Nur Benutzer mit der Rolle Admin können Log-Zugriff erhalten. Die Einstellung hat für Viewer-Konten keine Wirkung.
+
+---
+
+### 3 · API-Tokens
 
 API-Tokens verknüpfen einen eingehenden GPS-Webhook mit einem bestimmten Gerät und Benutzer.
 
@@ -49,7 +84,7 @@ https://deine-domain.com/route-tracker/api/gps?token=DEIN_TOKEN
 
 ---
 
-### 3 · Freigegebene Links
+### 4 · Freigegebene Links
 
 Erstelle zeitlich begrenzte öffentliche Links, um eine Routenansicht mit Personen zu teilen, die kein Konto haben.
 
@@ -63,7 +98,7 @@ Kopiere den generierten Link und sende ihn weiter. Er öffnet eine schreibgesch�
 
 ---
 
-### 4 · Medienverwaltung
+### 5 · Medienverwaltung
 
 Alle Medieneinträge pro Gerät ansehen, Beschreibungen bearbeiten, neu positionieren und löschen.
 
@@ -110,6 +145,30 @@ Als Admin zeigen alle Medien-Marker auf der Karte einen **Greif-Cursor**. Einfac
 | **Debug** | Öffnet das System-Debug-Panel mit Sitzungsinfos und Live-GPS-Monitor |
 | **Clear Route** | Entfernt die aktuelle Live-Route von der Karte (löscht nicht vom Server) |
 | **Reset View** | Passt die Karte wieder an den gesamten Routenbereich an |
+| **Punkte anzeigen** | Blendet kleine Punkt-Marker auf der Routenlinie ein oder aus. Klick auf einen Punkt zeigt Details (Koordinaten, Geschwindigkeit, Höhe, Zeitstempel) |
+| **Punkte bearbeiten** | Öffnet den Bearbeitungsmodus für Route-Punkte – siehe unten |
+
+---
+
+### Routenpunkte bearbeiten (nur Admin)
+
+Klicke auf **Punkte bearbeiten** im Karten-Header, um den Bearbeitungsmodus zu aktivieren. Über der Karte erscheint eine gelbe Werkzeugleiste.
+
+#### Aktionen
+
+| Aktion | Vorgehensweise |
+|---|---|
+| **Punkt verschieben** | Punkt anklicken, gedrückt halten und an die neue Position ziehen. Die Routenlinie aktualisiert sich in Echtzeit |
+| **Punkt hinzufügen** | Rechtsklick auf einen Punkt → **Punkt danach einfügen**. Ein neuer Punkt (blau dargestellt) wird als Mittelpunkt zwischen diesem und dem nächsten eingefügt. An die richtige Position ziehen |
+| **Punkt löschen** | Rechtsklick auf einen Punkt → **Punkt löschen**. Mindestens 2 Punkte müssen erhalten bleiben |
+| **Menü schließen** | Klick auf eine andere Stelle auf der Karte oder **Esc** drücken |
+
+#### Speichern
+
+- **Speichern** — schreibt die bearbeiteten Punkte auf den Server und berechnet Gesamtdistanz und Zeitstempel neu. Kehrt zur normalen Ansicht zurück.
+- **Verwerfen** — verwirft alle Änderungen und lädt die ursprüngliche Route vom Server.
+
+> Änderungen werden **nicht** automatisch gespeichert. Das Speichern muss explizit bestätigt werden.
 
 ---
 

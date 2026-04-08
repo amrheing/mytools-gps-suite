@@ -1,3 +1,18 @@
+const cluster = require('cluster');
+const MAX_WORKERS = 4;
+
+// Primary process: fork workers and restart on crash
+if (cluster.isPrimary) {
+    const workerCount = Math.min(MAX_WORKERS, require('os').cpus().length);
+    console.log(`[cluster] Primary ${process.pid} starting ${workerCount} workers`);
+    for (let i = 0; i < workerCount; i++) cluster.fork();
+    cluster.on('exit', (worker, code) => {
+        console.log(`[cluster] Worker ${worker.process.pid} exited (code ${code}), restarting`);
+        cluster.fork();
+    });
+    return;
+}
+
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs').promises;
@@ -5,6 +20,7 @@ const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const session = require('express-session');
+const FileStore = require('session-file-store')(session);
 const multer = require('multer');
 const sharp = require('sharp');
 const exifr = require('exifr');
@@ -14,6 +30,7 @@ const {
     generateAuthenticationOptions,
     verifyAuthenticationResponse
 } = require('@simplewebauthn/server');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -52,16 +69,24 @@ app.use(session({
     secret: process.env.SESSION_SECRET || sessionSecret,
     resave: false,
     saveUninitialized: false,
+    store: (() => {
+        try {
+            const sessionDir = require('path').join(DATA_DIR, 'sessions');
+            require('fs').mkdirSync(sessionDir, { recursive: true });
+            return new FileStore({ path: sessionDir, ttl: 86400, retries: 2, logFn: () => {} });
+        } catch { return undefined; /* fallback to MemoryStore in CI */ }
+    })(),
     cookie: {
-        secure: false, // set true if HTTPS-only (nginx handles TLS termination here)
+        secure: false,
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
-app.use(express.static('/usr/share/nginx/html'));
+app.use(express.static('/app'));
 app.use('/shared', express.static('/app/shared'));
 
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const INVITE_TOKENS_FILE = path.join(DATA_DIR, 'invite-tokens.json');
 const BCRYPT_ROUNDS = 12;
 
 // =====================
@@ -79,6 +104,36 @@ const loadUsers = async () => {
 
 const saveUsers = async (users) => {
     await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2));
+};
+
+const loadInviteTokens = async () => {
+    try {
+        const data = await fs.readFile(INVITE_TOKENS_FILE, 'utf8');
+        return JSON.parse(data);
+    } catch { return {}; }
+};
+
+const saveInviteTokens = async (tokens) => {
+    await fs.writeFile(INVITE_TOKENS_FILE, JSON.stringify(tokens, null, 2));
+};
+
+const sendInviteEmail = async (toEmail, username, inviteUrl) => {
+    const transporter = nodemailer.createTransport({
+        host: process.env.MAIL_HOST,
+        port: parseInt(process.env.MAIL_PORT) || 587,
+        secure: false,
+        auth: {
+            user: process.env.MAIL_USERNAME,
+            pass: process.env.MAIL_PASSWORD
+        }
+    });
+    await transporter.sendMail({
+        from: `"${process.env.MAIL_FROM_NAME || 'myTools'}" <${process.env.MAIL_FROM_ADDRESS}>`,
+        to: toEmail,
+        subject: 'Your myTools Invitation',
+        text: `Hello ${username},\n\nYou have been invited to access myTools.\n\nClick the link below to set your password:\n${inviteUrl}\n\nThis link expires in 72 hours.\n\nIf you did not expect this invitation, please ignore this email.`,
+        html: `<p>Hello <strong>${username}</strong>,</p><p>You have been invited to access <strong>myTools</strong>.</p><p><a href="${inviteUrl}">Click here to set your password</a></p><p>Or copy this link:<br><code>${inviteUrl}</code></p><p>This link expires in 72 hours.</p><p style="color:#888;font-size:0.85em;">If you did not expect this invitation, please ignore this email.</p>`
+    });
 };
 
 // Middleware: require web login session
@@ -122,9 +177,23 @@ const requireLogAccess = async (req, res, next) => {
     next();
 };
 
-// Store incoming request logs for debugging
-let requestLogs = [];
+// Store incoming request logs for debugging — file-backed so all workers share the same log
+const LOG_FILE = require('path').join(DATA_DIR, 'gps-request-log.json');
 const MAX_LOGS = 100;
+
+const loadRequestLogs = () => {
+    try { return JSON.parse(require('fs').readFileSync(LOG_FILE, 'utf8')); } catch { return []; }
+};
+const saveRequestLog = (entry) => {
+    try {
+        let logs = loadRequestLogs();
+        logs.unshift(entry);
+        if (logs.length > MAX_LOGS) logs = logs.slice(0, MAX_LOGS);
+        require('fs').writeFileSync(LOG_FILE, JSON.stringify(logs));
+    } catch { /* non-fatal */ }
+};
+// In-memory cache for reads (refreshed each request to /api/admin/logs)
+let requestLogs = loadRequestLogs();
 
 // Request logging middleware
 const logRequests = (req, res, next) => {
@@ -132,7 +201,7 @@ const logRequests = (req, res, next) => {
     const logEntry = {
         timestamp,
         method: req.method,
-        path: req.path,
+        path: req.originalUrl.split('?')[0],   // originalUrl preserves the full path when middleware is mounted at a sub-path
         query: req.query,
         body: req.body,
         headers: {
@@ -142,10 +211,8 @@ const logRequests = (req, res, next) => {
         }
     };
     
-    requestLogs.unshift(logEntry);
-    if (requestLogs.length > MAX_LOGS) {
-        requestLogs = requestLogs.slice(0, MAX_LOGS);
-    }
+    requestLogs = loadRequestLogs();
+    saveRequestLog(logEntry);
     
     const bodyStr = req.body ? JSON.stringify(req.body) : '';
     console.log(`[${logEntry.timestamp}] ${logEntry.method} ${logEntry.path}`, bodyStr.substring(0, 200));
@@ -332,7 +399,9 @@ app.post('/api/auth/login', async (req, res) => {
     const users = await loadUsers();
     const user = Object.values(users).find(u => u.username === username.trim().toLowerCase());
 
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    if (!user) return res.status(401).json({ error: 'Invalid username or password' });
+    if (!user.passwordHash) return res.status(401).json({ error: 'Account not yet activated. Please use your invitation link to set a password.' });
+    if (!(await bcrypt.compare(password, user.passwordHash))) {
         return res.status(401).json({ error: 'Invalid username or password' });
     }
 
@@ -623,19 +692,34 @@ app.get('/api/admin/users', requireLogin, requireAdmin, async (req, res) => {
     const users = await loadUsers();
     const sanitized = Object.values(users).map(u => ({
         id: u.id, username: u.username, role: u.role,
+        email: u.email || null,
+        hasPassword: !!u.passwordHash,
         allowedDevices: u.allowedDevices || [],
         devices: u.devices || [],
         dataWindow: u.dataWindow || { from: null, to: null },
         canViewLogs: u.canViewLogs || false,
+        passkeyCount: (u.passkeys || []).length,
         created: u.created, lastLogin: u.lastLogin || null
     }));
     res.json(sanitized);
 });
 
+// Admin: clear all passkeys for a user
+app.delete('/api/admin/users/:id/passkeys', requireLogin, requireAdmin, async (req, res) => {
+    const users = await loadUsers();
+    const user = users[req.params.id];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const removed = (user.passkeys || []).length;
+    user.passkeys = [];
+    await saveUsers(users);
+    res.json({ success: true, removed });
+});
+
 // Create user (admin only)
 app.post('/api/admin/users', requireLogin, requireAdmin, async (req, res) => {
-    const { username, password, role, allowedDevices, dataWindow } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+    const { username, password, email, role, allowedDevices, dataWindow } = req.body;
+    if (!username) return res.status(400).json({ error: 'Username required' });
+    if (!password && !email) return res.status(400).json({ error: 'Password or email address required' });
 
     const users = await loadUsers();
     if (Object.values(users).find(u => u.username === username.trim().toLowerCase())) {
@@ -646,7 +730,8 @@ app.post('/api/admin/users', requireLogin, requireAdmin, async (req, res) => {
     users[id] = {
         id,
         username: username.trim().toLowerCase(),
-        passwordHash: await bcrypt.hash(password, BCRYPT_ROUNDS),
+        passwordHash: password ? await bcrypt.hash(password, BCRYPT_ROUNDS) : null,
+        email: email ? email.trim().toLowerCase() : null,
         role: role === 'admin' ? 'admin' : 'viewer',
         allowedDevices: allowedDevices || [],
         devices: [],
@@ -673,6 +758,7 @@ app.put('/api/admin/users/:id', requireLogin, requireAdmin, async (req, res) => 
     if (req.body.allowedDevices !== undefined) user.allowedDevices = req.body.allowedDevices;
     if (req.body.dataWindow !== undefined) user.dataWindow = req.body.dataWindow;
     if (req.body.canViewLogs !== undefined) user.canViewLogs = !!req.body.canViewLogs;
+    if (req.body.email !== undefined) user.email = req.body.email ? req.body.email.trim().toLowerCase() : null;
 
     await saveUsers(users);
     res.json({ success: true });
@@ -690,6 +776,69 @@ app.delete('/api/admin/users/:id', requireLogin, requireAdmin, async (req, res) 
     delete users[req.params.id];
     await saveUsers(users);
     res.json({ success: true });
+});
+
+// Send invitation email to user
+app.post('/api/admin/users/:id/invite', requireLogin, requireAdmin, async (req, res) => {
+    const users = await loadUsers();
+    const user = users[req.params.id];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.email) return res.status(400).json({ error: 'User has no email address set' });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokens = await loadInviteTokens();
+    // Revoke any existing unused tokens for this user
+    for (const t of Object.keys(tokens)) {
+        if (tokens[t].userId === user.id && !tokens[t].usedAt) delete tokens[t];
+    }
+    tokens[token] = {
+        userId: user.id,
+        email: user.email,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
+        usedAt: null
+    };
+    await saveInviteTokens(tokens);
+
+    const baseUrl = (process.env.ORIGIN || 'https://tools.amrhein.info');
+    const inviteUrl = `${baseUrl}/route-tracker/invite/${token}`;
+    try {
+        await sendInviteEmail(user.email, user.username, inviteUrl);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('[invite] Email send failed:', error.message);
+        res.status(500).json({ error: 'Failed to send invitation email: ' + error.message });
+    }
+});
+
+// Public: serve invite set-password page
+app.get('/invite/:token', (req, res) => {
+    res.sendFile(path.join('/app', 'invite.html'));
+});
+
+// Public: set password via invite token
+app.post('/api/invite/:token', async (req, res) => {
+    const { password } = req.body;
+    if (!password || password.length < 8) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+    const tokens = await loadInviteTokens();
+    const tokenData = tokens[req.params.token];
+    if (!tokenData) return res.status(404).json({ error: 'Invalid invitation link' });
+    if (tokenData.usedAt) return res.status(410).json({ error: 'This invitation link has already been used' });
+    if (new Date(tokenData.expiresAt) < new Date()) return res.status(410).json({ error: 'This invitation link has expired. Ask an admin to resend the invitation.' });
+
+    const users = await loadUsers();
+    const user = users[tokenData.userId];
+    if (!user) return res.status(404).json({ error: 'User account not found' });
+
+    user.passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    await saveUsers(users);
+
+    tokenData.usedAt = new Date().toISOString();
+    await saveInviteTokens(tokens);
+
+    res.json({ success: true, username: user.username });
 });
 
 // =====================
@@ -716,8 +865,99 @@ app.get('/api/admin/media-devices', requireLogin, requireAdmin, async (req, res)
 });
 
 // =====================
-// SHARE LINK MANAGEMENT
+// DEVICE MANAGEMENT
 // =====================
+
+// List all devices with full summary (admin)
+app.get('/api/admin/devices', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        await ensureDataDir();
+        const devicesDir = path.join(DATA_DIR, 'devices');
+        const files = await fs.readdir(devicesDir).catch(() => []);
+        const devices = await Promise.all(files.filter(f => f.endsWith('.json')).map(async f => {
+            const d = await getDeviceData(f.replace('.json', ''));
+            return {
+                id: d.deviceId,
+                name: d.name,
+                routeCount: (d.routes || []).length,
+                totalPoints: d.totalPoints || 0,
+                lastUpdate: d.lastUpdate || null,
+                currentRoute: d.currentRoute || null,
+            };
+        }));
+        res.json(devices);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Rename a device (admin)
+app.patch('/api/admin/devices/:deviceId', requireLogin, requireAdmin, async (req, res) => {
+    const { name } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+    const deviceId = req.params.deviceId;
+    const deviceFile = path.join(DATA_DIR, 'devices', `${deviceId}.json`);
+    try {
+        await fs.access(deviceFile);
+    } catch {
+        return res.status(404).json({ error: 'Device not found' });
+    }
+    const data = await getDeviceData(deviceId);
+    data.name = name.trim();
+    await saveDeviceData(deviceId, data);
+    res.json({ success: true, name: data.name });
+});
+
+// Delete a device and all associated data (admin)
+app.delete('/api/admin/devices/:deviceId', requireLogin, requireAdmin, async (req, res) => {
+    const deviceId = req.params.deviceId;
+    const deviceFile = path.join(DATA_DIR, 'devices', `${deviceId}.json`);
+    try {
+        await fs.access(deviceFile);
+    } catch {
+        return res.status(404).json({ error: 'Device not found' });
+    }
+
+    // Load device to get its route list
+    const deviceData = await getDeviceData(deviceId);
+    let routesDeleted = 0;
+
+    // Delete all route files belonging to this device
+    for (const routeId of (deviceData.routes || [])) {
+        try {
+            await fs.unlink(path.join(DATA_DIR, 'routes', `${routeId}.json`));
+            routesDeleted++;
+        } catch { /* already gone */ }
+    }
+
+    // Delete device file
+    await fs.unlink(deviceFile);
+
+    // Remove device from all users' devices[] and allowedDevices[]
+    const users = await loadUsers();
+    let usersUpdated = 0;
+    for (const user of Object.values(users)) {
+        let changed = false;
+        if ((user.devices || []).includes(deviceId)) {
+            user.devices = user.devices.filter(d => d !== deviceId);
+            changed = true;
+        }
+        if ((user.allowedDevices || []).includes(deviceId)) {
+            user.allowedDevices = user.allowedDevices.filter(d => d !== deviceId);
+            changed = true;
+        }
+        if (changed) usersUpdated++;
+    }
+    await saveUsers(users);
+
+    // Delete media directory for this device
+    const mediaDeviceDir = path.join(MEDIA_DIR, deviceId);
+    try {
+        await fs.rm(mediaDeviceDir, { recursive: true, force: true });
+    } catch { /* no media for this device */ }
+
+    res.json({ success: true, routesDeleted, usersUpdated });
+});
 
 app.post('/api/shares', requireLogin, requireAdmin, async (req, res) => {
     try {
@@ -824,9 +1064,12 @@ app.post('/api/gps', validateOwnTracksAuth, async (req, res) => {
         }
         
         // Determine if we need a new route
+        // Use last point's timestamp (not startTime) so long active routes don't get split
         const routeTimeout = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
-        const isRouteExpired = currentRoute && 
-            (new Date() - new Date(currentRoute.startTime)) > routeTimeout;
+        const lastPointTime = currentRoute?.points?.length > 0
+            ? new Date(currentRoute.points[currentRoute.points.length - 1].timestamp)
+            : (currentRoute ? new Date(currentRoute.startTime) : null);
+        const isRouteExpired = !!lastPointTime && (new Date() - lastPointTime) > routeTimeout;
             
         const needNewRoute = !currentRoute || 
                             (routeName && routeName !== currentRoute.name) ||
@@ -1027,7 +1270,9 @@ app.get('/api/devices/:deviceId/routes', requireLogin, validateToken, async (req
                     // Return summary without all points
                     return {
                         id: route.id,
+                        deviceId: route.deviceId,
                         name: route.name,
+                        color: route.color || null,
                         startTime: route.startTime,
                         endTime: route.endTime,
                         totalPoints: route.points.length,
@@ -1104,15 +1349,105 @@ app.post('/api/devices/:deviceId/stop-route', requireLogin, validateToken, async
 // Rename a route
 app.patch('/api/routes/:routeId', requireLogin, requireAdmin, async (req, res) => {
     try {
-        const { name } = req.body;
+        const { name, color } = req.body;
         if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
         const routeFile = path.join(DATA_DIR, 'routes', `${req.params.routeId}.json`);
         const route = JSON.parse(await fs.readFile(routeFile, 'utf8'));
         route.name = name.trim();
+        if (color && /^#[0-9a-fA-F]{6}$/.test(color)) route.color = color;
         await saveRoute(route);
-        res.json({ success: true, name: route.name });
+        res.json({ success: true, name: route.name, color: route.color || null });
     } catch (error) {
         res.status(404).json({ error: 'Route not found' });
+    }
+});
+
+// Update route points (manual editing — add, delete, move)
+// editSnapshotTime: if provided, any points on the server with timestamp AFTER this are preserved
+// and appended to the edited set, so live GPS pushes during an edit session are not lost.
+app.put('/api/routes/:routeId/points', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const { points, editSnapshotTime } = req.body;
+        if (!Array.isArray(points) || points.length < 2) {
+            return res.status(400).json({ error: 'points array with at least 2 entries is required' });
+        }
+        for (const p of points) {
+            if (typeof p.lat !== 'number' || typeof p.lng !== 'number') {
+                return res.status(400).json({ error: 'Each point must have numeric lat and lng' });
+            }
+        }
+        const routeFile = path.join(DATA_DIR, 'routes', `${req.params.routeId}.json`);
+        const route = JSON.parse(await fs.readFile(routeFile, 'utf8'));
+
+        // If route is still active and we have a snapshot time, preserve any GPS points
+        // that arrived on the server after the edit session started
+        let finalPoints = points;
+        if (editSnapshotTime && route.status === 'active' && Array.isArray(route.points)) {
+            const cutoff = new Date(editSnapshotTime).getTime();
+            const newServerPoints = route.points.filter(p => {
+                const t = p.timestamp ? new Date(p.timestamp).getTime() : 0;
+                return t > cutoff;
+            });
+            if (newServerPoints.length > 0) {
+                finalPoints = [...points, ...newServerPoints];
+                finalPoints.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            }
+        }
+
+        route.points = finalPoints;
+        // Recalculate total distance
+        let totalDistance = 0;
+        for (let i = 1; i < finalPoints.length; i++) {
+            totalDistance += calculateDistance(finalPoints[i-1].lat, finalPoints[i-1].lng, finalPoints[i].lat, finalPoints[i].lng);
+        }
+        route.totalDistance = totalDistance;
+        route.startTime = finalPoints[0].timestamp || route.startTime;
+        if (route.status !== 'active') {
+            route.endTime = finalPoints[finalPoints.length - 1].timestamp || route.endTime;
+        }
+        await saveRoute(route);
+        res.json({ success: true, totalPoints: finalPoints.length, totalDistance });
+    } catch (error) {
+        res.status(404).json({ error: 'Route not found' });
+    }
+});
+
+// Activate a completed route — makes it the active route for the device so GPS appends to it
+app.post('/api/devices/:deviceId/routes/:routeId/activate', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const { deviceId, routeId } = req.params;
+        const routeFile = path.join(DATA_DIR, 'routes', `${routeId}.json`);
+        const route = JSON.parse(await fs.readFile(routeFile, 'utf8'));
+        if (route.deviceId !== deviceId) return res.status(400).json({ error: 'Route does not belong to this device' });
+
+        const deviceData = await getDeviceData(deviceId);
+
+        // Complete any currently active route first
+        if (deviceData.currentRoute && deviceData.currentRoute !== routeId) {
+            try {
+                const curFile = path.join(DATA_DIR, 'routes', `${deviceData.currentRoute}.json`);
+                const cur = JSON.parse(await fs.readFile(curFile, 'utf8'));
+                if (cur.status === 'active') {
+                    cur.status = 'completed';
+                    cur.endTime = new Date().toISOString();
+                    await saveRoute(cur);
+                }
+            } catch { /* current route file missing — ignore */ }
+        }
+
+        route.status = 'active';
+        route.endTime = null;
+        await saveRoute(route);
+
+        deviceData.currentRoute = routeId;
+        if (!deviceData.routes.includes(routeId)) deviceData.routes.unshift(routeId);
+        await saveDeviceData(deviceId, deviceData);
+
+        console.log(`▶️  Activated route: ${route.name} (${routeId}) for device ${deviceId}`);
+        res.json({ success: true, routeId, name: route.name });
+    } catch (error) {
+        console.error('Error activating route:', error);
+        res.status(500).json({ error: 'Failed to activate route' });
     }
 });
 
@@ -1139,6 +1474,84 @@ app.delete('/api/routes/:routeId', requireLogin, requireAdmin, async (req, res) 
     }
 });
 
+// Merge multiple routes into one (sorted by time, recalculates distance)
+app.post('/api/devices/:deviceId/routes/merge', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const { deviceId } = req.params;
+        const { routeIds, name } = req.body;
+        if (!Array.isArray(routeIds) || routeIds.length < 2) {
+            return res.status(400).json({ error: 'At least 2 route IDs required' });
+        }
+
+        // Load and validate all routes belong to this device
+        const routes = [];
+        for (const id of routeIds) {
+            const routeFile = path.join(DATA_DIR, 'routes', `${id}.json`);
+            const route = JSON.parse(await fs.readFile(routeFile, 'utf8'));
+            if (route.deviceId !== deviceId) {
+                return res.status(400).json({ error: `Route ${id} does not belong to device ${deviceId}` });
+            }
+            routes.push(route);
+        }
+
+        // Sort routes by startTime so the oldest becomes the base
+        routes.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+
+        // Merge all points sorted by timestamp
+        const allPoints = routes.flatMap(r => r.points);
+        allPoints.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+        // Recalculate total distance
+        let totalDistance = 0;
+        for (let i = 1; i < allPoints.length; i++) {
+            totalDistance += calculateDistance(
+                allPoints[i-1].lat, allPoints[i-1].lng,
+                allPoints[i].lat, allPoints[i].lng
+            );
+        }
+
+        const anyActive = routes.some(r => r.status === 'active');
+        const endTimes = routes.filter(r => r.endTime).map(r => new Date(r.endTime));
+        const endTime = anyActive ? null : (endTimes.length > 0 ? new Date(Math.max(...endTimes)).toISOString() : null);
+
+        // Build merged route using the oldest route's ID
+        const mergedRoute = {
+            ...routes[0],
+            name: (name && name.trim()) ? name.trim() : routes[0].name,
+            points: allPoints,
+            totalDistance,
+            startTime: routes[0].startTime,
+            endTime,
+            status: anyActive ? 'active' : 'completed'
+        };
+        await saveRoute(mergedRoute);
+
+        // Delete the other route files
+        const toDelete = routes.slice(1);
+        for (const route of toDelete) {
+            await fs.unlink(path.join(DATA_DIR, 'routes', `${route.id}.json`));
+        }
+
+        // Update device data
+        const deviceData = await getDeviceData(deviceId);
+        const deletedIds = new Set(toDelete.map(r => r.id));
+        deviceData.routes = deviceData.routes.filter(id => !deletedIds.has(id));
+        if (!deviceData.routes.includes(mergedRoute.id)) {
+            deviceData.routes.unshift(mergedRoute.id);
+        }
+        if (deletedIds.has(deviceData.currentRoute)) {
+            deviceData.currentRoute = mergedRoute.id;
+        }
+        await saveDeviceData(deviceId, deviceData);
+
+        console.log(`🔀 Merged ${routes.length} routes into ${mergedRoute.id} (${allPoints.length} pts, ${totalDistance.toFixed(2)} km)`);
+        res.json({ success: true, route: { id: mergedRoute.id, name: mergedRoute.name, totalPoints: allPoints.length, totalDistance } });
+    } catch (error) {
+        console.error('Error merging routes:', error);
+        res.status(500).json({ error: 'Failed to merge routes' });
+    }
+});
+
 // =====================
 // DEBUGGING ENDPOINTS
 // =====================
@@ -1147,6 +1560,7 @@ app.delete('/api/routes/:routeId', requireLogin, requireAdmin, async (req, res) 
 app.get('/api/admin/logs', requireLogin, requireLogAccess, (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 50, 200);
     const gpsOnly = req.query.gpsOnly === 'true';
+    requestLogs = loadRequestLogs(); // refresh from file
     const logs = gpsOnly
         ? requestLogs.filter(log => log.path === '/api/gps' && log.method === 'POST')
         : requestLogs;
@@ -1159,6 +1573,7 @@ app.get('/api/admin/logs', requireLogin, requireLogAccess, (req, res) => {
 
 // Debug endpoint - view recent requests (session auth, used by GPS monitoring loop)
 app.get('/api/debug/requests', requireLogin, (req, res) => {
+    requestLogs = loadRequestLogs(); // refresh from shared file
     res.json({
         total: requestLogs.length,
         requests: requestLogs.slice(0, 20), // Last 20 requests
@@ -1331,10 +1746,15 @@ const startServer = async () => {
     };
 
     // GET all media for a device — logged in users only
+    // Optional ?routeId= filter: returns entries belonging to that route, plus legacy entries (no routeId)
     app.get('/api/media/:deviceId', requireLogin, async (req, res) => {
         try {
             const entries = await loadMedia(req.params.deviceId);
-            res.json(entries);
+            const { routeId } = req.query;
+            const result = routeId
+                ? entries.filter(e => !e.routeId || e.routeId === routeId)
+                : entries;
+            res.json(result);
         } catch (error) {
             res.status(500).json({ error: error.message });
         }
@@ -1362,7 +1782,7 @@ const startServer = async () => {
     app.post('/api/media/:deviceId/photo', requireLogin, requireAdmin, upload.single('photo'), async (req, res) => {
         try {
             const { deviceId } = req.params;
-            const { description = '', lat, lng, timestamp } = req.body;
+            const { description = '', lat, lng, timestamp, routeId } = req.body;
 
             if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -1427,7 +1847,8 @@ const startServer = async () => {
                 timestamp: photoTime,
                 description,
                 filename: `${id}.jpg`,
-                createdAt: new Date().toISOString()
+                createdAt: new Date().toISOString(),
+                ...(routeId ? { routeId } : {})
             };
 
             const entries = await loadMedia(deviceId);
@@ -1444,7 +1865,7 @@ const startServer = async () => {
     app.post('/api/media/:deviceId/youtube', requireLogin, requireAdmin, async (req, res) => {
         try {
             const { deviceId } = req.params;
-            const { url, description = '', lat, lng } = req.body;
+            const { url, description = '', lat, lng, routeId } = req.body;
 
             if (!url || !url.includes('youtu')) return res.status(400).json({ error: 'Invalid YouTube URL' });
             const photoLat = parseFloat(lat);
@@ -1459,7 +1880,8 @@ const startServer = async () => {
                 lng: photoLng,
                 url,
                 description,
-                createdAt: new Date().toISOString()
+                createdAt: new Date().toISOString(),
+                ...(routeId ? { routeId } : {})
             };
 
             const entries = await loadMedia(deviceId);
@@ -1514,7 +1936,7 @@ const startServer = async () => {
     // ─── END MEDIA ROUTES ─────────────────────────────────────────────────────
 
     app.listen(PORT, '0.0.0.0', () => {
-        console.log(`Route Tracker GPS Receiver API running on port ${PORT}`);
+        console.log(`Route Tracker GPS Receiver API running on port ${PORT} (worker ${process.pid})`);
         console.log(`Data directory: ${DATA_DIR}`);
         console.log(`Health check: http://localhost:${PORT}/api/health`);
         console.log(`GPS endpoint: http://localhost:${PORT}/api/gps`);
