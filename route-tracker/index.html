@@ -561,25 +561,6 @@
 </head>
 <body>
     <div class="route-tracker-container">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-content">
-                <div class="breadcrumb">
-                    <a href="/"><i class="fas fa-arrow-left"></i> Back to Tools</a>
-                </div>
-                <h1><i class="fas fa-route"></i> Route Tracker</h1>
-                <p class="subtitle">Real-time Route and Location Tracking</p>
-            </div>
-            <div class="header-actions">
-                <a href="./admin.html" id="admin-link" class="btn btn-secondary" style="display:none;">
-                    <i class="fas fa-cog"></i> Admin
-                </a>
-                <button class="btn btn-secondary" onclick="logout()">
-                    <i class="fas fa-sign-out-alt"></i> Logout
-                </button>
-            </div>
-        </header>
-
         <!-- Offline Indicator -->
         <div class="offline-indicator" id="offline-indicator">
             <i class="fas fa-wifi"></i> Offline Mode - Data will sync when online
@@ -589,6 +570,24 @@
         <main class="main-content">
             <div class="route-tracker-container">
                 
+                <!-- === ROUTE TRACKER HEADER === -->
+                <header class="header">
+                    <div class="header-content" style="width: 100%;">
+                        <div class="breadcrumb" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <a href="/"><i class="fas fa-arrow-left"></i> Back to Tools</a>
+                            <div style="display: flex; gap: 1rem; margin-left: auto;">
+                                <a href="./admin.html" id="admin-link" style="display:none; color: var(--secondary-color); text-decoration: none;">
+                                    <i class="fas fa-cog"></i> Admin
+                                </a>
+                                <a href="#" onclick="logout(); return false;" style="color: var(--secondary-color); text-decoration: none;">
+                                    <i class="fas fa-sign-out-alt"></i> Logout
+                                </a>
+                            </div>
+                        </div>
+                        <h1><i class="fas fa-route"></i> Route Tracker</h1>
+                        <p class="subtitle">Real-time Route and Location Tracking</p>
+                    </div>
+                </header>
                 <!-- === 1. CONTROL PANEL === -->
                 <section class="control-panel">
                     <div class="section-header">

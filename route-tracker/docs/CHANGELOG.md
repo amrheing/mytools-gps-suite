@@ -1,5 +1,39 @@
 # Route Tracker - Changelog
 
+## [2.1.0] - 2026-04-12
+
+### 🤖 Auto-Route System Added
+
+#### Automated Route Creation
+- **Daily route scheduling** with customizable time settings per device
+- **Smart route completion** automatically finishes active routes before starting new ones
+- **Server-side scheduler** checks every minute for pending route creation
+- **Admin device management** with per-device auto-route configuration
+- **Manual route triggering** for testing and immediate route creation
+
+#### Device Management Interface
+- **Auto-Route Settings Modal** with enable/disable toggle and time picker
+- **Device table enhancement** showing auto-route status and schedule
+- **Test functionality** for immediate auto-route creation
+- **Settings persistence** with device-specific configuration storage
+- **Admin controls** for managing auto-route behavior across all devices
+
+#### Technical Implementation
+- **Minute-by-minute scheduler** using setInterval for reliable timing
+- **Device settings API** endpoints for configuration management
+- **Route name formatting** with "Auto Route MM/DD/YYYY" pattern
+- **Graceful error handling** with comprehensive logging
+- **Performance optimization** for background scheduling operations
+
+### 🔧 Admin Interface Improvements
+- **Device Management section** added to admin panel
+- **Auto-Route column** in device table for quick status visibility
+- **Robot icon controls** for intuitive auto-route management
+- **Modal-based settings** with modern UI/UX design
+- **Real-time updates** after configuration changes
+
+---
+
 ## [2.0.0] - 2026-04-11
 
 ### 🎯 Major Features Added

@@ -939,3 +939,77 @@ Each component provides health endpoints for monitoring:
 2. Validate health endpoint responses manually
 3. Ensure all required dependencies are installed
 4. Verify Docker Hub credentials are properly configured
+## Auto-Route Scheduling System (v2.1)
+
+### Overview
+
+The Auto-Route system provides automated daily route creation with device-specific configuration. This ensures continuous GPS tracking by automatically starting new routes at configured times.
+
+### Architecture Components
+
+**Server-Side Scheduler:**
+- Background process running every minute
+- Checks all devices for pending auto-route creation
+- Handles route completion and creation atomically
+- Activity-based triggering to avoid empty routes
+
+**Device Settings Storage:**
+```javascript
+// Device configuration structure
+{
+  "autoStartRoute": boolean,    // Enable/disable auto-route
+  "autoRouteTime": "HH:MM",    // Daily creation time (24h format)
+  "lastAutoRouteDate": "YYYY-MM-DD"  // Track last creation date
+}
+```
+
+**Admin Interface Integration:**
+- Device Management table with auto-route status column
+- Modal-based settings configuration
+- Real-time status updates and test functionality
+- Persistent settings storage per device
+
+### Implementation Details
+
+**Scheduler Logic:**
+```javascript
+const checkAndCreateAutoRoutes = async () => {
+  const now = new Date();
+  const currentTime = now.toTimeString().slice(0, 5); // HH:MM
+  const currentDate = now.toISOString().split('T')[0]; // YYYY-MM-DD
+  
+  const devices = await getDevicesWithAutoRoute();
+  
+  for (const device of devices) {
+    const settings = device.settings;
+    
+    // Check if it's time and not already created today
+    if (settings.autoRouteTime === currentTime && 
+        settings.lastAutoRouteDate !== currentDate &&
+        deviceHasRecentActivity(device)) {
+      
+      await createAutoRouteForDevice(device.id, currentDate);
+    }
+  }
+};
+```
+
+**Route Creation Process:**
+1. Complete any existing active route
+2. Generate new route with "Auto Route MM/DD/YYYY" naming
+3. Update device settings with creation timestamp
+4. Log creation event for monitoring
+5. Continue GPS tracking with new route
+
+### API Endpoints
+
+- `GET /api/admin/devices` - Device list with auto-route settings
+- `PUT /api/devices/:id/settings` - Update device auto-route configuration
+- `POST /api/devices/:id/create-auto-route` - Manual auto-route trigger
+
+### Monitoring and Logging
+
+- Scheduler status logged every execution cycle
+- Auto-route creation events tracked with device and timestamp
+- Error handling with graceful degradation
+- Admin interface provides immediate feedback and testing capabilities

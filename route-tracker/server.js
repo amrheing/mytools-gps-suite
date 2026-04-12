@@ -292,6 +292,109 @@ const validateOwnTracksAuth = async (req, res, next) => {
 // Passthrough for endpoints that already use requireLogin session auth
 const validateToken = (req, res, next) => next();
 
+// Auto-route scheduling
+let autoRouteScheduler = null;
+
+const startAutoRouteScheduler = () => {
+    if (autoRouteScheduler) {
+        clearInterval(autoRouteScheduler);
+    }
+    
+    // Check every minute for devices that need new routes
+    autoRouteScheduler = setInterval(async () => {
+        await checkAndCreateAutoRoutes();
+    }, 60000); // Check every minute
+    
+    console.log('🕐 Auto-route scheduler started');
+};
+
+const checkAndCreateAutoRoutes = async () => {
+    try {
+        const now = new Date();
+        const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
+        
+        // Read all device files
+        const devicesDir = path.join(DATA_DIR, 'devices');
+        try {
+            const deviceFiles = await fs.readdir(devicesDir);
+            
+            for (const file of deviceFiles) {
+                if (!file.endsWith('.json')) continue;
+                
+                const deviceId = file.replace('.json', '');
+                const deviceData = await getDeviceData(deviceId);
+                
+                // Check if device has auto-route enabled
+                if (!deviceData.settings?.autoStartRoute) continue;
+                
+                // Check if we've already created a route today
+                if (deviceData.settings.lastAutoRouteDate === today) continue;
+                
+                // Parse the configured time (HH:MM format)
+                const autoTime = deviceData.settings.autoRouteTime || '00:00';
+                const [hours, minutes] = autoTime.split(':').map(Number);
+                
+                // Check if it's time to create a new route
+                const targetTime = new Date(now);
+                targetTime.setHours(hours, minutes, 0, 0);
+                
+                // Only create if we've passed the target time and haven't created today
+                if (now >= targetTime) {
+                    await createAutoRoute(deviceId, deviceData);
+                }
+            }
+        } catch (error) {
+            // Devices directory doesn't exist yet
+            console.log('No devices directory found, skipping auto-route check');
+        }
+    } catch (error) {
+        console.error('Error in auto-route scheduler:', error);
+    }
+};
+
+const createAutoRoute = async (deviceId, deviceData) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Complete current route if active
+        if (deviceData.currentRoute) {
+            try {
+                const routeFile = path.join(DATA_DIR, 'routes', `${deviceData.currentRoute}.json`);
+                const routeData = JSON.parse(await fs.readFile(routeFile, 'utf8'));
+                if (routeData.status === 'active') {
+                    routeData.status = 'completed';
+                    routeData.endTime = new Date().toISOString();
+                    await saveRoute(routeData);
+                    console.log(`🔄 Auto-completed route: ${routeData.name}`);
+                }
+            } catch (error) {
+                console.error('Error completing previous route:', error);
+            }
+        }
+        
+        // Create new route
+        const routeName = `Auto Route ${new Date().toLocaleDateString()}`;
+        const newRoute = createNewRoute(deviceId, routeName);
+        
+        // Update device data
+        deviceData.currentRoute = newRoute.id;
+        deviceData.routes.unshift(newRoute.id);
+        deviceData.settings.lastAutoRouteDate = today;
+        
+        // Save route and device data
+        await saveRoute(newRoute);
+        await saveDeviceData(deviceId, deviceData);
+        
+        console.log(`🤖 Auto-created route: ${routeName} for device ${deviceId}`);
+        
+    } catch (error) {
+        console.error(`Error creating auto-route for device ${deviceId}:`, error);
+    }
+};
+
+// Start the scheduler when server starts
+startAutoRouteScheduler();
+
 // Device management
 const getDeviceData = async (deviceId) => {
     try {
@@ -306,7 +409,12 @@ const getDeviceData = async (deviceId) => {
             routes: [],
             currentRoute: null,
             totalPoints: 0,
-            lastUpdate: null
+            lastUpdate: null,
+            settings: {
+                autoStartRoute: true, // Default: enabled
+                autoRouteTime: '00:00',  // Default: midnight
+                lastAutoRouteDate: null  // Track when last auto-route was created
+            }
         };
     }
 };
@@ -1227,6 +1335,11 @@ app.get('/api/admin/devices', requireLogin, requireAdmin, async (req, res) => {
                 totalPoints: d.totalPoints || 0,
                 lastUpdate: d.lastUpdate || null,
                 currentRoute: d.currentRoute || null,
+                settings: d.settings || {
+                    autoStartRoute: true,
+                    autoRouteTime: '00:00',
+                    lastAutoRouteDate: null
+                }
             };
         }));
         res.json(devices);
@@ -1561,6 +1674,66 @@ app.get('/api/devices/:deviceId', requireLogin, validateToken, async (req, res) 
         const deviceId = req.params.deviceId;
         const deviceData = await getDeviceData(deviceId);
         res.json(deviceData);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Update device settings (admin only)
+app.put('/api/devices/:deviceId/settings', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const deviceId = req.params.deviceId;
+        const { autoStartRoute, autoRouteTime } = req.body;
+        
+        const deviceData = await getDeviceData(deviceId);
+        
+        // Initialize settings if not exists
+        if (!deviceData.settings) {
+            deviceData.settings = {
+                autoStartRoute: true,
+                autoRouteTime: '00:00',
+                lastAutoRouteDate: null
+            };
+        }
+        
+        // Update settings
+        if (autoStartRoute !== undefined) {
+            deviceData.settings.autoStartRoute = !!autoStartRoute;
+        }
+        if (autoRouteTime !== undefined) {
+            // Validate time format (HH:MM)
+            if (!/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(autoRouteTime)) {
+                return res.status(400).json({ error: 'Invalid time format. Use HH:MM (24-hour)' });
+            }
+            deviceData.settings.autoRouteTime = autoRouteTime;
+        }
+        
+        await saveDeviceData(deviceId, deviceData);
+        
+        res.json({ 
+            success: true, 
+            settings: deviceData.settings,
+            message: `Auto-route settings updated for device ${deviceId}`
+        });
+        
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Manually trigger auto-route creation (admin only)
+app.post('/api/devices/:deviceId/create-auto-route', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const deviceId = req.params.deviceId;
+        const deviceData = await getDeviceData(deviceId);
+        
+        await createAutoRoute(deviceId, deviceData);
+        
+        res.json({ 
+            success: true, 
+            message: `Auto-route created manually for device ${deviceId}`
+        });
+        
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

@@ -62,6 +62,8 @@ Export buttons are available to all users:
 
 The **Route History** list shows all saved routes. Click **Load** to display a past route on the map.
 
+
+> Routes with names like "Auto Route MM/DD/YYYY" are automatically created daily by the system (if configured by an admin). These ensure continuous tracking by starting fresh routes at scheduled times.
 > The **Share** button is only available to admins.
 
 ---

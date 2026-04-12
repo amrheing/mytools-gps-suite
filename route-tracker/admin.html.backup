@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Route Tracker – Admin</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0f1117;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        /* ---- NAV ---- */
+        nav {
+            background: #1a1d2e;
+            border-bottom: 1px solid #2a2d3e;
+            padding: 0 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+        }
+        .nav-brand { display: flex; align-items: center; gap: 12px; color: white; font-size: 1.1rem; font-weight: 600; }
+        .nav-brand i { color: #e74c3c; font-size: 1.3rem; }
+        .nav-actions { display: flex; gap: 12px; align-items: center; }
+        .nav-user { color: rgba(255,255,255,0.6); font-size: 0.85rem; }
+        /* ---- LAYOUT ---- */
+        .container { max-width: 1100px; margin: 0 auto; padding: 30px 20px; }
+        h2 { color: white; font-size: 1.4rem; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        h2 i { color: #e74c3c; }
+        /* ---- CARD ---- */
+        .card {
+            background: #1a1d2e;
+            border: 1px solid #2a2d3e;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+        /* ---- TABLE ---- */
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            text-align: left;
+            padding: 10px 14px;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: rgba(255,255,255,0.4);
+            border-bottom: 1px solid #2a2d3e;
+        }
+        td { padding: 13px 14px; border-bottom: 1px solid #1f2235; vertical-align: middle; font-size: 0.9rem; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-admin { background: rgba(231,76,60,0.2); color: #e74c3c; }
+        .badge-viewer { background: rgba(52,152,219,0.2); color: #3498db; }
+        .devices-list { display: flex; flex-wrap: wrap; gap: 5px; }
+        .device-tag {
+            background: rgba(46,204,113,0.15);
+            color: #2ecc71;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 0.75rem;
+        }
+        .all-tag {
+            background: rgba(155,89,182,0.15);
+            color: #9b59b6;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 0.75rem;
+        }
+        /* ---- BUTTONS ---- */
+        .btn {
+            padding: 8px 16px;
+            border-radius: 7px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: opacity 0.15s;
+        }
+        .btn:hover { opacity: 0.85; }
+        .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+        .btn-primary { background: #e74c3c; color: white; }
+        .btn-secondary { background: #2a2d3e; color: #ccc; }
+        .btn-danger { background: rgba(231,76,60,0.15); color: #e74c3c; border: 1px solid rgba(231,76,60,0.3); }
+        .btn-success { background: rgba(46,204,113,0.15); color: #2ecc71; border: 1px solid rgba(46,204,113,0.3); }
+        /* ---- FORM ---- */
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+        .form-row.single { grid-template-columns: 1fr; }
+        .form-group label { display: block; color: rgba(255,255,255,0.6); font-size: 0.82rem; margin-bottom: 6px; }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            background: #0f1117;
+            border: 1px solid #2a2d3e;
+            border-radius: 8px;
+            color: white;
+            font-size: 0.9rem;
+        }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #e74c3c; }
+        .form-actions { display: flex; gap: 10px; margin-top: 5px; }
+        /* ---- DEVICES CHECKBOXES ---- */
+        .device-checkboxes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+        .device-check-item { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+        .device-check-item input[type=checkbox] { accent-color: #e74c3c; width: 15px; height: 15px; }
+        .device-check-item label { font-size: 0.85rem; color: #ccc; cursor: pointer; }
+        /* ---- MODAL ---- */
+        .modal-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000;
+            display: none;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: #1a1d2e;
+            border: 1px solid #2a2d3e;
+            border-radius: 14px;
+            padding: 30px;
+            width: 100%;
+            max-width: 480px;
+        }
+        .modal h3 { color: white; margin-bottom: 20px; }
+        /* ---- ALERT ---- */
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 0.85rem;
+            display: none;
+        }
+        .alert.show { display: block; }
+        .alert-success { background: rgba(46,204,113,0.15); border: 1px solid rgba(46,204,113,0.3); color: #2ecc71; }
+        .alert-error { background: rgba(231,76,60,0.15); border: 1px solid rgba(231,76,60,0.3); color: #e74c3c; }
+        .empty-state { text-align: center; color: rgba(255,255,255,0.3); padding: 40px; }
+        /* ---- SHARE LINK ROW ---- */
+        .token-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #1f2235; gap: 12px; }
+        .token-row:last-child { border-bottom: none; }
+        .token-info { flex: 1; min-width: 0; }
+        .token-name { font-weight: 600; color: #eee; font-size: 0.9rem; margin-bottom: 4px; }
+        .token-meta { font-size: 0.75rem; color: rgba(255,255,255,0.35); margin-bottom: 6px; }
+        .token-value-row { display: flex; align-items: center; gap: 8px; }
+        .token-value { font-family: monospace; font-size: 0.75rem; background: #0f1117; border: 1px solid #2a2d3e; border-radius: 6px; padding: 5px 10px; color: #2ecc71; word-break: break-all; flex: 1; }
+        .copy-btn { white-space: nowrap; }
+        .copy-btn.copied { color: #2ecc71; border-color: rgba(46,204,113,0.3); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-brand">
+        <i class="fas fa-route"></i>
+        <span>Route Tracker</span>
+        <span style="color:rgba(255,255,255,0.3); font-weight:400; font-size:0.85rem;">/ Admin</span>
+    </div>
+    <div class="nav-actions">
+        <span class="nav-user" id="nav-username"></span>
+        <a href="./index.html" class="btn btn-secondary btn-sm"><i class="fas fa-map"></i> Map</a>
+        <button class="btn btn-danger btn-sm" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</button>
+    </div>
+</nav>
+
+<div class="container">
+    <div id="alert-box" class="alert"></div>
+
+    <!-- User List -->
+    <h2><i class="fas fa-users"></i> User Management</h2>
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+            <span style="color:rgba(255,255,255,0.5); font-size:0.85rem;" id="user-count">Loading...</span>
+            <button class="btn btn-primary" onclick="openCreateModal()">
+                <i class="fas fa-user-plus"></i> Add User
+            </button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Linked Devices</th>
+                    <th>View Restrictions</th>
+                    <th>Date Window</th>
+                    <th>Last Login</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="users-table-body">
+                <tr><td colspan="8" class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- OwnTracks Setup -->
+    <h2><i class="fas fa-mobile-alt"></i> OwnTracks Setup</h2>
+    <div class="card">
+        <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;">
+            Configure OwnTracks in <strong>HTTP</strong> mode. Each user authenticates with their own username and password.
+        </p>
+        <div style="background:#0f1117; border:1px solid #2a2d3e; border-radius:8px; padding:16px; margin-bottom:15px;">
+            <div style="margin-bottom:12px;">
+                <span style="color:rgba(255,255,255,0.4); font-size:0.78rem; text-transform:uppercase;">Endpoint URL</span><br>
+                <code id="owntracks-endpoint" style="color:#2ecc71; font-size:0.9rem;">Loading...</code>
+                <button class="btn btn-secondary btn-sm" style="margin-left:10px;" onclick="copyEndpoint()"><i class="fas fa-copy"></i></button>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; font-size:0.85rem;">
+                <div><span style="color:rgba(255,255,255,0.4);">Mode</span><br><strong>HTTP</strong></div>
+                <div><span style="color:rgba(255,255,255,0.4);">Authentication</span><br><strong>ON</strong></div>
+                <div><span style="color:rgba(255,255,255,0.4);">Password</span><br><strong>ON</strong></div>
+                <div><span style="color:rgba(255,255,255,0.4);">UserID</span><br><strong>&lt;their username&gt;</strong></div>
+                <div><span style="color:rgba(255,255,255,0.4);">Password</span><br><strong>&lt;their app password&gt;</strong></div>
+                <div><span style="color:rgba(255,255,255,0.4);">DeviceID</span><br><strong>&lt;any name&gt;</strong></div>
+            </div>
+        </div>
+        <p style="color:rgba(255,255,255,0.35); font-size:0.8rem;">The DeviceID (set in OwnTracks settings) becomes the device name auto-registered to that user on first GPS push.</p>
+    </div>
+
+    <!-- GPS Log Viewer (canViewLogs admins only) -->
+    <div id="log-viewer-section" style="display:none;">
+        <h2 style="color:#2ecc71;"><i class="fas fa-list-alt"></i> GPS Incoming Log <span style="font-size:0.6rem;font-weight:400;color:rgba(46,204,113,0.5);letter-spacing:0.08em;text-transform:uppercase;margin-left:8px;">live</span></h2>
+        <div class="card" style="border-color:#2ecc7133;">
+            <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
+                <button class="btn btn-primary btn-sm" onclick="loadGPSLogs()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                <label style="display:flex; align-items:center; gap:6px; color:rgba(255,255,255,0.7); cursor:pointer; font-size:0.9rem;">
+                    <input type="checkbox" id="gps-only-filter" checked onchange="loadGPSLogs()">
+                    GPS pushes only
+                </label>
+                <span id="log-summary" style="color:rgba(255,255,255,0.4); font-size:0.82rem;"></span>
+            </div>
+            <div id="log-viewer-content" style="max-height:520px; overflow-y:auto;">
+                <p class="empty-state">Click Refresh to load incoming GPS log.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shared Links -->
+    <h2><i class="fas fa-share-alt"></i> Shared Links</h2>
+    <div class="card">
+        <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;">
+            Share links give temporary read-only access to a specific route without requiring a login.
+        </p>
+        <div id="shares-list" style="margin-bottom:20px;"><p class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</p></div>
+    </div>
+
+    <!-- Device Management -->
+    <h2><i class="fas fa-hdd"></i> Device Management</h2>
+    <div class="card">
+        <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;">
+            Registered GPS devices. Deleting a device permanently removes all its routes, media and references from users.
+        </p>
+        <div id="devices-list"><p class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</p></div>
+    </div>
+
+    <!-- Media Management -->
+    <h2><i class="fas fa-photo-video"></i> Media Management</h2>
+    <div class="card">
+        <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;">
+            Photos and YouTube videos attached to device routes. Expand a device to view, edit or delete entries.
+        </p>
+        <div id="media-sections"><p class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</p></div>
+    </div>
+
+</div>
+
+<!-- Rename Device Modal -->
+<div class="modal-overlay" id="device-rename-modal">
+    <div class="modal" style="max-width:400px;">
+        <h3><i class="fas fa-hdd"></i> Rename Device</h3>
+        <input type="hidden" id="rename-device-id">
+        <div class="form-group">
+            <label style="color:rgba(255,255,255,0.7); font-size:0.9rem;">Display Name</label>
+            <input type="text" id="rename-device-name" placeholder="e.g. Gerald's iPhone" autocomplete="off"
+                style="width:100%;padding:10px;background:#1e2a3a;border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:white;font-size:0.95rem;">
+        </div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn btn-success" onclick="saveDeviceRename()" style="flex:1;">
+                <i class="fas fa-save"></i> Save
+            </button>
+            <button class="btn btn-secondary" onclick="closeDeviceRenameModal()" style="flex:1;">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Device Auto-Route Settings Modal -->
+<div class="modal-overlay" id="device-auto-route-modal">
+    <div class="modal" style="max-width:500px;">
+        <h3><i class="fas fa-robot"></i> Auto-Route Settings</h3>
+        <input type="hidden" id="auto-route-device-id">
+        <div id="device-name-display" style="color:rgba(255,255,255,0.7); font-size:0.9rem; margin-bottom:20px;"></div>
+        
+        <div class="form-group">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;">
+                <input type="checkbox" id="auto-route-enabled" style="accent-color: #e74c3c; width: 18px; height: 18px;">
+                <label for="auto-route-enabled" style="color:white; font-size:1rem; font-weight:500; cursor:pointer;">
+                    <i class="fas fa-robot"></i> Enable auto-route creation
+                </label>
+            </div>
+            <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;">
+                Automatically create a new route every day at the specified time. Previous active route will be completed.
+            </p>
+        </div>
+        
+        <div class="form-group" id="auto-route-time-group">
+            <label style="color:rgba(255,255,255,0.7); font-size:0.9rem;">Daily creation time (24-hour format)</label>
+            <input type="time" id="auto-route-time" value="00:00"
+                style="width:150px; padding:8px; background:#1e2a3a; border:1px solid rgba(255,255,255,0.15); border-radius:6px; color:white; font-size:0.95rem;">
+            <div style="color:rgba(255,255,255,0.5); font-size:0.8rem; margin-top:5px;">
+                Default: 00:00 (midnight)
+            </div>
+        </div>
+        
+        <div style="background:rgba(46,204,113,0.1); border:1px solid rgba(46,204,113,0.3); border-radius:6px; padding:12px; margin:15px 0;">
+            <div style="color:#2ecc71; font-size:0.85rem; font-weight:500; margin-bottom:5px;">
+                <i class="fas fa-info-circle"></i> How it works
+            </div>
+            <ul style="color:rgba(255,255,255,0.7); font-size:0.82rem; margin-left:15px; line-height:1.4;">
+                <li>Server checks every minute if it's time to create a new route</li>
+                <li>Any active route is automatically completed before creating the new one</li>
+                <li>New route gets name format: "Auto Route MM/DD/YYYY"</li>
+                <li>GPS tracking continues seamlessly with the new route</li>
+            </ul>
+        </div>
+        
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn btn-success" onclick="saveAutoRouteSettings()" style="flex:1;">
+                <i class="fas fa-save"></i> Save Settings
+            </button>
+            <button class="btn btn-secondary" onclick="testAutoRoute()" style="flex:1;">
+                <i class="fas fa-play"></i> Test Now
+            </button>
+            <button class="btn btn-secondary" onclick="closeAutoRouteModal()">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit User Modal -->
+<div class="modal-overlay" id="user-modal">
+    <div class="modal">
+        <h3 id="modal-title">Add User</h3>
+        <div id="modal-alert" class="alert"></div>
+
+        <input type="hidden" id="edit-user-id">
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="modal-username" placeholder="e.g. gerald" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label>Role</label>
+                <select id="modal-role" onchange="toggleLogAccessField()">
+                    <option value="viewer">Viewer</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Email Address <span style="color:rgba(255,255,255,0.3); font-size:0.78rem;">(required for invitation flow)</span></label>
+                <input type="email" id="modal-email" placeholder="e.g. user@example.com" autocomplete="off">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label id="password-label">Password <span style="color:rgba(255,255,255,0.3); font-size:0.78rem;">(or leave blank and use Invite)</span></label>
+                <input type="password" id="modal-password" placeholder="Enter password" autocomplete="new-password">
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:20px;">
+            <label>View Restrictions <span style="color:rgba(255,255,255,0.3); font-size:0.78rem;">(viewers only — leave all unchecked = see all devices)</span></label>
+            <div class="device-checkboxes" id="device-checkboxes">
+                <span style="color:rgba(255,255,255,0.3); font-size:0.82rem;">Loading devices...</span>
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:20px;">
+            <label>Data Window <span style="color:rgba(255,255,255,0.3); font-size:0.78rem;">(leave empty = all time)</span></label>
+            <div style="display:flex; gap:12px; align-items:center; margin-top:8px;">
+                <input type="date" id="modal-date-from" style="flex:1;">
+                <span style="color:rgba(255,255,255,0.4); flex-shrink:0;">to</span>
+                <input type="date" id="modal-date-to" style="flex:1;">
+            </div>
+        </div>
+
+        <div class="form-group" id="log-access-group" style="margin-bottom:20px; display:none;">
+            <label>Log Viewer Access <span style="color:rgba(255,255,255,0.3); font-size:0.78rem;">(admin users only)</span></label>
+            <label style="display:flex; align-items:center; gap:10px; margin-top:8px; cursor:pointer;">
+                <input type="checkbox" id="modal-can-view-logs" style="width:16px;height:16px;">
+                <span style="color:rgba(255,255,255,0.7); font-size:0.9rem;">Allow this admin to access the GPS incoming log viewer</span>
+            </label>
+        </div>
+
+        <div class="form-actions">
+            <button class="btn btn-primary" onclick="saveUser()">
+                <i class="fas fa-save"></i> Save
+            </button>
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let allUsers = [];
+let allDevices = [];
+let adminDevices = [];
+
+// ---- Init ----
+async function init() {
+    const me = await fetch('./api/auth/me').then(r => r.json()).catch(() => null);
+    if (!me || me.role !== 'admin') {
+        window.location.href = './login.html';
+        return;
+    }
+    document.getElementById('nav-username').textContent = me.username;
+    // Set OwnTracks endpoint URL
+    const ep = document.getElementById('owntracks-endpoint');
+    if (ep) ep.textContent = window.location.origin + '/route-tracker/api/gps';
+    await Promise.all([loadUsers(), loadDevices(), loadShares(), loadMediaAdmin(), loadAdminDevices()]);
+    if (me.canViewLogs) {
+        document.getElementById('log-viewer-section').style.display = 'block';
+        loadGPSLogs();
+    }
+}
+
+// ---- Users ----
+async function loadUsers() {
+    const res = await fetch('./api/admin/users');
+    if (!res.ok) return;
+    allUsers = await res.json();
+    renderUsers();
+}
+
+function renderUsers() {
+    const tbody = document.getElementById('users-table-body');
+    document.getElementById('user-count').textContent = `${allUsers.length} user${allUsers.length !== 1 ? 's' : ''}`;
+
+    if (allUsers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No users yet.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = allUsers.map(u => {
+        const linkedDevices = (u.devices || []);
+        const linkedBadges = linkedDevices.length === 0
+            ? '<span style="color:rgba(255,255,255,0.3);">—</span>'
+            : linkedDevices.map(d => `<span class="device-tag">${escHtml(d)}</span>`).join('');
+        const dw = u.dataWindow;
+        const dwText = (dw && (dw.from || dw.to))
+            ? `<span style="font-size:0.78rem;color:#f39c12;">${dw.from || '∞'} → ${dw.to || '∞'}</span>`
+            : '<span style="color:rgba(255,255,255,0.3);">All time</span>';
+        const canLogsTag = (u.role === 'admin' && u.canViewLogs)
+            ? '<span style="font-size:0.68rem;color:#2ecc71;margin-left:6px;" title="Log viewer access"><i class="fas fa-list-alt"></i></span>'
+            : '';
+        const passkeyTag = u.passkeyCount > 0
+            ? `<span style="font-size:0.68rem;color:#3498db;margin-left:6px;" title="${u.passkeyCount} passkey(s) registered"><i class="fas fa-fingerprint"></i> ${u.passkeyCount}</span>`
+            : '';
+        const noPasswordBadge = !u.hasPassword
+            ? '<span style="font-size:0.68rem;color:#e67e22;margin-left:6px;" title="No password set — awaiting invite activation"><i class="fas fa-exclamation-triangle"></i></span>'
+            : '';
+        const emailDisplay = u.email
+            ? `<a href="mailto:${escHtml(u.email)}" style="color:rgba(255,255,255,0.6);font-size:0.82rem;text-decoration:none;">${escHtml(u.email)}</a>`
+            : '<span style="color:rgba(255,255,255,0.2);font-size:0.82rem;">—</span>';
+        return `
+        <tr>
+            <td><i class="fas fa-user" style="color:rgba(255,255,255,0.3); margin-right:8px;"></i>${escHtml(u.username)}${noPasswordBadge}</td>
+            <td>${emailDisplay}</td>
+            <td><span class="badge badge-${u.role}">${u.role}</span>${canLogsTag}${passkeyTag}</td>
+            <td><div class="devices-list">${linkedBadges}</div></td>
+            <td>
+                <div class="devices-list">
+                    ${(u.allowedDevices || []).length === 0
+                        ? '<span class="all-tag"><i class="fas fa-globe"></i> All devices</span>'
+                        : u.allowedDevices.map(d => `<span class="device-tag">${escHtml(d)}</span>`).join('')}
+                </div>
+            </td>
+            <td>${dwText}</td>
+            <td style="color:rgba(255,255,255,0.4); font-size:0.82rem;">${u.lastLogin ? new Date(u.lastLogin).toLocaleString() : 'Never'}</td>
+            <td>
+                <button class="btn btn-success btn-sm" onclick="openEditModal('${escHtml(u.id)}')">
+                    <i class="fas fa-edit"></i> Edit
+                </button>
+                &nbsp;
+                ${u.email ? `<button class="btn btn-sm" style="background:#1a2a3a;border:1px solid #9b59b6;color:#9b59b6;" title="Send invitation email to ${escHtml(u.email)}" onclick="inviteUser('${escHtml(u.id)}', '${escHtml(u.username)}')"><i class="fas fa-envelope"></i> Invite</button>&nbsp;` : ''}
+                ${u.passkeyCount > 0 ? `<button class="btn btn-sm" style="background:#1a2a3a;border:1px solid #3498db;color:#3498db;" title="Remove all passkeys for ${escHtml(u.username)}" onclick="clearPasskeys('${escHtml(u.id)}', '${escHtml(u.username)}')"><i class="fas fa-fingerprint"></i><i class="fas fa-times" style="font-size:0.7em;margin-left:2px;"></i></button>&nbsp;` : ''}
+                <button class="btn btn-danger btn-sm" onclick="deleteUser('${escHtml(u.id)}', '${escHtml(u.username)}')">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+// ---- Devices ----
+async function loadDevices() {
+    try {
+        const res = await fetch('./api/devices');
+        if (res.ok) allDevices = await res.json();
+    } catch {}
+}
+
+function renderDeviceCheckboxes(selectedDevices = []) {
+    const container = document.getElementById('device-checkboxes');
+    if (allDevices.length === 0) {
+        container.innerHTML = '<span style="color:rgba(255,255,255,0.3); font-size:0.82rem;">No devices found yet.</span>';
+        return;
+    }
+    container.innerHTML = allDevices.map(d => `
+        <div class="device-check-item">
+            <input type="checkbox" id="dev-${escHtml(d.id)}" value="${escHtml(d.id)}"
+                ${selectedDevices.includes(d.id) ? 'checked' : ''}>
+            <label for="dev-${escHtml(d.id)}">${escHtml(d.name || d.id)}</label>
+        </div>
+    `).join('');
+}
+
+// ---- Modal ----
+
+function openCreateModal() {
+    document.getElementById('modal-title').textContent = 'Add User';
+    document.getElementById('edit-user-id').value = '';
+    document.getElementById('modal-username').value = '';
+    document.getElementById('modal-username').disabled = false;
+    document.getElementById('modal-email').value = '';
+    document.getElementById('modal-password').value = '';
+    document.getElementById('password-label').textContent = 'Password (or leave blank and use Invite)';
+    document.getElementById('modal-role').value = 'viewer';
+    document.getElementById('modal-can-view-logs').checked = false;
+    document.getElementById('log-access-group').style.display = 'none';
+    document.getElementById('modal-alert').classList.remove('show');
+    document.getElementById('modal-date-from').value = '';
+    document.getElementById('modal-date-to').value = '';
+    renderDeviceCheckboxes([]);
+    document.getElementById('user-modal').classList.add('show');
+}
+
+function openEditModal(userId) {
+    const user = allUsers.find(u => u.id === userId);
+    if (!user) return;
+
+    document.getElementById('modal-title').textContent = `Edit: ${user.username}`;
+    document.getElementById('edit-user-id').value = user.id;
+    document.getElementById('modal-username').value = user.username;
+    document.getElementById('modal-username').disabled = true;
+    document.getElementById('modal-email').value = user.email || '';
+    document.getElementById('modal-password').value = '';
+    document.getElementById('password-label').textContent = 'New Password (leave blank to keep)';
+    document.getElementById('modal-role').value = user.role;
+    document.getElementById('modal-can-view-logs').checked = !!(user.canViewLogs);
+    document.getElementById('log-access-group').style.display = user.role === 'admin' ? 'block' : 'none';
+    document.getElementById('modal-alert').classList.remove('show');
+    document.getElementById('modal-date-from').value = user.dataWindow?.from || '';
+    document.getElementById('modal-date-to').value = user.dataWindow?.to || '';
+    renderDeviceCheckboxes(user.allowedDevices || []);
+    document.getElementById('user-modal').classList.add('show');
+}
+
+function closeModal() {
+    document.getElementById('user-modal').classList.remove('show');
+}
+
+function getCheckedDevices() {
+    return [...document.querySelectorAll('#device-checkboxes input[type=checkbox]:checked')]
+        .map(cb => cb.value);
+}
+
+async function saveUser() {
+    const id = document.getElementById('edit-user-id').value;
+    const username = document.getElementById('modal-username').value.trim();
+    const email = document.getElementById('modal-email').value.trim();
+    const password = document.getElementById('modal-password').value;
+    const role = document.getElementById('modal-role').value;
+    const allowedDevices = getCheckedDevices();
+    const alertDiv = document.getElementById('modal-alert');
+
+    if (!id && !username) {
+        alertDiv.textContent = 'Username is required.';
+        alertDiv.className = 'alert alert-error show';
+        return;
+    }
+    if (!id && !password && !email) {
+        alertDiv.textContent = 'Password or email address is required.';
+        alertDiv.className = 'alert alert-error show';
+        return;
+    }
+
+    const canViewLogs = document.getElementById('modal-can-view-logs').checked;
+    const body = {
+        role,
+        email: email || null,
+        allowedDevices,
+        canViewLogs: role === 'admin' ? canViewLogs : false,
+        dataWindow: {
+            from: document.getElementById('modal-date-from').value || null,
+            to: document.getElementById('modal-date-to').value || null
+        }
+    };
+    if (!id) { body.username = username; if (password) body.password = password; }
+    else if (password) { body.password = password; }
+
+    const res = await fetch(id ? `./api/admin/users/${id}` : './api/admin/users', {
+        method: id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+        closeModal();
+        showAlert(`User ${id ? 'updated' : 'created'} successfully.`, 'success');
+        await loadUsers();
+    } else {
+        alertDiv.textContent = data.error || 'Error saving user.';
+        alertDiv.className = 'alert alert-error show';
+    }
+}
+
+async function deleteUser(id, username) {
+    if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+    const res = await fetch(`./api/admin/users/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok) {
+        showAlert('User deleted.', 'success');
+        await loadUsers();
+    } else {
+        showAlert(data.error || 'Error deleting user.', 'error');
+    }
+}
+
+async function inviteUser(id, username) {
+    if (!confirm(`Send invitation email to ${username}?`)) return;
+    const res = await fetch(`./api/admin/users/${id}/invite`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+        showAlert(`Invitation sent to ${username}.`, 'success');
+    } else {
+        showAlert(data.error || 'Error sending invitation.', 'error');
+    }
+}
+
+async function clearPasskeys(id, username) {
+    if (!confirm(`Remove all passkeys for "${username}"?\nThey will need to set up a new passkey on next login.`)) return;
+    const res = await fetch(`./api/admin/users/${id}/passkeys`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok) {
+        showAlert(`Passkeys removed for ${username} (${data.removed} removed).`, 'success');
+        await loadUsers();
+    } else {
+        showAlert(data.error || 'Error removing passkeys.', 'error');
+    }
+}
+
+// ---- Device Management ----
+
+async function loadAdminDevices() {
+    const res = await fetch('./api/admin/devices');
+    if (!res.ok) return;
+    const devices = await res.json();
+    adminDevices = devices; // Store globally
+    renderAdminDevices(devices);
+}
+
+function renderAdminDevices(devices) {
+    const container = document.getElementById('devices-list');
+    if (!devices || devices.length === 0) {
+        container.innerHTML = '<p class="empty-state">No devices registered yet. Devices are auto-created when the first GPS point is received.</p>';
+        return;
+    }
+    container.innerHTML = `
+        <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+            <thead>
+                <tr style="color:rgba(255,255,255,0.4); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em;">
+                    <th style="text-align:left; padding:8px 10px;">Device ID</th>
+                    <th style="text-align:left; padding:8px 10px;">Name</th>
+                    <th style="text-align:center; padding:8px 10px;">Routes</th>
+                    <th style="text-align:center; padding:8px 10px;">GPS Points</th>
+                    <th style="text-align:center; padding:8px 10px;">Auto-Route</th>
+                    <th style="text-align:left; padding:8px 10px;">Last Update</th>
+                    <th style="text-align:right; padding:8px 10px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${devices.map(d => {
+                    const autoRoute = d.settings?.autoStartRoute ? 
+                        `<span style="color:#2ecc71; font-size:0.75rem;"><i class="fas fa-robot"></i> ${d.settings.autoRouteTime || '00:00'}</span>` : 
+                        `<span style="color:rgba(255,255,255,0.4); font-size:0.75rem;"><i class="fas fa-times"></i> Disabled</span>`;
+                    return `
+                <tr style="border-top:1px solid rgba(255,255,255,0.07);">
+                    <td style="padding:10px; color:rgba(255,255,255,0.4); font-size:0.82rem; font-family:monospace;">${escHtml(d.id)}</td>
+                    <td style="padding:10px; color:white; font-weight:500;">
+                        ${escHtml(d.name)}
+                        ${d.currentRoute ? '<span style="font-size:0.72rem;color:#2ecc71;margin-left:6px;"><i class="fas fa-circle fa-xs"></i> active</span>' : ''}
+                    </td>
+                    <td style="padding:10px; text-align:center; color:rgba(255,255,255,0.7);">${d.routeCount}</td>
+                    <td style="padding:10px; text-align:center; color:rgba(255,255,255,0.7);">${d.totalPoints.toLocaleString()}</td>
+                    <td style="padding:10px; text-align:center;">${autoRoute}</td>
+                    <td style="padding:10px; color:rgba(255,255,255,0.4); font-size:0.82rem;">${d.lastUpdate ? new Date(d.lastUpdate).toLocaleString() : '—'}</td>
+                    <td style="padding:10px; text-align:right;">
+                        <button class="btn btn-sm" style="background:#2a2d3e;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.7);" onclick="openAutoRouteModal('${escHtml(d.id)}', '${escHtml(d.name)}')" title="Auto-Route Settings">
+                            <i class="fas fa-robot"></i>
+                        </button>
+                        &nbsp;
+                        <button class="btn btn-sm" style="background:#1e2a3a;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.7);" onclick="openDeviceRenameModal('${escHtml(d.id)}', '${escHtml(d.name)}')">
+                            <i class="fas fa-pencil-alt"></i>
+                        </button>
+                        &nbsp;
+                        <button class="btn btn-danger btn-sm" onclick="deleteDevice('${escHtml(d.id)}', '${escHtml(d.name)}', ${d.routeCount})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>`;
+                }).join('')}
+            </tbody>
+        </table>`;
+}
+
+function openDeviceRenameModal(deviceId, currentName) {
+    document.getElementById('rename-device-id').value = deviceId;
+    document.getElementById('rename-device-name').value = currentName;
+    document.getElementById('device-rename-modal').classList.add('show');
+    setTimeout(() => document.getElementById('rename-device-name').focus(), 50);
+}
+
+function closeDeviceRenameModal() {
+    document.getElementById('device-rename-modal').classList.remove('show');
+}
+
+async function saveDeviceRename() {
+    const id = document.getElementById('rename-device-id').value;
+    const name = document.getElementById('rename-device-name').value.trim();
+    if (!name) return;
+    const res = await fetch(`./api/admin/devices/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+    });
+    const data = await res.json();
+    if (res.ok) {
+        closeDeviceRenameModal();
+        showAlert(`Device renamed to "${data.name}".`, 'success');
+        await loadAdminDevices();
+    } else {
+        showAlert(data.error || 'Error renaming device.', 'error');
+    }
+}
+
+async function deleteDevice(id, name, routeCount) {
+    const warn = routeCount > 0 ? `\n\nThis will permanently delete ${routeCount} route(s) and all associated media.` : '';
+    if (!confirm(`Delete device "${name}" (${id})?${warn}\n\nThis cannot be undone.`)) return;
+    const res = await fetch(`./api/admin/devices/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok) {
+        showAlert(`Device "${name}" deleted (${data.routesDeleted} routes removed).`, 'success');
+        await Promise.all([loadAdminDevices(), loadUsers(), loadMediaAdmin()]);
+    } else {
+        showAlert(data.error || 'Error deleting device.', 'error');
+    }
+}
+// Auto-Route Settings Functions
+function openAutoRouteModal(deviceId, deviceName) {
+    document.getElementById('auto-route-device-id').value = deviceId;
+    document.getElementById('device-name-display').textContent = `Device: ${deviceName} (${deviceId})`;
+    
+    // Load current settings from device data
+    const device = adminDevices.find(d => d.id === deviceId);
+    const settings = device?.settings || { autoStartRoute: true, autoRouteTime: '00:00' };
+    
+    document.getElementById('auto-route-enabled').checked = settings.autoStartRoute !== false;
+    document.getElementById('auto-route-time').value = settings.autoRouteTime || '00:00';
+    
+    updateAutoRouteTimeVisibility();
+    document.getElementById('device-auto-route-modal').classList.add('show');
+}
+
+function closeAutoRouteModal() {
+    document.getElementById('device-auto-route-modal').classList.remove('show');
+}
+
+function updateAutoRouteTimeVisibility() {
+    const enabled = document.getElementById('auto-route-enabled').checked;
+    const timeGroup = document.getElementById('auto-route-time-group');
+    timeGroup.style.opacity = enabled ? '1' : '0.5';
+    timeGroup.style.pointerEvents = enabled ? 'auto' : 'none';
+}
+
+async function saveAutoRouteSettings() {
+    const deviceId = document.getElementById('auto-route-device-id').value;
+    const autoStartRoute = document.getElementById('auto-route-enabled').checked;
+    const autoRouteTime = document.getElementById('auto-route-time').value;
+    
+    try {
+        const res = await fetch(`./api/devices/${encodeURIComponent(deviceId)}/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                autoStartRoute,
+                autoRouteTime
+            })
+        });
+        
+        const data = await res.json();
+        if (res.ok) {
+            closeAutoRouteModal();
+            showAlert(data.message || 'Auto-route settings saved successfully.', 'success');
+            await loadAdminDevices(); // Refresh device list
+        } else {
+            showAlert(data.error || 'Error saving settings.', 'error');
+        }
+    } catch (error) {
+        showAlert('Network error saving settings.', 'error');
+    }
+}
+
+async function testAutoRoute() {
+    const deviceId = document.getElementById('auto-route-device-id').value;
+    
+    if (!confirm('This will create a new auto-route immediately and complete any active route. Continue?')) {
+        return;
+    }
+    
+    try {
+        const res = await fetch(`./api/devices/${encodeURIComponent(deviceId)}/create-auto-route`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await res.json();
+        if (res.ok) {
+            showAlert(data.message || 'Auto-route created successfully.', 'success');
+            await loadAdminDevices(); // Refresh device list
+        } else {
+            showAlert(data.error || 'Error creating auto-route.', 'error');
+        }
+    } catch (error) {
+        showAlert('Network error creating auto-route.', 'error');
+    }
+}
+
+// Add event listener for auto-route checkbox when page loads
+window.addEventListener('DOMContentLoaded', function() {
+    const checkbox = document.getElementById('auto-route-enabled');
+    if (checkbox) {
+        checkbox.addEventListener('change', updateAutoRouteTimeVisibility);
+    }
+});
+    document.getElementById('auto-route-time').value = settings.autoRouteTime || '00:00';
+    
+    updateAutoRouteTimeVisibility();
+    document.getElementById('device-auto-route-modal').classList.add('show');
+}
+
+function closeAutoRouteModal() {
+    document.getElementById('device-auto-route-modal').classList.remove('show');
+}
+
+function updateAutoRouteTimeVisibility() {
+    const enabled = document.getElementById('auto-route-enabled').checked;
+    const timeGroup = document.getElementById('auto-route-time-group');
+    timeGroup.style.opacity = enabled ? '1' : '0.5';
+    timeGroup.style.pointerEvents = enabled ? 'auto' : 'none';
+}
+
+// Add event listener for auto-route checkbox
+document.addEventListener('DOMContentLoaded', function() {
+    const checkbox = document.getElementById('auto-route-enabled');
+    if (checkbox) {
+        checkbox.addEventListener('change', updateAutoRouteTimeVisibility);
+    }
+});
+
+async function saveAutoRouteSettings() {
+    const deviceId = document.getElementById('auto-route-device-id').value;
+    const autoStartRoute = document.getElementById('auto-route-enabled').checked;
+    const autoRouteTime = document.getElementById('auto-route-time').value;
+    
+    try {
+        const res = await fetch(`./api/devices/${encodeURIComponent(deviceId)}/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                autoStartRoute,
+                autoRouteTime
+            })
+        });
+        
+        const data = await res.json();
+        if (res.ok) {
+            closeAutoRouteModal();
+            showAlert(data.message || 'Auto-route settings saved successfully.', 'success');
+            await loadAdminDevices(); // Refresh device list
+        } else {
+            showAlert(data.error || 'Error saving settings.', 'error');
+        }
+    } catch (error) {
+        showAlert('Network error saving settings.', 'error');
+    }
+}
+
+async function testAutoRoute() {
+    const deviceId = document.getElementById('auto-route-device-id').value;
+    
+    if (!confirm('This will create a new auto-route immediately and complete any active route. Continue?')) {
+        return;
+    }
+    
+    try {
+        const res = await fetch(`./api/devices/${encodeURIComponent(deviceId)}/create-auto-route`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await res.json();
+        if (res.ok) {
+            showAlert(data.message || 'Auto-route created successfully.', 'success');
+            await loadAdminDevices(); // Refresh device list
+        } else {
+            showAlert(data.error || 'Error creating auto-route.', 'error');
+        }
+    } catch (error) {
+        showAlert('Network error creating auto-route.', 'error');
+    }
+}
+// ---- OwnTracks endpoint copy ----
+function copyEndpoint() {
+    const ep = document.getElementById('owntracks-endpoint')?.textContent;
+    if (ep) navigator.clipboard.writeText(ep).then(() => showAlert('Endpoint URL copied!', 'success'));
+}
+
+async function loadShares() {
+    const res = await fetch('./api/shares');
+    if (!res.ok) return;
+    const shares = await res.json();
+    const container = document.getElementById('shares-list');
+    if (shares.length === 0) {
+        container.innerHTML = '<p class="empty-state">No active share links. Use the Share button on the map to create one.</p>';
+        return;
+    }
+    container.innerHTML = shares.map(s => `
+        <div class="token-row">
+            <div class="token-info">
+                <div class="token-name">${escHtml(s.label)}</div>
+                <div class="token-meta">
+                    Created: ${new Date(s.createdAt).toLocaleString()}
+                    &bull; Route: <code style="color:#2ecc71;">${escHtml(s.routeId)}</code>
+                    &bull; Accessed: ${s.accessCount || 0}×
+                    ${s.lastAccessed ? ' &bull; Last: ' + new Date(s.lastAccessed).toLocaleString() : ''}
+                    ${s.expiresAt ? ' &bull; Expires: ' + new Date(s.expiresAt).toLocaleString() : ''}
+                </div>
+                <div class="token-value-row">
+                    <span class="token-value" id="sv-${escHtml(s.id)}" style="cursor:pointer;" onclick="copyShareLink('${escHtml(s.id)}', this)">[Click to reveal]</span>
+                    <button class="btn btn-secondary btn-sm" onclick="copyShareLink('${escHtml(s.id)}', document.getElementById('sv-${escHtml(s.id)}'))">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                </div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="revokeShare('${escHtml(s.id)}')">
+                <i class="fas fa-times"></i> Revoke
+            </button>
+        </div>
+    `).join('');
+}
+
+async function copyShareLink(shareId, el) {
+    const res = await fetch('./api/shares');
+    const shares = await res.json();
+    const share = shares.find(s => s.id === shareId);
+    if (!share) return;
+    const base = window.location.href.replace(/\/admin\.html.*$/, '/');
+    const url = `${base}?share=${shareId}`;
+    if (el) el.textContent = url;
+    navigator.clipboard.writeText(url).then(() => {
+        if (el) { el.textContent = '✓ Copied!'; setTimeout(() => { el.textContent = url; }, 2000); }
+    });
+}
+
+async function revokeShare(shareId) {
+    if (!confirm('Revoke this share link? Anyone with the link will lose access immediately.')) return;
+    const res = await fetch(`./api/shares/${shareId}`, { method: 'DELETE' });
+    if (res.ok) { showAlert('Share link revoked.', 'success'); loadShares(); }
+    else showAlert('Error revoking share link.', 'error');
+}
+
+// ---- Helpers ----
+function showAlert(msg, type) {
+    const div = document.getElementById('alert-box');
+    div.textContent = msg;
+    div.className = `alert alert-${type} show`;
+    setTimeout(() => div.classList.remove('show'), 4000);
+}
+
+function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function logout() {
+    await fetch('./api/auth/logout', { method: 'POST' });
+    window.location.href = './login.html';
+}
+
+// Close modal on overlay click
+document.getElementById('user-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal();
+});
+
+init();
+</script>
+
+<script>
+// ---- Media Management ----
+async function loadMediaAdmin() {
+    const container = document.getElementById('media-sections');
+    const deviceIds = await fetch('./api/admin/media-devices').then(r => r.json()).catch(() => []);
+
+    if (!deviceIds.length) {
+        container.innerHTML = '<p class="empty-state">No devices found.</p>';
+        return;
+    }
+
+    container.innerHTML = '';
+    for (const deviceId of deviceIds) {
+        const section = document.createElement('div');
+        section.style.cssText = 'border:1px solid rgba(255,255,255,0.1);border-radius:8px;margin-bottom:12px;overflow:hidden;';
+        section.innerHTML = `
+            <div onclick="toggleMediaSection('${escHtml(deviceId)}')" style="cursor:pointer;padding:14px 18px;background:rgba(255,255,255,0.05);display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-weight:600;"><i class="fas fa-mobile-alt" style="margin-right:8px;color:#e74c3c;"></i>${escHtml(deviceId)}</span>
+                <i class="fas fa-chevron-down" id="ms-icon-${escHtml(deviceId)}" style="transition:transform 0.2s;color:rgba(255,255,255,0.4);"></i>
+            </div>
+            <div id="ms-${escHtml(deviceId)}" style="display:none;padding:16px;">
+                <p class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</p>
+            </div>`;
+        container.appendChild(section);
+    }
+}
+
+function toggleMediaSection(deviceId) {
+    const panel = document.getElementById('ms-' + deviceId);
+    const icon = document.getElementById('ms-icon-' + deviceId);
+    const isOpen = panel.style.display !== 'none';
+    panel.style.display = isOpen ? 'none' : '';
+    if (icon) icon.style.transform = isOpen ? '' : 'rotate(180deg)';
+    if (!isOpen) renderMediaForDevice(deviceId, panel);
+}
+
+async function renderMediaForDevice(deviceId, panel) {
+    panel.innerHTML = '<p class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</p>';
+    const res = await fetch('./api/media/' + encodeURIComponent(deviceId));
+    if (!res.ok) { panel.innerHTML = '<p class="empty-state">Failed to load.</p>'; return; }
+    const entries = await res.json();
+    if (!entries.length) { panel.innerHTML = '<p class="empty-state">No media yet.</p>'; return; }
+
+    panel.innerHTML = `<table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+            <th style="padding:8px;text-align:left;font-weight:500;color:rgba(255,255,255,0.5);width:50px;"></th>
+            <th style="padding:8px;text-align:left;font-weight:500;color:rgba(255,255,255,0.5);">Description</th>
+            <th style="padding:8px;text-align:left;font-weight:500;color:rgba(255,255,255,0.5);">Coords</th>
+            <th style="padding:8px;text-align:left;font-weight:500;color:rgba(255,255,255,0.5);">Date</th>
+            <th style="padding:8px;text-align:right;font-weight:500;color:rgba(255,255,255,0.5);">Actions</th>
+        </tr></thead>
+        <tbody>${entries.map(e => mediaRow(e, deviceId)).join('')}</tbody>
+    </table>`;
+}
+
+function mediaRow(e, deviceId) {
+    const typeIcon = e.type === 'photo'
+        ? `<i class="fas fa-image" style="color:#3498db;" title="Photo"></i>`
+        : `<i class="fab fa-youtube" style="color:#FF0000;" title="YouTube"></i>`;
+    const desc = escHtml(e.description || e.url || '—');
+    const coords = Number(e.lat).toFixed(4) + ', ' + Number(e.lng).toFixed(4);
+    const date = e.createdAt ? new Date(e.createdAt).toLocaleDateString() : '—';
+    const id = escHtml(e.id);
+    const dId = escHtml(deviceId);
+    const currentDesc = escHtml(e.description || '');
+    return `<tr id="media-row-${id}" style="border-bottom:1px solid rgba(255,255,255,0.05);">
+        <td style="padding:10px 8px;text-align:center;">${typeIcon}</td>
+        <td style="padding:10px 8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(e.description||e.url||'')}">${desc}</td>
+        <td style="padding:10px 8px;font-family:monospace;font-size:0.82rem;color:rgba(255,255,255,0.5);">${coords}</td>
+        <td style="padding:10px 8px;color:rgba(255,255,255,0.5);font-size:0.85rem;">${date}</td>
+        <td style="padding:10px 8px;text-align:right;">
+            <div style="display:flex;gap:6px;justify-content:flex-end;">
+                <button class="btn btn-success btn-sm" onclick="editMediaDesc('${dId}','${id}','${currentDesc}')"><i class="fas fa-pen"></i></button>
+                <button class="btn btn-danger btn-sm" onclick="deleteMedia('${dId}','${id}')"><i class="fas fa-trash"></i></button>
+            </div>
+        </td>
+    </tr>`;
+}
+
+async function deleteMedia(deviceId, id) {
+    if (!confirm('Delete this media entry?')) return;
+    const res = await fetch('./api/media/' + encodeURIComponent(deviceId) + '/' + encodeURIComponent(id), { method: 'DELETE' });
+    if (res.ok) {
+        const row = document.getElementById('media-row-' + id);
+        if (row) row.remove();
+    } else {
+        showAlert('Failed to delete media.', 'error');
+    }
+}
+
+async function editMediaDesc(deviceId, id, currentDesc) {
+    const newDesc = prompt('Edit description:', currentDesc);
+    if (newDesc === null) return;
+    const res = await fetch('./api/media/' + encodeURIComponent(deviceId) + '/' + encodeURIComponent(id), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: newDesc })
+    });
+    if (res.ok) {
+        const panel = document.getElementById('ms-' + deviceId);
+        if (panel && panel.style.display !== 'none') renderMediaForDevice(deviceId, panel);
+    } else {
+        showAlert('Failed to update description.', 'error');
+    }
+}
+
+// ---- GPS Log Viewer ----
+function toggleLogAccessField() {
+    const role = document.getElementById('modal-role').value;
+    document.getElementById('log-access-group').style.display = role === 'admin' ? 'block' : 'none';
+    if (role !== 'admin') document.getElementById('modal-can-view-logs').checked = false;
+}
+
+async function loadGPSLogs() {
+    const gpsOnly = document.getElementById('gps-only-filter')?.checked !== false;
+    const res = await fetch(`./api/admin/logs?limit=50&gpsOnly=${gpsOnly}`);
+    if (!res.ok) { showAlert('Failed to load logs.', 'error'); return; }
+    const data = await res.json();
+    const summaryEl = document.getElementById('log-summary');
+    if (summaryEl) summaryEl.textContent = `${data.gpsTotal} GPS push${data.gpsTotal !== 1 ? 'es' : ''} / ${data.total} total in memory`;
+    renderLogs(data.logs);
+}
+
+function renderLogs(logs) {
+    const container = document.getElementById('log-viewer-content');
+    if (!logs || logs.length === 0) {
+        container.innerHTML = '<p class="empty-state">No log entries.</p>';
+        return;
+    }
+    container.innerHTML = logs.map(log => {
+        const ts = new Date(log.timestamp).toLocaleString();
+        const isGPS = log.path === '/api/gps' && log.method === 'POST';
+        const body = log.body && Object.keys(log.body).length > 0 ? JSON.stringify(log.body, null, 2) : null;
+        const deviceInfo = log.body?.topic ? `<span style="margin-left:8px;font-size:0.75rem;color:rgba(255,255,255,0.4);">topic: ${escHtml(log.body.topic)}</span>` : '';
+        return `
+        <div style="margin-bottom:8px; padding:10px 14px; background:rgba(255,255,255,0.04); border-radius:6px; border-left:3px solid ${isGPS ? '#2ecc71' : 'rgba(255,255,255,0.12)'};">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:${body ? '7px' : '0'};">
+                <div>
+                    <span style="font-family:monospace; font-size:0.82rem; color:${isGPS ? '#2ecc71' : 'rgba(255,255,255,0.6)'};">${escHtml(log.method)} ${escHtml(log.path)}</span>
+                    ${deviceInfo}
+                </div>
+                <span style="font-size:0.72rem; color:rgba(255,255,255,0.3); white-space:nowrap;">${ts}</span>
+            </div>
+            ${body ? `<pre style="margin:0; font-size:0.7rem; color:rgba(255,255,255,0.45); white-space:pre-wrap; word-break:break-all; max-height:160px; overflow-y:auto;">${escHtml(body)}</pre>` : ''}
+        </div>`;
+    }).join('');
+}
+
+</script>
+</body>
+</html>

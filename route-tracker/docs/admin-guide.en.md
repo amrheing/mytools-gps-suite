@@ -84,7 +84,42 @@ https://your-domain.com/route-tracker/api/gps?token=YOUR_TOKEN
 
 ---
 
-### 4 · Shared Links
+### 5 · Device Management
+
+Manage registered GPS devices and configure auto-route settings.
+
+- Each device shows: Device ID, Name, Route Count, GPS Points, Auto-Route Status, Last Update
+- **Auto-Route column** displays current scheduling status:
+  - **🤖 HH:MM** — Auto-route enabled with daily creation time
+  - **✖ Disabled** — Auto-route turned off for this device
+
+| Action | How |
+|---|---|
+| **Configure auto-route** | Click the robot (🤖) icon next to a device |
+| **Rename device** | Click the pencil icon to change the display name |
+| **Delete device** | Click the trash icon (permanently removes all routes and media) |
+
+#### Auto-Route Settings
+
+Click the **🤖** button next to any device to configure automatic route creation:
+
+- **Enable auto-route creation** — Toggle daily route generation
+- **Daily creation time** — Set when new routes should be created (24-hour format, default: 00:00)
+- **Test Now** — Create an auto-route immediately for testing
+- **Save Settings** — Apply configuration to the device
+
+**How Auto-Route Works:**
+1. Server checks every minute if it's time to create a new route
+2. Any active route is automatically completed before creating the new one  
+3. New route gets name format: "Auto Route MM/DD/YYYY"
+4. GPS tracking continues seamlessly with the new route
+5. Previous routes remain available in route history
+
+> **Note:** Auto-route creation only triggers if the device has been active (received GPS data) within the last 24 hours. This prevents creating empty routes for inactive devices.
+
+---
+
+### 6 · Shared Links
 
 Create time-limited public links to share a route view with people who have no account.
 
@@ -98,7 +133,7 @@ Copy the generated link and send it. It opens a read-only map view without requi
 
 ---
 
-### 5 · Media Management
+### 7 · Media Management
 
 View, edit descriptions, reposition, and delete all media entries per device.
 

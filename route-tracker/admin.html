@@ -293,6 +293,60 @@
     </div>
 </div>
 
+<!-- Device Auto-Route Settings Modal -->
+<div class="modal-overlay" id="device-auto-route-modal">
+    <div class="modal" style="max-width:500px;">
+        <h3><i class="fas fa-robot"></i> Auto-Route Settings</h3>
+        <input type="hidden" id="auto-route-device-id">
+        <div id="device-name-display" style="color:rgba(255,255,255,0.7); font-size:0.9rem; margin-bottom:20px;"></div>
+        
+        <div class="form-group">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;">
+                <input type="checkbox" id="auto-route-enabled" style="accent-color: #e74c3c; width: 18px; height: 18px;">
+                <label for="auto-route-enabled" style="color:white; font-size:1rem; font-weight:500; cursor:pointer;">
+                    <i class="fas fa-robot"></i> Enable auto-route creation
+                </label>
+            </div>
+            <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;">
+                Automatically create a new route every day at the specified time. Previous active route will be completed.
+            </p>
+        </div>
+        
+        <div class="form-group" id="auto-route-time-group">
+            <label style="color:rgba(255,255,255,0.7); font-size:0.9rem;">Daily creation time (24-hour format)</label>
+            <input type="time" id="auto-route-time" value="00:00"
+                style="width:150px; padding:8px; background:#1e2a3a; border:1px solid rgba(255,255,255,0.15); border-radius:6px; color:white; font-size:0.95rem;">
+            <div style="color:rgba(255,255,255,0.5); font-size:0.8rem; margin-top:5px;">
+                Default: 00:00 (midnight)
+            </div>
+        </div>
+        
+        <div style="background:rgba(46,204,113,0.1); border:1px solid rgba(46,204,113,0.3); border-radius:6px; padding:12px; margin:15px 0;">
+            <div style="color:#2ecc71; font-size:0.85rem; font-weight:500; margin-bottom:5px;">
+                <i class="fas fa-info-circle"></i> How it works
+            </div>
+            <ul style="color:rgba(255,255,255,0.7); font-size:0.82rem; margin-left:15px; line-height:1.4;">
+                <li>Server checks every minute if it's time to create a new route</li>
+                <li>Any active route is automatically completed before creating the new one</li>
+                <li>New route gets name format: "Auto Route MM/DD/YYYY"</li>
+                <li>GPS tracking continues seamlessly with the new route</li>
+            </ul>
+        </div>
+        
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn btn-success" onclick="saveAutoRouteSettings()" style="flex:1;">
+                <i class="fas fa-save"></i> Save Settings
+            </button>
+            <button class="btn btn-secondary" onclick="testAutoRoute()" style="flex:1;">
+                <i class="fas fa-play"></i> Test Now
+            </button>
+            <button class="btn btn-secondary" onclick="closeAutoRouteModal()">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Create/Edit User Modal -->
 <div class="modal-overlay" id="user-modal">
     <div class="modal">
@@ -615,6 +669,7 @@ async function loadAdminDevices() {
     const res = await fetch('./api/admin/devices');
     if (!res.ok) return;
     const devices = await res.json();
+    adminDevices = devices; // Store globally for auto-route modal
     renderAdminDevices(devices);
 }
 
@@ -632,12 +687,17 @@ function renderAdminDevices(devices) {
                     <th style="text-align:left; padding:8px 10px;">Name</th>
                     <th style="text-align:center; padding:8px 10px;">Routes</th>
                     <th style="text-align:center; padding:8px 10px;">GPS Points</th>
+                    <th style="text-align:center; padding:8px 10px;">Auto-Route</th>
                     <th style="text-align:left; padding:8px 10px;">Last Update</th>
                     <th style="text-align:right; padding:8px 10px;">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                ${devices.map(d => `
+                ${devices.map(d => {
+                    const autoRoute = d.settings?.autoStartRoute ? 
+                        `<span style="color:#2ecc71; font-size:0.75rem;"><i class="fas fa-robot"></i> ${d.settings.autoRouteTime || '00:00'}</span>` : 
+                        `<span style="color:rgba(255,255,255,0.4); font-size:0.75rem;"><i class="fas fa-times"></i> Disabled</span>`;
+                    return `
                 <tr style="border-top:1px solid rgba(255,255,255,0.07);">
                     <td style="padding:10px; color:rgba(255,255,255,0.4); font-size:0.82rem; font-family:monospace;">${escHtml(d.id)}</td>
                     <td style="padding:10px; color:white; font-weight:500;">
@@ -646,8 +706,13 @@ function renderAdminDevices(devices) {
                     </td>
                     <td style="padding:10px; text-align:center; color:rgba(255,255,255,0.7);">${d.routeCount}</td>
                     <td style="padding:10px; text-align:center; color:rgba(255,255,255,0.7);">${d.totalPoints.toLocaleString()}</td>
+                    <td style="padding:10px; text-align:center;">${autoRoute}</td>
                     <td style="padding:10px; color:rgba(255,255,255,0.4); font-size:0.82rem;">${d.lastUpdate ? new Date(d.lastUpdate).toLocaleString() : '—'}</td>
                     <td style="padding:10px; text-align:right;">
+                        <button class="btn btn-sm" style="background:#2a2d3e;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.7);" onclick="openAutoRouteModal('${escHtml(d.id)}', '${escHtml(d.name)}')" title="Auto-Route Settings">
+                            <i class="fas fa-robot"></i>
+                        </button>
+                        &nbsp;
                         <button class="btn btn-sm" style="background:#1e2a3a;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.7);" onclick="openDeviceRenameModal('${escHtml(d.id)}', '${escHtml(d.name)}')">
                             <i class="fas fa-pencil-alt"></i>
                         </button>
@@ -656,7 +721,8 @@ function renderAdminDevices(devices) {
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
-                </tr>`).join('')}
+                </tr>`;
+                }).join('')}
             </tbody>
         </table>`;
 }
@@ -701,6 +767,86 @@ async function deleteDevice(id, name, routeCount) {
         await Promise.all([loadAdminDevices(), loadUsers(), loadMediaAdmin()]);
     } else {
         showAlert(data.error || 'Error deleting device.', 'error');
+    }
+}
+
+// Auto-Route Settings Functions
+function openAutoRouteModal(deviceId, deviceName) {
+    document.getElementById('auto-route-device-id').value = deviceId;
+    document.getElementById('device-name-display').textContent = `Device: ${deviceName} (${deviceId})`;
+    
+    // Load current settings from device data
+    const device = adminDevices.find(d => d.id === deviceId);
+    const settings = device?.settings || { autoStartRoute: true, autoRouteTime: '00:00' };
+    
+    document.getElementById('auto-route-enabled').checked = settings.autoStartRoute !== false;
+    document.getElementById('auto-route-time').value = settings.autoRouteTime || '00:00';
+    
+    updateAutoRouteTimeVisibility();
+    document.getElementById('device-auto-route-modal').classList.add('show');
+}
+
+function closeAutoRouteModal() {
+    document.getElementById('device-auto-route-modal').classList.remove('show');
+}
+
+function updateAutoRouteTimeVisibility() {
+    const enabled = document.getElementById('auto-route-enabled').checked;
+    const timeGroup = document.getElementById('auto-route-time-group');
+    timeGroup.style.opacity = enabled ? '1' : '0.5';
+    timeGroup.style.pointerEvents = enabled ? 'auto' : 'none';
+}
+
+async function saveAutoRouteSettings() {
+    const deviceId = document.getElementById('auto-route-device-id').value;
+    const autoStartRoute = document.getElementById('auto-route-enabled').checked;
+    const autoRouteTime = document.getElementById('auto-route-time').value;
+    
+    try {
+        const res = await fetch(`./api/devices/${encodeURIComponent(deviceId)}/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                autoStartRoute,
+                autoRouteTime
+            })
+        });
+        
+        const data = await res.json();
+        if (res.ok) {
+            closeAutoRouteModal();
+            showAlert(data.message || 'Auto-route settings saved successfully.', 'success');
+            await loadAdminDevices(); // Refresh device list
+        } else {
+            showAlert(data.error || 'Error saving settings.', 'error');
+        }
+    } catch (error) {
+        showAlert('Network error saving settings.', 'error');
+    }
+}
+
+async function testAutoRoute() {
+    const deviceId = document.getElementById('auto-route-device-id').value;
+    
+    if (!confirm('This will create a new auto-route immediately and complete any active route. Continue?')) {
+        return;
+    }
+    
+    try {
+        const res = await fetch(`./api/devices/${encodeURIComponent(deviceId)}/create-auto-route`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await res.json();
+        if (res.ok) {
+            showAlert(data.message || 'Auto-route created successfully.', 'success');
+            await loadAdminDevices(); // Refresh device list
+        } else {
+            showAlert(data.error || 'Error creating auto-route.', 'error');
+        }
+    } catch (error) {
+        showAlert('Network error creating auto-route.', 'error');
     }
 }
 
@@ -784,6 +930,14 @@ async function logout() {
 // Close modal on overlay click
 document.getElementById('user-modal').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeModal();
+});
+
+// Add event listener for auto-route checkbox
+document.addEventListener('DOMContentLoaded', function() {
+    const checkbox = document.getElementById('auto-route-enabled');
+    if (checkbox) {
+        checkbox.addEventListener('change', updateAutoRouteTimeVisibility);
+    }
 });
 
 init();

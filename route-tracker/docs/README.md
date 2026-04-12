@@ -6,6 +6,12 @@ A comprehensive web application for real-time GPS route tracking, route history 
 
 ## 🚀 Features
 
+### Recent Enhancements (v2.1)
+- **🤖 Auto-Route System** — Automatic daily route creation with configurable scheduling per device and admin management interface
+- **📊 Device Management** — Comprehensive admin controls for device configuration, auto-route settings, and route automation
+- **⏰ Smart Scheduling** — Server-side minute-by-minute checking with customizable daily route creation times
+- **🔧 Admin Interface** — Enhanced device table with auto-route status, settings modal, and test functionality
+
 ### Recent Enhancements (v2.0)
 - **🎨 Smart Route Visualization** — Automatic analysis classifies route segments as road (green) vs off-road (brown) based on speed patterns
 - **🔧 Advanced Route Editing** — Comprehensive point manipulation system with drag-and-drop, add/delete, and point merging
@@ -22,6 +28,7 @@ A comprehensive web application for real-time GPS route tracking, route history 
 - **Pause/Resume functionality** for flexible route recording
 - **Live route visualization** on interactive maps
 - **Automatic distance and speed calculations**
+- **Auto-route creation** with daily scheduling and device-specific configuration
 
 ### User Management
 - **Secure user registration and authentication**

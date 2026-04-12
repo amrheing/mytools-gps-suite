@@ -172,6 +172,9 @@ class RouteTracker {
                         this.currentRoute = null;
                     }
                     this.updateRouteStats(null); // Clear stats
+                    
+                    // Try to center on recent GPS data if no current route
+                    await this.centerOnRecentActivity();
                 }
                 
                 // Load recent routes list
@@ -180,6 +183,52 @@ class RouteTracker {
         } catch (error) {
             console.error('Error loading data:', error);
             this.showNotification('Error loading device data: ' + error.message, 'error');
+        }
+    }
+
+    async centerOnRecentActivity() {
+        if (this.mapCentered || this.userHasMovedMap) return;
+        
+        try {
+            // First try to get recent GPS data from debug endpoint
+            const debugResponse = await this.apiCall('/api/debug/requests');
+            if (debugResponse.ok) {
+                const data = await debugResponse.json();
+                const gpsRequests = data.requests.filter(req => 
+                    req.path === '/api/gps' && req.method === 'POST'
+                );
+                
+                if (gpsRequests.length > 0) {
+                    const latestRequest = gpsRequests[0];
+                    if (latestRequest && latestRequest.body && latestRequest.body.lat && latestRequest.body.lng) {
+                        console.log('Centering map on recent GPS data');
+                        this.map.setView([latestRequest.body.lat, latestRequest.body.lng], 14);
+                        this.mapCentered = true;
+                        return;
+                    }
+                }
+            }
+            
+            // If no recent GPS data, try to center on the most recent route
+            const routesResponse = await this.apiCall(`/api/devices/${this.selectedDeviceId}/routes`);
+            if (routesResponse.ok) {
+                const routesData = await routesResponse.json();
+                if (routesData.routes && routesData.routes.length > 0) {
+                    const mostRecentRoute = routesData.routes[0]; // Routes should be sorted by date
+                    if (mostRecentRoute.id) {
+                        console.log('Centering map on most recent route');
+                        const routeData = await this.loadRoute(mostRecentRoute.id);
+                        if (routeData && routeData.points && routeData.points.length > 0) {
+                            // Center on the last point of the most recent route
+                            const lastPoint = routeData.points[routeData.points.length - 1];
+                            this.map.setView([lastPoint.lat, lastPoint.lng], 14);
+                            this.mapCentered = true;
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error centering on recent activity:', error);
         }
     }
 
@@ -235,8 +284,17 @@ class RouteTracker {
             }
         }
         
-        // Auto-zoom to fit for historical routes (non-live routes)
-        if (routeData && !routeData.isLive && routeData.points && routeData.points.length > 0) {
+        // Center map on route data if this is the first route loaded and user hasn't moved map
+        if (routeData && routeData.points && routeData.points.length > 0 && !this.mapCentered && !this.userHasMovedMap) {
+            setTimeout(() => {
+                if (typeof zoomToFit === 'function') {
+                    zoomToFit();
+                    this.mapCentered = true;
+                }
+            }, 500);
+        }
+        // Also auto-zoom to fit for historical routes (non-live routes)
+        else if (routeData && !routeData.isLive && routeData.points && routeData.points.length > 0) {
             setTimeout(() => {
                 if (typeof zoomToFit === 'function') zoomToFit();
             }, 500);
@@ -1977,7 +2035,9 @@ routeList.innerHTML = routes.map(route => {
 
     initMap() {
         // Initialize Leaflet map — scroll wheel zoom disabled; use Alt+scroll or the +/- controls
-        this.map = L.map('map', { scrollWheelZoom: false }).setView([49.4875, 8.466], 13); // Default to Mannheim, Germany
+        // Start with a default view, will be updated after loading current session data
+        this.map = L.map('map', { scrollWheelZoom: false }).setView([49.4875, 8.466], 13);
+        this.mapCentered = false; // Track if we've centered on actual data yet
 
         // Enable zoom only while Alt/Option is held
         this.map.getContainer().addEventListener('wheel', (e) => {
@@ -2109,6 +2169,7 @@ routeList.innerHTML = routes.map(route => {
             } else {
                 this.map.setView([lat, lng], 15);
             }
+            this.mapCentered = true; // Mark that we've centered on real data
         }
 
         console.log(`Live position updated: ${lat}, ${lng} (${this.liveTrail.length} points total)`);
