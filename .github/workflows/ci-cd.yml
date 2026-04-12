@@ -44,14 +44,42 @@ jobs:
       run: |
         cd route-tracker
         npm install
-        DATA_DIR=/tmp/route-tracker-data node server.js &
+        
+        # Create temporary data directory
+        mkdir -p /tmp/route-tracker-data/{routes,devices,sessions}
+        
+        # Start server in background
+        DATA_DIR=/tmp/route-tracker-data PORT=3000 node server.js &
         SERVER_PID=$!
-        for i in $(seq 1 10); do
-          curl -sf http://localhost:3000/api/health && break
-          sleep 1
+        
+        # Wait for server to be ready (with better error handling)
+        echo "Waiting for Route Tracker server to start..."
+        for i in $(seq 1 15); do
+          if curl -sf http://localhost:3000/api/health >/dev/null 2>&1; then
+            echo "✅ Route Tracker server is healthy"
+            break
+          fi
+          if [ $i -eq 15 ]; then
+            echo "❌ Route Tracker server failed to start"
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
+          fi
+          sleep 2
         done
-        curl -f http://localhost:3000/api/health || exit 1
+        
+        # Test health endpoint response
+        HEALTH_RESPONSE=$(curl -s http://localhost:3000/api/health)
+        echo "Health check response: $HEALTH_RESPONSE"
+        
+        # Test basic API endpoints
+        curl -sf http://localhost:3000/api/routes >/dev/null || echo "⚠️ Routes endpoint not accessible (expected for first run)"
+        
+        # Clean shutdown
         kill $SERVER_PID 2>/dev/null || true
+        wait $SERVER_PID 2>/dev/null || true
+        
+        # Cleanup
+        rm -rf /tmp/route-tracker-data
 
     - name: Test JavaScript components
       run: |
@@ -96,6 +124,9 @@ jobs:
         # Test Extract GPX Parts
         curl -f http://localhost:6020 || exit 1
         
+        # Test Route Tracker
+        curl -f http://localhost:6050/api/health || exit 1
+        
         docker compose down
     
     - name: Run security scan
@@ -124,6 +155,7 @@ jobs:
       uses: docker/setup-buildx-action@v3
     
     - name: Log in to Docker Hub
+      if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -134,8 +166,9 @@ jobs:
       uses: docker/metadata-action@v5
       with:
         images: |
-          your-dockerhub-username/google-gpx-converter
-          your-dockerhub-username/extract-gpx-parts
+          ${{ secrets.DOCKERHUB_USERNAME }}/google-gpx-converter
+          ${{ secrets.DOCKERHUB_USERNAME }}/extract-gpx-parts
+          ${{ secrets.DOCKERHUB_USERNAME }}/route-tracker
         tags: |
           type=ref,event=branch
           type=ref,event=pr
@@ -143,22 +176,40 @@ jobs:
           type=raw,value=latest,enable={{is_default_branch}}
     
     - name: Build and push Google GPX Converter
+      if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
       uses: docker/build-push-action@v5
       with:
         context: ./google-gpx-converter
         push: true
-        tags: your-dockerhub-username/google-gpx-converter:latest
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/google-gpx-converter:latest
         cache-from: type=gha
         cache-to: type=gha,mode=max
     
     - name: Build and push Extract GPX Parts
+      if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
       uses: docker/build-push-action@v5
       with:
         context: ./extract-gpx-parts
         push: true
-        tags: your-dockerhub-username/extract-gpx-parts:latest
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/extract-gpx-parts:latest
         cache-from: type=gha
         cache-to: type=gha,mode=max
+        
+    - name: Build and push Route Tracker
+      if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
+      uses: docker/build-push-action@v5
+      with:
+        context: ./route-tracker
+        push: true
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/route-tracker:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Skip Docker Push (Missing Credentials)
+      if: ${{ !secrets.DOCKERHUB_USERNAME || !secrets.DOCKERHUB_TOKEN }}
+      run: |
+        echo "⚠️ Skipping Docker Hub deployment - credentials not configured"
+        echo "To enable deployment, set DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets"
 
   release:
     runs-on: ubuntu-latest

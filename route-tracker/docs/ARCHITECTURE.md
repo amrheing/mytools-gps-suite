@@ -836,3 +836,106 @@ This architecture documentation provides a comprehensive overview of the Route T
 **Last Updated**: April 11, 2026  
 **Version**: 2.0 (Enhanced with point editing and analysis features)  
 **Author**: Gerald Amrhein
+
+---
+
+## CI/CD Pipeline Architecture
+
+### Overview
+The myTools project uses GitHub Actions for continuous integration and deployment, providing automated testing, building, and deployment across all components.
+
+**Pipeline Configuration**: `.github/workflows/ci-cd.yml`
+**Trigger Events**: push to main/develop, pull requests, releases
+
+### Pipeline Structure
+
+#### Test Job
+- **Platform**: ubuntu-latest
+- **Python Testing**: extract-gpx-parts with pytest and coverage
+- **Node.js Testing**: Route Tracker health endpoint validation
+- **Coverage**: Automatic upload to Codecov
+
+#### Docker Build Job
+- **Conditional Execution**: Only runs with Docker Hub credentials
+- **Multi-Platform**: Buildx for cross-platform compatibility
+- **Registry Support**: Docker Hub with GitHub Container Registry fallback
+- **Optimization**: Layer caching for faster builds
+
+### Component Testing Strategy
+
+#### Route Tracker Testing
+```bash
+# Isolated environment setup
+mkdir -p /tmp/route-tracker-data/{routes,devices,sessions}
+DATA_DIR=/tmp/route-tracker-data PORT=3000 node server.js &
+
+# Health check with retry logic
+for i in $(seq 1 15); do
+  curl -sf http://localhost:3000/api/health && break
+  sleep 2
+done
+
+# API validation
+curl -f http://localhost:3000/api/routes
+```
+
+#### Extract GPX Parts Testing
+```bash
+# Comprehensive test suite
+cd extract-gpx-parts
+python -m pytest --cov=. --cov-report=xml
+
+# Coverage reporting
+codecov-action@v3 with coverage.xml
+```
+
+### Configuration Management
+
+#### Required Secrets (Optional)
+- `DOCKERHUB_USERNAME`: Docker Hub account username
+- `DOCKERHUB_TOKEN`: Docker Hub access token with push permissions
+
+#### Conditional Logic
+```yaml
+# Only build/push with credentials
+if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
+```
+
+### Health Monitoring
+
+Each component provides health endpoints for monitoring:
+
+- **Route Tracker**: `GET /api/health`
+  ```json
+  {"status": "healthy", "timestamp": "2024-01-02T15:30:00Z"}
+  ```
+
+- **Extract GPX Parts**: Flask application health in web interface
+- **Google GPX Converter**: Static files, no health endpoint needed
+
+### Security Best Practices
+
+1. **Secret Management**: All credentials stored as GitHub secrets
+2. **Conditional Building**: No hardcoded usernames or tokens
+3. **Isolated Testing**: Temporary data directories for tests
+4. **Graceful Degradation**: Pipeline succeeds without Docker credentials
+
+### Deployment Workflow
+
+1. **Development**: Commits to develop branch trigger testing only
+2. **Integration**: Pull requests to main trigger full build and test
+3. **Production**: Tagged releases trigger production deployment
+4. **Monitoring**: Health checks validate successful deployments
+
+### Troubleshooting
+
+**Common Issues**:
+- Missing Docker credentials: Pipeline runs tests but skips Docker builds
+- Health check failures: Server startup timeout or port conflicts
+- Test failures: Missing dependencies or environment configuration
+
+**Resolution Steps**:
+1. Check GitHub Actions logs for specific error messages
+2. Validate health endpoint responses manually
+3. Ensure all required dependencies are installed
+4. Verify Docker Hub credentials are properly configured

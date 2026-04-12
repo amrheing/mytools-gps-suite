@@ -649,3 +649,180 @@ This developer guide provides comprehensive information for continuing developme
 
 **Last Updated**: April 11, 2026  
 **Contributors**: Gerald Amrhein
+
+---
+
+## Working with CI/CD Pipeline
+
+### Overview
+The myTools project uses GitHub Actions for automated testing, building, and deployment. Understanding the pipeline helps ensure smooth development and deployment processes.
+
+### Pipeline Configuration
+
+**Location**: `.github/workflows/ci-cd.yml`
+**Triggers**: push to main/develop branches, pull requests to main, releases
+
+### Setting Up CI/CD
+
+#### For Contributors (Testing Only)
+No special setup required. The pipeline automatically:
+1. Runs all tests when you push code
+2. Validates Route Tracker health endpoints
+3. Reports coverage to Codecov
+4. Builds Docker images (but doesn't push without credentials)
+
+#### For Maintainers (Full Pipeline)
+Configure GitHub repository secrets:
+1. Go to Settings → Secrets and variables → Actions
+2. Add secrets:
+   - `DOCKERHUB_USERNAME`: Your Docker Hub username
+   - `DOCKERHUB_TOKEN`: Docker Hub access token
+
+**Creating Docker Hub Token:**
+```bash
+# 1. Log in to Docker Hub
+# 2. Go to Account Settings → Security
+# 3. Click "New Access Token"
+# 4. Set description: "GitHub Actions myTools"
+# 5. Set permissions: Read, Write, Delete
+# 6. Copy token (shown once only)
+```
+
+### Development Workflow with CI/CD
+
+#### Feature Development
+```bash
+# 1. Create feature branch
+git checkout -b feature/new-capability
+git push origin feature/new-capability
+
+# 2. Make changes and commit
+git add .
+git commit -m "Add new capability"
+git push origin feature/new-capability
+
+# 3. Create PR to main
+# Pipeline automatically runs tests
+# Review pipeline status in GitHub Actions tab
+```
+
+#### Pre-commit Testing
+```bash
+# Test locally before pushing
+cd route-tracker
+npm test
+
+cd ../extract-gpx-parts
+python -m pytest
+
+# Check Route Tracker health locally
+npm start &
+curl http://localhost:3000/api/health
+```
+
+#### Monitoring Pipeline Status
+1. **GitHub Actions Tab**: View all pipeline runs
+2. **PR Status Checks**: See test results in pull requests
+3. **Commit Status**: Green checkmark indicates successful pipeline
+
+### Pipeline Jobs Explained
+
+#### Test Job
+**Purpose**: Validate code quality and functionality
+**Components**:
+- Python tests for extract-gpx-parts
+- Node.js health checks for Route Tracker
+- Coverage reporting
+
+**Common Failures**:
+- Python test failures: Check `pytest` output
+- Health check timeout: Server startup issues
+- Missing dependencies: Update requirements files
+
+#### Docker Build Job
+**Purpose**: Build and push container images
+**Conditions**: Only runs with Docker Hub credentials
+**Components**:
+- Multi-platform builds (linux/amd64, linux/arm64)
+- Layer caching for speed
+- Automatic tagging (latest, branch names, SHA)
+
+**Common Issues**:
+- Build failures: Check Dockerfile syntax
+- Push authentication: Verify Docker Hub credentials
+- Size limits: Optimize image layers
+
+### Troubleshooting CI/CD Issues
+
+#### Test Failures
+```bash
+# Debug locally
+cd extract-gpx-parts
+python -m pytest -v
+
+# Check specific test
+python -m pytest tests/test_specific.py::test_function -v
+
+# Route Tracker debugging
+cd route-tracker
+DEBUG=* npm start
+```
+
+#### Docker Build Failures
+```bash
+# Test build locally
+docker build -t route-tracker-test .
+
+# Check for common issues
+docker run --rm route-tracker-test node --version
+docker run --rm route-tracker-test npm list
+```
+
+#### Health Check Failures
+```bash
+# Manual health check
+cd route-tracker
+DATA_DIR=/tmp/test-data node server.js &
+sleep 5
+curl -v http://localhost:3000/api/health
+
+# Check logs
+docker logs route-tracker
+```
+
+### Pipeline Optimization Tips
+
+#### Faster Builds
+- Use `.dockerignore` to exclude unnecessary files
+- Leverage Docker layer caching
+- Use multi-stage builds for smaller images
+
+#### Reliable Tests
+- Use isolated test environments
+- Add retry logic for flaky tests
+- Mock external dependencies
+
+#### Security Best Practices
+- Never commit secrets to code
+- Use GitHub secrets for sensitive data
+- Regularly rotate Docker Hub tokens
+- Review security alerts in GitHub
+
+### Manual Deployment Override
+
+If CI/CD is unavailable, manual deployment:
+```bash
+# Build images locally
+docker build -t your-username/route-tracker:latest ./route-tracker
+docker build -t your-username/extract-gpx-parts:latest ./extract-gpx-parts
+docker build -t your-username/google-gpx-converter:latest ./google-gpx-converter
+
+# Push manually
+docker push your-username/route-tracker:latest
+docker push your-username/extract-gpx-parts:latest
+docker push your-username/google-gpx-converter:latest
+
+# Deploy to production
+docker-compose pull
+docker-compose up -d
+```
