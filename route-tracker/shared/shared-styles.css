@@ -830,4 +830,248 @@ body {
 .text-light { color: var(--text-light); }
 
 .bg-light { background: var(--light-bg); }
+
+/* ======================================================= */
+/* ENHANCED ROUTE TRACKER STYLES */
+/* ======================================================= */
+
+/* Enhanced Context Menu */
+.leaflet-popup-content-wrapper.enhanced-context {
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-hover);
+    border: 2px solid var(--secondary-color);
+    min-width: 280px;
+}
+
+.enhanced-context-menu {
+    padding: 0;
+    margin: 0;
+}
+
+.enhanced-context-menu h4 {
+    color: var(--primary-color);
+    background: var(--secondary-color);
+    color: white;
+    margin: 0 -20px 15px -20px;
+    padding: 10px 20px;
+    font-size: 1.1rem;
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+.context-menu-section {
+    margin-bottom: 15px;
+}
+
+.context-menu-section:last-child {
+    margin-bottom: 0;
+}
+
+.context-menu-section h5 {
+    color: var(--text-light);
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.context-btn {
+    width: 100%;
+    padding: 8px 12px;
+    margin-bottom: 5px;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-align: left;
+    transition: var(--transition);
+    color: var(--text-color);
+}
+
+.context-btn:hover {
+    background: var(--light-bg);
+    border-color: var(--secondary-color);
+    transform: translateY(-1px);
+}
+
+.context-btn:active {
+    transform: translateY(0);
+}
+
+.context-btn:last-child {
+    margin-bottom: 0;
+}
+
+/* Route Segment Visualization */
+.route-segment-road {
+    stroke-dasharray: none;
+}
+
+.route-segment-offroad {
+    stroke-dasharray: 10, 5;
+}
+
+/* Pause Point Styles */
+.pause-circle {
+    cursor: pointer;
+}
+
+.pause-popup {
+    max-width: 220px;
+}
+
+.pause-popup h4 {
+    color: var(--warning-color);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 5px;
+    margin-bottom: 8px;
+}
+
+/* Track Outline Arrows */
+.approach-arrow, .departure-arrow {
+    font-size: 16px;
+    font-weight: bold;
+    text-shadow: 0 0 3px white;
+}
+
+.approach-outline {
+    stroke-dasharray: 8, 4;
+}
+
+.departure-outline {
+    stroke-dasharray: 8, 4;
+}
+
+/* Segment Tooltips */
+.segment-tooltip-road {
+    background: var(--success-color) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 5px !important;
+    padding: 5px 10px !important;
+    font-size: 12px !important;
+}
+
+.segment-tooltip-offroad {
+    background: #8b4513 !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 5px !important;
+    padding: 5px 10px !important;
+    font-size: 12px !important;
+}
+
+/* Edit Point Dots for Enhanced Mode */
+.edit-point-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: bold;
+    color: white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    cursor: grab;
+}
+
+.edit-point-dot:active {
+    cursor: grabbing;
+}
+
+.edit-point-new {
+    font-size: 8px;
+}
+
+/* Analysis Status Indicators */
+.analysis-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.analysis-status.analyzing {
+    background: var(--warning-color);
+    color: white;
+}
+
+.analysis-status.complete {
+    background: var(--success-color);
+    color: white;
+}
+
+.analysis-status.none {
+    background: var(--text-light);
+    color: white;
+}
+
+/* Enhanced Route List with Analysis Info */
+.route-item.enhanced {
+    border-left: 4px solid transparent;
+}
+
+.route-item.enhanced.has-analysis {
+    border-left-color: var(--success-color);
+}
+
+.route-item.enhanced.has-pauses {
+    position: relative;
+}
+
+.route-item.enhanced.has-pauses::before {
+    content: '🛑';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 14px;
+}
+
+.route-analysis-summary {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-top: 5px;
+}
+
+.route-segment-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-right: 10px;
+}
+
+.route-segment-count .road {
+    color: var(--success-color);
+}
+
+.route-segment-count .offroad {
+    color: #8b4513;
+}
+
+/* Responsive Enhancements for Small Screens */
+@media (max-width: 768px) {
+    .enhanced-context-menu {
+        min-width: 250px;
+    }
+    
+    .context-btn {
+        padding: 10px;
+        font-size: 0.85rem;
+    }
+    
+    .pause-popup {
+        max-width: 200px;
+    }
+    
+    .edit-point-dot {
+        width: 16px;
+        height: 16px;
+    }
+}
 .bg-white { background: white; }

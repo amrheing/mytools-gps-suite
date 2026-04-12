@@ -6,6 +6,16 @@ A comprehensive web application for real-time GPS route tracking, route history 
 
 ## 🚀 Features
 
+### Recent Enhancements (v2.0)
+- **🎨 Smart Route Visualization** — Automatic analysis classifies route segments as road (green) vs off-road (brown) based on speed patterns
+- **🔧 Advanced Route Editing** — Comprehensive point manipulation system with drag-and-drop, add/delete, and point merging
+- **🔐 PassKey Authentication** — Modern biometric authentication using WebAuthn standard for password-free secure login  
+- **📍 Point Merging System** — Select multiple GPS points via rectangle selection or Alt+click and merge them into representative points
+- **⚡ Performance Optimization** — Intelligent point simplification renders large routes (1000+ points) smoothly while preserving important features
+- **🎯 Precision Controls** — Alt+drag for map movement during editing, fixed background prevents accidental map shifts
+- **📊 Route Analysis** — Automatic pause point detection, road/off-road classification, and statistical analysis
+- **📋 Route Management** — Copy routes for testing, bulk operations, and advanced admin features
+
 ### Core Tracking
 - **Real-time GPS tracking** with high accuracy positioning
 - **Customizable tracking intervals** (1s to 30s)
@@ -42,15 +52,36 @@ A comprehensive web application for real-time GPS route tracking, route history 
 - **Route history viewer** with detailed analytics
 - **Export format customization** for different use cases
 - **GPS data point overlay** — toggle small dot markers per recorded point with per-point popups (speed, altitude, timestamp)
-- **Route point editing** (admin) — add, delete, and drag-to-move individual GPS points via right-click context menu; changes saved back to server with distance recalculation
+- **Advanced route editing** (admin) — comprehensive point manipulation system:
+  - **Point dragging** — drag individual GPS points with visual feedback
+  - **Point addition/deletion** — add points between existing ones or remove unwanted points
+  - **Point merging system** — select multiple points via rectangle selection or Alt+click and merge them into single representative points
+  - **Edit mode controls** — Alt+drag for map movement, fixed map background to prevent interference
+  - **Route analysis integration** — automatic road/off-road classification with smart color coding
+  - **Route copying** — duplicate routes for debugging and testing purposes
+  - **Undo/save/discard** — full edit session management with change persistence
+
+### Enhanced User Experience
+- **Smart route visualization** — automatic analysis distinguishes road segments (green) from off-road sections (brown)
+- **Pause point detection** — automatically identifies and visualizes route stops and breaks
+- **Performance optimization** — intelligent point simplification for smooth rendering of large routes (1000+ points)
+- **Biometric authentication** — PassKey/WebAuthn support for secure, password-free login
+- **Touch-optimized interface** — responsive design optimized for mobile route editing
+- **Real-time feedback** — live distance calculations and route statistics during editing
 
 ## 🛠️ Technology Stack
 
 - **Frontend**: HTML5, CSS3 (CSS Grid/Flexbox), Vanilla JavaScript (ES6+)
 - **Mapping**: Leaflet.js with OpenStreetMap tiles
-- **Storage**: localStorage for offline data persistence
-- **Authentication**: Client-side user management system
-- **Containerization**: Docker with nginx
+- **Backend**: Node.js 16+ with Express.js framework
+- **Authentication**: @simplewebauthn/server v9 for PassKey/WebAuthn biometric authentication
+- **Session Management**: express-session with file-based persistence
+- **Security**: bcrypt password hashing, CORS protection, input validation
+- **Storage**: File-based JSON storage with atomic operations
+- **File Processing**: multer for uploads, sharp for image processing
+- **Email**: nodemailer for admin notifications
+- **Containerization**: Docker with multi-stage builds and nginx
+- **Architecture**: Process clustering (4 workers) for performance
 - **PWA**: Service Worker support for offline functionality
 
 ## 📱 Mobile Features
@@ -114,6 +145,31 @@ route-tracker:
 
 ## 🎯 Usage Guide
 
+### Advanced Route Editing (Admin)
+1. **Load any historical route** from the route history
+2. **Click "Edit Points"** to enter advanced editing mode
+3. **Drag individual points** to adjust GPS track accuracy
+4. **Click points** to see popup with "Add After" and "Delete" options
+5. **Use "Merge Points" mode** for combining clustered GPS points:
+   - Draw rectangle around points to select multiple
+   - Alt+click to select individual points
+   - Click "Execute Merge" to combine into single representative point
+6. **Navigate with Alt+drag** to move the map while editing
+7. **Save changes** to persist edits or discard to revert
+
+### Route Analysis & Visualization
+- **Smart route display** automatically analyzes routes for road vs off-road classification
+- **Pause points** are automatically detected and visualized
+- **Performance optimization** handles routes with thousands of points smoothly
+- **Toggle features** like data points and pause points for different views
+- **Route statistics** provide detailed analytics on distance, time, elevation, and speed
+
+### Authentication & Security
+- **Modern PassKey login** using biometric authentication (fingerprint, Face ID, etc.)
+- **Traditional email/password** available as fallback
+- **Secure session management** with 24-hour sessions
+- **Admin controls** for user and route management
+
 ### Getting Started
 1. **Open the application** in your web browser
 2. **Allow location access** when prompted
@@ -148,7 +204,29 @@ route-tracker:
 - **Usage statistics** and analytics
 - **Data backup** and export capabilities
 
-## 🔧 Configuration
+## � Documentation
+
+### Quick Reference
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Comprehensive system architecture and technical details
+- **[DEVELOPER.md](DEVELOPER.md)** - Developer guide for contributing and extending functionality  
+- **[CHANGELOG.md](CHANGELOG.md)** - Complete version history and feature evolution
+- **[docs/user-guide.en.md](docs/user-guide.en.md)** - End-user documentation and tutorials
+- **[docs/admin-guide.en.md](docs/admin-guide.en.md)** - Administrative features and management
+
+### Development Resources
+- **API Documentation** - See ARCHITECTURE.md for complete endpoint reference
+- **Frontend Architecture** - RouteTracker class documentation in DEVELOPER.md
+- **Deployment Guide** - Container and production setup in multiple guides
+- **Feature Implementation** - Step-by-step development patterns and examples
+
+### Quick Links
+- 🏗️ **System Design** → [Architecture Overview](ARCHITECTURE.md#system-architecture)
+- 🔧 **Development Setup** → [Developer Quick Start](DEVELOPER.md#quick-start)  
+- 🎯 **Feature Guides** → [Implementation Patterns](DEVELOPER.md#feature-implementation)
+- 🚀 **Recent Changes** → [Latest Enhancements](CHANGELOG.md#200---2026-04-11)
+- 🐛 **Troubleshooting** → [Common Issues](DEVELOPER.md#debugging-guide)
+
+## �🔧 Configuration
 
 ### Environment Variables
 - `PORT`: Server port (default: 80)

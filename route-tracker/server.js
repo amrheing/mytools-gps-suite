@@ -22,15 +22,10 @@ const bcrypt = require('bcrypt');
 const session = require('express-session');
 const FileStore = require('session-file-store')(session);
 const multer = require('multer');
-const sharp = require('sharp');
-const exifr = require('exifr');
-const {
-    generateRegistrationOptions,
-    verifyRegistrationResponse,
-    generateAuthenticationOptions,
-    verifyAuthenticationResponse
-} = require('@simplewebauthn/server');
+// const sharp = require('sharp');
+// const exifr = require('exifr');
 const nodemailer = require('nodemailer');
+const { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -340,6 +335,27 @@ const createNewRoute = (deviceId, routeName) => {
         metadata: {
             source: 'owntracks',
             version: '1.0'
+        },
+        // Enhanced analysis data
+        analysis: {
+            segments: [],
+            pausePoints: [],
+            splitPoints: [],
+            lastAnalyzed: null,
+            version: '2.0'
+        },
+        // Visual configuration
+        visualization: {
+            colors: {
+                road: '#2ecc71',      // Green for roads
+                offroad: '#8b4513',   // Brown for nature/offroad
+                pause: '#f39c12',     // Orange for pause points
+                approach: '#e74c3c',  // Red for approach tracks
+                departure: '#3498db'  // Blue for departure tracks
+            },
+            showAnalysis: true,
+            showPausePoints: true,
+            showTrackOutlines: true
         }
     };
 };
@@ -365,6 +381,16 @@ const calculateDistance = (lat1, lng1, lat2, lng2) => {
     return R * c;
 };
 
+// Calculate bearing between two points
+const calculateBearing = (lat1, lng1, lat2, lng2) => {
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const y = Math.sin(dLng) * Math.cos(lat2 * Math.PI / 180);
+    const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
+              Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLng);
+    const bearing = Math.atan2(y, x) * 180 / Math.PI;
+    return (bearing + 360) % 360;
+};
+
 // Parse OwnTracks JSON location payload
 // OwnTracks HTTP mode POSTs all message types to the same endpoint.
 // Only _type=location contains GPS data; all others are acknowledged with [].
@@ -385,6 +411,324 @@ const parseGPSData = (data) => {
 
     if (point.lat == null || point.lng == null || isNaN(point.lat) || isNaN(point.lng)) return [];
     return [point];
+};
+
+// =====================
+// ENHANCED ROUTE ANALYSIS FUNCTIONS
+// =====================
+
+// Simple road proximity detection using speed and movement patterns
+const detectRoadProximity = async (point, previousPoints = []) => {
+    try {
+        // Basic heuristics for road detection:
+        // 1. Speed > 30 km/h usually indicates road travel
+        // 2. Consistent bearing suggests road following
+        // 3. Regular GPS accuracy indicates good signal (roads vs forest)
+        
+        const speedKmh = (point.speed || 0) * 3.6;
+        
+        // If moving fast, likely on road
+        if (speedKmh > 30) return true;
+        
+        // If stationary or very slow, check context
+        if (speedKmh < 5) return false;
+        
+        // Check movement consistency with recent points
+        if (previousPoints.length >= 3) {
+            const recent = previousPoints.slice(-3);
+            const bearings = [];
+            
+            for (let i = 0; i < recent.length - 1; i++) {
+                const bearing = calculateBearing(
+                    recent[i].lat, recent[i].lng,
+                    recent[i + 1].lat, recent[i + 1].lng
+                );
+                bearings.push(bearing);
+            }
+            
+            // Calculate bearing variance - roads have consistent bearings
+            if (bearings.length > 1) {
+                const avgBearing = bearings.reduce((a, b) => a + b) / bearings.length;
+                const variance = bearings.reduce((sum, bearing) => {
+                    const diff = Math.min(Math.abs(bearing - avgBearing), 360 - Math.abs(bearing - avgBearing));
+                    return sum + diff * diff;
+                }, 0) / bearings.length;
+                
+                // Low variance suggests road following
+                return variance < 400; // degrees squared
+            }
+        }
+        
+        // Default: assume off-road for hiking speeds
+        return speedKmh > 15;
+        
+    } catch (error) {
+        console.log('Road detection error:', error.message);
+        return false;
+    }
+};
+
+// Analyze route segments for map matching
+const analyzeRouteSegments = async (points) => {
+    if (!points || points.length < 2) return [];
+    
+    const segments = [];
+    let currentSegment = { 
+        type: 'unknown', 
+        points: [], 
+        startIndex: 0,
+        geometry: []
+    };
+    
+    for (let i = 0; i < points.length; i++) {
+        const point = points[i];
+        const previousPoints = points.slice(Math.max(0, i - 5), i);
+        const isOnRoad = await detectRoadProximity(point, previousPoints);
+        const segmentType = isOnRoad ? 'road' : 'offroad';
+        
+        if (segmentType !== currentSegment.type && currentSegment.points.length > 0) {
+            // Segment type changed - finalize current and start new
+            currentSegment.endIndex = i - 1;
+            currentSegment.geometry = optimizeSegmentGeometry(currentSegment);
+            segments.push(currentSegment);
+            
+            currentSegment = {
+                type: segmentType,
+                points: [point],
+                startIndex: i,
+                geometry: []
+            };
+        } else {
+            currentSegment.type = segmentType;
+            currentSegment.points.push(point);
+        }
+    }
+    
+    // Don't forget the last segment
+    if (currentSegment.points.length > 0) {
+        currentSegment.endIndex = points.length - 1;
+        currentSegment.geometry = optimizeSegmentGeometry(currentSegment);
+        segments.push(currentSegment);
+    }
+    
+    return segments;
+};
+
+// Optimize segment geometry for rendering
+const optimizeSegmentGeometry = (segment) => {
+    if (!segment.points || segment.points.length === 0) return [];
+    
+    if (segment.type === 'road' && segment.points.length > 10) {
+        // For road segments, use Douglas-Peucker simplification
+        return simplifyPolyline(segment.points, 0.0001); // ~10m tolerance
+    } else {
+        // For off-road, keep more detail but still optimize
+        return segment.points.length > 50 ? 
+            simplifyPolyline(segment.points, 0.00005) : // ~5m tolerance
+            segment.points.map(p => [p.lat, p.lng]);
+    }
+};
+
+// Simple Douglas-Peucker line simplification
+const simplifyPolyline = (points, tolerance) => {
+    if (points.length <= 2) return points.map(p => [p.lat, p.lng]);
+    
+    const simplified = [points[0]];
+    
+    for (let i = 1; i < points.length - 1; i++) {
+        const prev = points[i - 1];
+        const curr = points[i];
+        const next = points[i + 1];
+        
+        // Calculate perpendicular distance to line between prev and next
+        const distance = pointToLineDistance(curr, prev, next);
+        
+        if (distance > tolerance || i % 5 === 0) { // Keep every 5th point minimum
+            simplified.push(curr);
+        }
+    }
+    
+    simplified.push(points[points.length - 1]);
+    return simplified.map(p => [p.lat, p.lng]);
+};
+
+// Calculate perpendicular distance from point to line
+const pointToLineDistance = (point, lineStart, lineEnd) => {
+    const A = point.lat - lineStart.lat;
+    const B = point.lng - lineStart.lng;
+    const C = lineEnd.lat - lineStart.lat;
+    const D = lineEnd.lng - lineStart.lng;
+    
+    const dot = A * C + B * D;
+    const lenSq = C * C + D * D;
+    
+    if (lenSq === 0) return Math.sqrt(A * A + B * B);
+    
+    const param = dot / lenSq;
+    
+    let xx, yy;
+    if (param < 0) {
+        xx = lineStart.lat;
+        yy = lineStart.lng;
+    } else if (param > 1) {
+        xx = lineEnd.lat;
+        yy = lineEnd.lng;
+    } else {
+        xx = lineStart.lat + param * C;
+        yy = lineStart.lng + param * D;
+    }
+    
+    const dx = point.lat - xx;
+    const dy = point.lng - yy;
+    return Math.sqrt(dx * dx + dy * dy);
+};
+
+// Detect pause points in route
+const detectPausePoints = (points) => {
+    if (!points || points.length < 2) return [];
+    
+    const pausePoints = [];
+    const PAUSE_THRESHOLD = 3600000; // 1 hour in ms
+    const MOVEMENT_RADIUS = 50; // 50 meters
+    
+    let pauseStart = null;
+    let pauseCenter = null;
+    let pausePoints_temp = [];
+    
+    for (let i = 0; i < points.length - 1; i++) {
+        const point = points[i];
+        const nextPoint = points[i + 1];
+        
+        if (!point.timestamp || !nextPoint.timestamp) continue;
+        
+        const distance = calculateDistance(point.lat, point.lng, nextPoint.lat, nextPoint.lng) * 1000; // km to m
+        const timeDiff = new Date(nextPoint.timestamp) - new Date(point.timestamp);
+        
+        if (distance < MOVEMENT_RADIUS) {
+            if (!pauseStart) {
+                pauseStart = point;
+                pauseCenter = { lat: point.lat, lng: point.lng, count: 1 };
+                pausePoints_temp = [i];
+            } else {
+                // Update pause center (running average)
+                pauseCenter.lat = (pauseCenter.lat * pauseCenter.count + point.lat) / (pauseCenter.count + 1);
+                pauseCenter.lng = (pauseCenter.lng * pauseCenter.count + point.lng) / (pauseCenter.count + 1);
+                pauseCenter.count++;
+                pausePoints_temp.push(i);
+            }
+            
+            const pauseDuration = new Date(point.timestamp) - new Date(pauseStart.timestamp);
+            if (pauseDuration >= PAUSE_THRESHOLD) {
+                // Found a significant pause
+                const pausePoint = {
+                    lat: pauseCenter.lat,
+                    lng: pauseCenter.lng,
+                    startTime: pauseStart.timestamp,
+                    endTime: point.timestamp,
+                    duration: Math.round(pauseDuration / 1000), // seconds
+                    pointIndices: [...pausePoints_temp],
+                    approaches: findApproachTracks(points, pausePoints_temp[0], pauseCenter),
+                    departures: findDepartureTracks(points, pausePoints_temp[pausePoints_temp.length - 1], pauseCenter)
+                };
+                
+                pausePoints.push(pausePoint);
+                console.log(`🛑 Detected pause: ${Math.round(pauseDuration/60000)}min at [${pauseCenter.lat.toFixed(6)}, ${pauseCenter.lng.toFixed(6)}]`);
+            }
+        } else {
+            // Movement detected - reset pause tracking
+            pauseStart = null;
+            pauseCenter = null;
+            pausePoints_temp = [];
+        }
+    }
+    
+    return pausePoints;
+};
+
+// Find approach tracks leading to a pause point
+const findApproachTracks = (points, pauseStartIndex, pauseCenter) => {
+    const approaches = [];
+    const TRACK_DISTANCE = 1000; // Look back 1km
+    const approach = [];
+    
+    for (let i = pauseStartIndex - 1; i >= 0; i--) {
+        const point = points[i];
+        const distance = calculateDistance(point.lat, point.lng, pauseCenter.lat, pauseCenter.lng) * 1000; // km to m
+        
+        if (distance > TRACK_DISTANCE) break;
+        
+        approach.unshift({
+            index: i,
+            lat: point.lat,
+            lng: point.lng,
+            distance: distance,
+            bearing: calculateBearing(point.lat, point.lng, pauseCenter.lat, pauseCenter.lng)
+        });
+    }
+    
+    if (approach.length > 0) {
+        approaches.push({
+            geometry: approach.map(p => [p.lat, p.lng]),
+            distance: Math.max(...approach.map(p => p.distance)),
+            points: approach.length
+        });
+    }
+    
+    return approaches;
+};
+
+// Find departure tracks leaving from a pause point
+const findDepartureTracks = (points, pauseEndIndex, pauseCenter) => {
+    const departures = [];
+    const TRACK_DISTANCE = 1000; // Look ahead 1km
+    const departure = [];
+    
+    for (let i = pauseEndIndex + 1; i < points.length; i++) {
+        const point = points[i];
+        const distance = calculateDistance(point.lat, point.lng, pauseCenter.lat, pauseCenter.lng) * 1000; // km to m
+        
+        if (distance > TRACK_DISTANCE) break;
+        
+        departure.push({
+            index: i,
+            lat: point.lat,
+            lng: point.lng,
+            distance: distance,
+            bearing: calculateBearing(pauseCenter.lat, pauseCenter.lng, point.lat, point.lng)
+        });
+    }
+    
+    if (departure.length > 0) {
+        departures.push({
+            geometry: departure.map(p => [p.lat, p.lng]),
+            distance: Math.max(...departure.map(p => p.distance)),
+            points: departure.length
+        });
+    }
+    
+    return departures;
+};
+
+// Analyze complete route for enhanced features
+const analyzeCompleteRoute = async (route) => {
+    if (!route.points || route.points.length < 10) {
+        return { segments: [], pausePoints: [], splitPoints: [] };
+    }
+    
+    console.log(`🔍 Analyzing route with ${route.points.length} points...`);
+    
+    const [segments, pausePoints] = await Promise.all([
+        analyzeRouteSegments(route.points),
+        Promise.resolve(detectPausePoints(route.points))
+    ]);
+    
+    console.log(`✅ Analysis complete: ${segments.length} segments, ${pausePoints.length} pause points`);
+    
+    return {
+        segments,
+        pausePoints,
+        splitPoints: [] // User-defined split points (added via UI)
+    };
 };
 
 // =====================
@@ -1122,6 +1466,23 @@ app.post('/api/gps', validateOwnTracksAuth, async (req, res) => {
         deviceData.totalPoints += points.length;
         deviceData.lastUpdate = new Date().toISOString();
         
+        // Trigger route analysis for large routes or when completed
+        const shouldAnalyze = currentRoute.points.length > 100 && 
+                             (currentRoute.points.length % 500 === 0 || // Every 500 points
+                              currentRoute.status !== 'active'); // When route completed
+        
+        if (shouldAnalyze && (!currentRoute.analysis?.lastAnalyzed || 
+            new Date() - new Date(currentRoute.analysis.lastAnalyzed) > 300000)) { // 5 min cooldown
+            try {
+                console.log(`🔍 Triggering route analysis for ${currentRoute.name}...`);
+                currentRoute.analysis = await analyzeCompleteRoute(currentRoute);
+                currentRoute.analysis.lastAnalyzed = new Date().toISOString();
+                console.log(`✅ Route analysis completed for ${currentRoute.name}`);
+            } catch (error) {
+                console.error('Route analysis failed:', error.message);
+            }
+        }
+        
         // Save data
         await saveRoute(currentRoute);
         await saveDeviceData(deviceId, deviceData);
@@ -1250,6 +1611,153 @@ app.get('/api/routes/:routeId', requireLogin, validateToken, async (req, res) =>
         }
     } catch (error) {
         res.status(404).json({ error: 'Route not found' });
+    }
+});
+
+// Trigger route analysis
+app.post('/api/routes/:routeId/analyze', requireLogin, validateToken, async (req, res) => {
+    try {
+        const routeId = req.params.routeId;
+        
+        // Check if user can access this route
+        if (req.session.role === 'share' && req.session.shareRouteId !== routeId) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+        
+        const routeFile = path.join(DATA_DIR, 'routes', `${routeId}.json`);
+        let routeData;
+        
+        try {
+            const data = await fs.readFile(routeFile, 'utf8');
+            routeData = JSON.parse(data);
+        } catch (error) {
+            return res.status(404).json({ error: 'Route not found' });
+        }
+        
+        // Perform route analysis
+        console.log(`🔍 Manual route analysis triggered for ${routeData.name}`);
+        
+        try {
+            const analysis = await analyzeCompleteRoute(routeData);
+            routeData.analysis = analysis;
+            routeData.analysis.lastAnalyzed = new Date().toISOString();
+            
+            // Save updated route with analysis
+            await saveRoute(routeData);
+            
+            console.log(`✅ Manual route analysis completed for ${routeData.name}`);
+            
+            res.json({
+                success: true,
+                message: 'Route analysis completed',
+                analysis: analysis,
+                route: routeData
+            });
+        } catch (analysisError) {
+            console.error('Route analysis failed:', analysisError);
+            res.status(500).json({ 
+                error: 'Route analysis failed', 
+                details: analysisError.message 
+            });
+        }
+        
+    } catch (error) {
+        console.error('Route analysis endpoint error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Add route archiving endpoint  
+app.post('/api/routes/:routeId/archive', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const routeId = req.params.routeId;
+        const routeFile = path.join(DATA_DIR, 'routes', `${routeId}.json`);
+        
+        let routeData;
+        try {
+            const data = await fs.readFile(routeFile, 'utf8');
+            routeData = JSON.parse(data);
+        } catch (error) {
+            return res.status(404).json({ error: 'Route not found' });
+        }
+        
+        // Mark as archived
+        routeData.status = 'archived';
+        routeData.archivedAt = new Date().toISOString();
+        
+        await saveRoute(routeData);
+        
+        console.log(`📦 Route archived: ${routeData.name}`);
+        
+        res.json({
+            success: true,
+            message: 'Route archived successfully'
+        });
+        
+    } catch (error) {
+        console.error('Route archive error:', error);
+        res.status(500).json({ error: 'Failed to archive route' });
+    }
+});
+
+// Copy a route for testing/debugging
+app.post('/api/routes/:routeId/copy', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const sourceRouteId = req.params.routeId;
+        const { name, deviceId } = req.body;
+        
+        if (!name || !name.trim()) {
+            return res.status(400).json({ error: 'Route name is required' });
+        }
+        
+        // Read source route 
+        const sourceFile = path.join(DATA_DIR, 'routes', `${sourceRouteId}.json`);
+        const sourceData = await fs.readFile(sourceFile, 'utf8');
+        const sourceRoute = JSON.parse(sourceData);
+        
+        // Create new route ID
+        const newRouteId = `${(deviceId || sourceRoute.deviceId)}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Create copied route with new metadata
+        const copiedRoute = {
+            ...sourceRoute,
+            id: newRouteId,
+            name: name.trim(),
+            deviceId: deviceId || sourceRoute.deviceId,
+            copyOf: sourceRouteId,
+            copyTimestamp: new Date().toISOString(),
+            status: 'completed', // Copies are never active
+            endTime: sourceRoute.endTime || new Date().toISOString() // Ensure end time is set
+        };
+        
+        // Remove any live/active flags
+        delete copiedRoute.isLive;
+        
+        // Save copied route
+        const newFile = path.join(DATA_DIR, 'routes', `${newRouteId}.json`);
+        await fs.writeFile(newFile, JSON.stringify(copiedRoute, null, 2), 'utf8');
+        
+        // Update device routes list
+        const device = await getDeviceData(copiedRoute.deviceId);
+        if (!device.routes.includes(newRouteId)) {
+            device.routes.unshift(newRouteId);
+            
+            const deviceFile = path.join(DATA_DIR, 'devices', `${copiedRoute.deviceId}.json`);
+            await fs.writeFile(deviceFile, JSON.stringify(device, null, 2), 'utf8');
+        }
+        
+        console.log(`📋 Route copied: ${sourceRouteId} → ${newRouteId} ("${name}")`);
+        
+        res.json({ 
+            success: true, 
+            message: 'Route copied successfully',
+            newRouteId,
+            newRouteName: name.trim()
+        });
+        
+    } catch (error) {
+        console.error('Error copying route:', error);
+        res.status(500).json({ error: 'Failed to copy route: ' + error.message });
     }
 });
 

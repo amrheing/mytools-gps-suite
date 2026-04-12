@@ -215,18 +215,99 @@ class RouteTracker {
     displayRoute(routeData) {
         // Exit edit mode before loading a new route
         if (this.editMode) this.exitEditMode(false);
+        
+        // Store current route data for editing
+        this.currentRouteData = routeData;
 
         // Clear existing layers
-        if (this.currentRoute) {
-            this.map.removeLayer(this.currentRoute);
-        }
-        this.map.eachLayer(layer => {
-            if (layer instanceof L.Marker || layer instanceof L.Polyline) {
-                this.map.removeLayer(layer);
-            }
-        });
+        this.clearRoute();
         
-        // Create new route line
+        // Check if route has enhanced analysis data - use smart display if available
+        if (routeData && routeData.analysis && routeData.analysis.segments && routeData.analysis.segments.length > 0) {
+            this.displaySmartRoute(routeData);
+        } else {
+            // Always display the route first, then optionally enhance
+            this.displaySimpleRoute(routeData);
+            
+            // Auto-trigger analysis for substantial routes (>100 points) in background
+            if (routeData?.points?.length > 100 && !routeData.analysis) {
+                setTimeout(() => this.triggerRouteAnalysis(), 1000);
+            }
+        }
+        
+        // Auto-zoom to fit for historical routes (non-live routes)
+        if (routeData && !routeData.isLive && routeData.points && routeData.points.length > 0) {
+            setTimeout(() => {
+                if (typeof zoomToFit === 'function') zoomToFit();
+            }, 500);
+        }
+    }
+
+    // Enhanced smart route display with analysis
+    displaySmartRoute(routeData) {
+        if (!routeData?.points?.length) return;
+        
+        console.log('🎨 Rendering smart route with analysis...');
+        this.routeLayers = this.routeLayers || [];
+        
+        // 1. Draw route segments with appropriate colors
+        if (routeData.analysis.segments && routeData.analysis.segments.length > 0) {
+            routeData.analysis.segments.forEach((segment, index) => {
+                const colors = routeData.visualization?.colors || {
+                    road: '#2ecc71',
+                    offroad: '#8b4513'
+                };
+                
+                const color = segment.type === 'road' ? colors.road : colors.offroad;
+                const geometry = segment.geometry && segment.geometry.length > 0 ? 
+                                segment.geometry : 
+                                segment.points.map(p => [p.lat, p.lng]);
+                
+                if (geometry.length > 0) {
+                    const polyline = L.polyline(geometry, {
+                        color: color,
+                        weight: segment.type === 'road' ? 5 : 4,
+                        opacity: 0.8,
+                        className: `route-segment-${segment.type}`
+                    });
+                    
+                    // Add tooltip for segment info with simplified count
+                    const displayCount = segment.geometry && segment.geometry.length > 0 ? 
+                                        segment.geometry.length : segment.points.length;
+                    polyline.bindTooltip(
+                        `${segment.type.toUpperCase()}: ${(segment.distance_km || 0).toFixed(1)}km`, 
+                        {
+                            sticky: true,
+                            className: `segment-tooltip-${segment.type}`
+                        }
+                    );
+                    
+                    this.routeLayers.push(polyline.addTo(this.map));
+                    
+                    if (index === 0) this.currentRoute = polyline; // For bounds calculation
+                }
+            });
+            
+            console.log(`✅ Drew ${routeData.analysis.segments.length} route segments`);
+        } else {
+            // Fallback to simple rendering if no segments
+            this.displaySimpleRoute(routeData);
+        }
+        
+        // 2. Draw pause points with yellow circles
+        if (routeData.analysis.pausePoints && routeData.visualization?.showPausePoints) {
+            this.drawPausePoints(routeData.analysis.pausePoints, routeData.visualization.colors);
+        }
+        
+        // 3. Add start/end markers
+        this.addStartEndMarkers(routeData);
+        
+        // 4. Build data-point dots layer (optional)
+        this.buildRouteDataPoints(routeData);
+    }
+
+    // Simple route display (fallback)
+    displaySimpleRoute(routeData) {
         if (routeData && routeData.points && routeData.points.length > 0) {
             const latLngs = routeData.points.map(p => [p.lat, p.lng]);
             
@@ -236,48 +317,228 @@ class RouteTracker {
                 opacity: 0.8
             }).addTo(this.map);
 
+            // Add start/end markers
+            this.addStartEndMarkers(routeData);
+            
             // Build data-point dots layer
             this.buildRouteDataPoints(routeData);
+        }
+    }
+
+    // Draw pause points with approach/departure tracks
+    drawPausePoints(pausePoints, colors = {}) {
+        const pauseColors = {
+            pause: colors.pause || '#f39c12',
+            approach: colors.approach || '#e74c3c', 
+            departure: colors.departure || '#3498db',
+            ...colors
+        };
+        
+        pausePoints.forEach((pause, pauseIndex) => {
+            // Main pause circle (smaller size, more transparent)
+            const pauseCircle = L.circle([pause.lat, pause.lng], {
+                color: pauseColors.pause,
+                fillColor: pauseColors.pause,
+                fillOpacity: 0.5,
+                radius: 50,
+                weight: 2,
+                className: 'pause-circle'
+            });
             
-            // Add start/end markers
-            const startPoint = routeData.points[0];
-            const endPoint = routeData.points[routeData.points.length - 1];
+            const popup = this.createPausePopup(pause);
+            pauseCircle.bindPopup(popup);
+            this.routeLayers.push(pauseCircle.addTo(this.map));
             
-            L.marker([startPoint.lat, startPoint.lng], {
+            // Draw approach tracks with colored outlines
+            if (pause.approaches && this.currentRouteData?.visualization?.showTrackOutlines) {
+                pause.approaches.forEach((approach, i) => {
+                    if (approach.geometry && approach.geometry.length > 0) {
+                        // Approach track outline
+                        const outlineColor = pauseColors.approach;
+                        const outline = L.polyline(approach.geometry, {
+                            color: outlineColor,
+                            weight: 6,
+                            opacity: 0.7,
+                            className: 'approach-outline'
+                        });
+                        
+                        this.routeLayers.push(outline.addTo(this.map));
+                        
+                        // Approach direction arrow
+                        const lastPoint = approach.geometry[approach.geometry.length - 1];
+                        const arrow = L.marker(lastPoint, {
+                            icon: L.divIcon({
+                                className: 'approach-arrow',
+                                html: `<div style="color:${outlineColor};">→</div>`,
+                                iconSize: [20, 20]
+                            })
+                        });
+                        this.routeLayers.push(arrow.addTo(this.map));
+                    }
+                });
+            }
+            
+            // Draw departure tracks with colored outlines  
+            if (pause.departures && this.currentRouteData?.visualization?.showTrackOutlines) {
+                pause.departures.forEach((departure, i) => {
+                    if (departure.geometry && departure.geometry.length > 0) {
+                        // Departure track outline
+                        const outlineColor = pauseColors.departure;
+                        const outline = L.polyline(departure.geometry, {
+                            color: outlineColor,
+                            weight: 6,
+                            opacity: 0.7,
+                            className: 'departure-outline'
+                        });
+                        
+                        this.routeLayers.push(outline.addTo(this.map));
+                        
+                        // Departure direction arrow
+                        const firstPoint = departure.geometry[0];
+                        const arrow = L.marker(firstPoint, {
+                            icon: L.divIcon({
+                                className: 'departure-arrow',
+                                html: `<div style="color:${outlineColor};">←</div>`,
+                                iconSize: [20, 20]
+                            })
+                        });
+                        this.routeLayers.push(arrow.addTo(this.map));
+                    }
+                });
+            }
+            
+            console.log(`🛑 Drew pause point ${pauseIndex + 1}: ${Math.round(pause.duration/3600)}h`);
+        });
+    }
+
+    createPausePopup(pause) {
+        const duration = Math.round(pause.duration / 3600 * 10) / 10; // Hours with 1 decimal
+        const startTime = new Date(pause.startTime).toLocaleString();
+        const endTime = new Date(pause.endTime).toLocaleString();
+        
+        return `
+            <div class="pause-popup" style="font-size:12px; max-width:200px;">
+                <h4 style="margin:0 0 8px 0; color:#f39c12;">🛑 Pause Point</h4>
+                <p style="margin:2px 0;"><strong>Duration:</strong> ${duration}h</p>
+                <p style="margin:2px 0;"><strong>From:</strong> ${startTime}</p>
+                <p style="margin:2px 0;"><strong>To:</strong> ${endTime}</p>
+                <p style="margin:2px 0;"><strong>Approaches:</strong> ${pause.approaches?.length || 0}</p>
+                <p style="margin:2px 0;"><strong>Departures:</strong> ${pause.departures?.length || 0}</p>
+            </div>
+        `;
+    }
+
+    addStartEndMarkers(routeData) {
+        if (!routeData?.points?.length) return;
+        
+        const startPoint = routeData.points[0];
+        const endPoint = routeData.points[routeData.points.length - 1];
+        
+        // Initialize layer tracking if needed
+        if (!this.routeLayers) this.routeLayers = [];
+        
+        // Start marker
+        const startMarker = L.marker([startPoint.lat, startPoint.lng], {
+            icon: L.divIcon({
+                className: '',
+                html: `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;">
+                    <div style="background:#27ae60;color:white;font-size:10px;font-weight:700;padding:1px 5px;border-radius:3px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.4);line-height:1.4;">START</div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="#27ae60" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,0.5));"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                    </div>`,
+                iconSize: [50, 44],
+                iconAnchor: [25, 44]
+            })
+        })
+        .bindPopup(`Start: ${routeData.name}<br>Time: ${new Date(startPoint.timestamp).toLocaleString()}`)
+        .addTo(this.map);
+        
+        this.routeLayers.push(startMarker);
+        
+        // End marker (if different from start)
+        if (routeData.points.length > 1) {
+            const endMarker = L.marker([endPoint.lat, endPoint.lng], {
                 icon: L.divIcon({
                     className: '',
                     html: `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;">
-                        <div style="background:#27ae60;color:white;font-size:10px;font-weight:700;padding:1px 5px;border-radius:3px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.4);line-height:1.4;">START</div>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="#27ae60" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,0.5));"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                        <div style="background:#c0392b;color:white;font-size:10px;font-weight:700;padding:1px 5px;border-radius:3px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.4);line-height:1.4;">END</div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="#c0392b" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,0.5));"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                     </div>`,
                     iconSize: [50, 44],
                     iconAnchor: [25, 44]
                 })
             })
-            .bindPopup(`Start: ${routeData.name}<br>Time: ${new Date(startPoint.timestamp).toLocaleString()}`)
+            .bindPopup(`Current: ${routeData.name}<br>Time: ${new Date(endPoint.timestamp).toLocaleString()}<br>Speed: ${endPoint.speed ? (endPoint.speed * 3.6).toFixed(1) + ' km/h' : 'N/A'}`)
             .addTo(this.map);
             
-            if (routeData.points.length > 1) {
-                L.marker([endPoint.lat, endPoint.lng], {
-                    icon: L.divIcon({
-                        className: '',
-                        html: `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;">
-                            <div style="background:#c0392b;color:white;font-size:10px;font-weight:700;padding:1px 5px;border-radius:3px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.4);line-height:1.4;">END</div>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="#c0392b" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,0.5));"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                        </div>`,
-                        iconSize: [50, 44],
-                        iconAnchor: [25, 44]
-                    })
-                })
-                .bindPopup(`Current: ${routeData.name}<br>Time: ${new Date(endPoint.timestamp).toLocaleString()}<br>Speed: ${endPoint.speed ? (endPoint.speed * 3.6).toFixed(1) + ' km/h' : 'N/A'}`)
-                .addTo(this.map);
+            this.routeLayers.push(endMarker);
+        }
+    }
+
+    // Clear all route layers
+    clearRoute() {
+        // Clear old route layer
+        if (this.currentRoute) {
+            this.map.removeLayer(this.currentRoute);
+            this.currentRoute = null;
+        }
+        
+        // Clear all route-related layers
+        if (this.routeLayers) {
+            this.routeLayers.forEach(layer => {
+                if (this.map.hasLayer(layer)) {
+                    this.map.removeLayer(layer);
+                }
+            });
+            this.routeLayers = [];
+        }
+        
+        // Clear legacy layers (backward compatibility)
+        this.map.eachLayer(layer => {
+            if (layer instanceof L.Marker || layer instanceof L.Polyline || layer instanceof L.Circle) {
+                // Don't remove the base map tiles
+                if (layer.options && (layer.options.className?.includes('route') || 
+                    layer.options.className?.includes('pause') ||
+                    layer.options.className?.includes('approach') ||
+                    layer.options.className?.includes('departure'))) {
+                    this.map.removeLayer(layer);
+                }
             }
+        });
+    }
+
+    // Simplify points for display performance using distance-based decimation
+    simplifyPointsForDisplay(points, maxPoints = 200, minDistance = 50) {
+        if (!points || points.length <= maxPoints) return points;
+        
+        const simplified = [points[0]]; // Always keep first point
+        let lastIncluded = points[0];
+        
+        for (let i = 1; i < points.length - 1; i++) {
+            const current = points[i];
+            const distance = this.calculateDistance(lastIncluded.lat, lastIncluded.lng, current.lat, current.lng);
             
-            // Fit map to route on first load only; don't reset if user has manually panned/zoomed
-            if (!this.userHasMovedMap) {
-                this.map.fitBounds(latLngs, { padding: [20, 20], maxZoom: 17 });
+            // Always include merged points (critical for route continuity after point merging)
+            const isMergedPoint = current._merged === true;
+            
+            // Include point if it's merged, far enough, or we need to sample more
+            if (isMergedPoint || distance > minDistance || simplified.length < maxPoints / 2) {
+                simplified.push(current);
+                lastIncluded = current;
             }
         }
+        
+        simplified.push(points[points.length - 1]); // Always keep last point
+        return simplified;
+    }
+    
+    calculateDistance(lat1, lng1, lat2, lng2) {
+        const R = 6371000; // Earth radius in meters
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLng/2) * Math.sin(dLng/2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
 
     buildRouteDataPoints(routeData) {
@@ -286,21 +547,31 @@ class RouteTracker {
             this.map.removeLayer(this.dataPointsLayerGroup);
         }
         if (!routeData || !routeData.points) return;
-        routeData.points.forEach(p => {
+        
+        // Archive original points but simplify for display
+        const originalCount = routeData.points.length;
+        const displayPoints = this.simplifyPointsForDisplay(routeData.points, 200, 25);
+        
+        console.log(`📍 Point optimization: ${originalCount} original → ${displayPoints.length} displayed`);
+        
+        displayPoints.forEach((p, index) => {
+            const isKeyPoint = index === 0 || index === displayPoints.length - 1;
             const popup = `<div style="font-size:12px;">
                 📍 ${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}<br>
                 ${p.speed !== undefined && p.speed !== null ? `🚀 ${(p.speed * 3.6).toFixed(1)} km/h<br>` : ''}
                 ${p.alt !== undefined && p.alt !== null ? `⛰️ ${p.alt}m<br>` : ''}
-                🕒 ${new Date(p.timestamp).toLocaleTimeString()}
+                🕒 ${new Date(p.timestamp).toLocaleTimeString()}<br>
+                <small>${isKeyPoint ? '(Key Point)' : `Point ${index + 1}/${displayPoints.length}`}</small>
             </div>`;
             L.circleMarker([p.lat, p.lng], {
-                radius: 4,
-                color: '#c0392b',
-                fillColor: '#e74c3c',
-                fillOpacity: 0.85,
-                weight: 1.5
+                radius: isKeyPoint ? 6 : 4,
+                color: isKeyPoint ? '#27ae60' : '#c0392b',
+                fillColor: isKeyPoint ? '#2ecc71' : '#e74c3c',
+                fillOpacity: isKeyPoint ? 0.9 : 0.7,
+                weight: isKeyPoint ? 2 : 1.5
             }).bindPopup(popup).addTo(this.dataPointsLayerGroup);
         });
+        
         if (this.showDataPoints) {
             this.dataPointsLayerGroup.addTo(this.map);
         }
@@ -324,6 +595,7 @@ class RouteTracker {
             return;
         }
         this.editMode = true;
+        this.mergeMode = false;
         // Record when editing started — used to preserve GPS points that arrive during the session
         this._editSnapshotTime = this.currentRouteData.points.length > 0
             ? this.currentRouteData.points[this.currentRouteData.points.length - 1].timestamp
@@ -335,6 +607,18 @@ class RouteTracker {
         }
 
         this.buildEditMarkers();
+        this.setupRouteContextMenu();
+
+        // Disable map zoom and keyboard, and initially disable dragging
+        this.map.touchZoom.disable();
+        this.map.doubleClickZoom.disable();
+        this.map.scrollWheelZoom.disable();
+        this.map.boxZoom.disable();
+        this.map.keyboard.disable();
+        this.map.dragging.disable();
+        
+        // Set up Alt key listeners for map dragging control
+        this.setupEditModeKeyListeners();
 
         // Expand map to full window and lock page scroll
         const section = document.querySelector('.map-section');
@@ -349,12 +633,15 @@ class RouteTracker {
             btn.classList.add('btn-warning');
             btn.innerHTML = '<i class="fas fa-times"></i> Exit Edit';
         }
-        this.showNotification('Edit mode — right-click a point to add/delete · drag to move · Esc or "Exit Edit" to leave', 'info');
+        this.showNotification('Edit mode — Alt+drag to move map · drag points to move · right-click for options · Esc to exit', 'info');
     }
 
     exitEditMode(restorePoints = true) {
         this.editMode = false;
+        this.mergeMode = false;
         this.hideEditContextMenu();
+        this.exitMergeMode();
+        this.resetMergeMode();
 
         // Remove edit markers
         this.editMarkersGroup.clearLayers();
@@ -368,6 +655,17 @@ class RouteTracker {
         }
 
         document.getElementById('edit-toolbar').style.display = 'none';
+
+        // Re-enable all map interactions
+        this.map.dragging.enable();
+        this.map.touchZoom.enable();
+        this.map.doubleClickZoom.enable();
+        this.map.scrollWheelZoom.enable();
+        this.map.boxZoom.enable();
+        this.map.keyboard.enable();
+        
+        // Remove edit mode key listeners
+        this.removeEditModeKeyListeners();
 
         // Restore map to normal size and re-enable page scroll
         const section = document.querySelector('.map-section');
@@ -384,57 +682,60 @@ class RouteTracker {
     }
 
     buildEditMarkers() {
-        this.editMarkersGroup.clearLayers();
-        if (this.map.hasLayer(this.editMarkersGroup)) {
-            this.map.removeLayer(this.editMarkersGroup);
-        }
-
-        const points = this.currentRouteData.points;
-
-        points.forEach((p, i) => {
-            const isNew = p._new === true;
-            const bg = isNew ? '#3498db' : '#e74c3c';
-            const border = isNew ? '#2471a3' : '#c0392b';
-
-            const marker = L.marker([p.lat, p.lng], {
-                draggable: true,
-                zIndexOffset: 500,
-                icon: L.divIcon({
-                    className: '',
-                    html: `<div class="edit-point-dot" style="background:${bg};border-color:${border};">${isNew ? '<span class="edit-point-new">+</span>' : ''}</div>`,
-                    iconSize: [14, 14],
-                    iconAnchor: [7, 7]
-                })
-            });
-
-            // Drag → update coordinates + redraw polyline
-            marker.on('dragend', (e) => {
-                const ll = e.target.getLatLng();
-                this.currentRouteData.points[i].lat = +ll.lat.toFixed(7);
-                this.currentRouteData.points[i].lng = +ll.lng.toFixed(7);
-                this.redrawEditPolyline();
-            });
-
-            // Right-click → context menu
-            marker.on('contextmenu', (e) => {
-                L.DomEvent.preventDefault(e.originalEvent);
-                L.DomEvent.stopPropagation(e.originalEvent);
-                this.showEditContextMenu(e.originalEvent, i);
-            });
-
-            this.editMarkersGroup.addLayer(marker);
-        });
-
-        this.editMarkersGroup.addTo(this.map);
-        this.redrawEditPolyline();
+        // Use the new updateEditMarkers function which handles selection highlighting
+        this.updateEditMarkers();
     }
 
-    redrawEditPolyline() {
-        if (this.currentRoute && this.currentRouteData) {
-            this.currentRoute.setLatLngs(
-                this.currentRouteData.points.map(p => [p.lat, p.lng])
-            );
+    // Redraw polyline for edit mode with merged point handling
+    redrawMergedEditPolyline() {
+        if (!this.currentRouteData?.points) return;
+        
+        // Clear existing route display
+        this.clearRoute();
+        
+        // Draw clean polyline connecting all points including merged points
+        const routePoints = this.currentRouteData.points.map(p => [p.lat, p.lng]);
+        
+        if (routePoints.length > 1) {
+            this.currentRoute = L.polyline(routePoints, {
+                color: '#34495e',
+                weight: 4,
+                opacity: 0.7,
+                className: 'edit-mode-route'
+            }).addTo(this.map);
         }
+    }
+    
+    // Highlight merged point after creation
+    highlightMergedPoint(pointIndex) {
+        if (!this.currentRouteData?.points[pointIndex]) return;
+        
+        const point = this.currentRouteData.points[pointIndex];
+        
+        // Brief highlight animation
+        const highlight = L.circleMarker([point.lat, point.lng], {
+            radius: 15,
+            color: '#f39c12',
+            fillColor: 'transparent',
+            weight: 4,
+            opacity: 1
+        }).addTo(this.map);
+        
+        // Animate highlight
+        let opacity = 1;
+        const fadeOut = setInterval(() => {
+            opacity -= 0.1;
+            highlight.setStyle({ opacity });
+            if (opacity <= 0) {
+                this.map.removeLayer(highlight);
+                clearInterval(fadeOut);
+            }
+        }, 100);
+        
+        // Show instruction
+        setTimeout(() => {
+            this.showNotification('Drag the orange merged point to adjust its final position', 'info');
+        }, 1000);
     }
 
     showEditContextMenu(event, pointIndex) {
@@ -455,10 +756,781 @@ class RouteTracker {
         if (menu) menu.style.display = 'none';
     }
 
-    contextMenuAddAfter() {
+    // Enhanced context menu setup for route analysis features
+    setupRouteContextMenu() {
+        // Remove existing context menu listeners - using point-specific context menus instead
+        this.map.off('contextmenu');
+        
+        // Context menus are now handled by individual point markers
+        // This prevents conflicting menu systems during edit mode
+    }
+
+    createEnhancedContextMenu(latlng) {
+        const nearestPoint = this.findNearestRoutePoint(latlng.lat, latlng.lng);
+        
+        return L.popup({
+            className: 'route-context-menu enhanced-context',
+            closeButton: false,
+            autoClose: false,
+            closeOnClick: true
+        }).setLatLng(latlng).setContent(`
+            <div class="enhanced-context-menu">
+                <h4>🛠️ Route Tools</h4>
+                <div class="context-menu-section">
+                    <h5>✂️ Route Operations</h5>
+                    <button onclick="routeTracker.splitRouteAt(${latlng.lat}, ${latlng.lng}, ${nearestPoint.index})" class="context-btn">
+                        ✂️ Split Route Here
+                    </button>
+                    <button onclick="routeTracker.addPauseMarker(${latlng.lat}, ${latlng.lng})" class="context-btn">
+                        🛑 Mark as Pause Point
+                    </button>
+                </div>
+                <div class="context-menu-section">
+                    <h5>📍 Point Operations</h5>
+                    <button onclick="routeTracker.contextMenuAddAfter(); routeTracker.map.closePopup();" class="context-btn">
+                        ➕ Add Point After
+                    </button>
+                    <button onclick="routeTracker.contextMenuDelete(); routeTracker.map.closePopup();" class="context-btn">
+                        ❌ Delete Point
+                    </button>
+                </div>
+                <div class="context-menu-section">
+                    <h5>🔍 Analysis</h5>
+                    <button onclick="routeTracker.triggerRouteAnalysis()" class="context-btn">
+                        🔍 Re-analyze Route
+                    </button>
+                    <button onclick="routeTracker.toggleVisualizationFeature('showPausePoints')" class="context-btn">
+                        👁️ Toggle Pause Points
+                    </button>
+                </div>
+            </div>
+        `);
+    }
+
+    findNearestRoutePoint(lat, lng) {
+        if (!this.currentRouteData?.points?.length) return { index: 0, distance: Infinity };
+        
+        let nearestIndex = 0;
+        let nearestDistance = Infinity;
+        
+        this.currentRouteData.points.forEach((point, index) => {
+            const distance = Math.sqrt(
+                Math.pow(point.lat - lat, 2) + Math.pow(point.lng - lng, 2)
+            );
+            if (distance < nearestDistance) {
+                nearestDistance = distance;
+                nearestIndex = index;
+            }
+        });
+        
+        return { index: nearestIndex, distance: nearestDistance };
+    }
+
+    // Split route at specified location
+    async splitRouteAt(lat, lng, pointIndex) {
+        this.map.closePopup();
+        
+        if (pointIndex <= 0 || pointIndex >= this.currentRouteData.points.length - 1) {
+            this.showNotification('Cannot split at route start or end', 'warning');
+            return;
+        }
+        
+        const confirmed = confirm(`Split route at point ${pointIndex + 1}? This will create 2 separate routes:\\n\\n` +
+                                `Part 1: ${this.currentRouteData.points.length - pointIndex} points\\n` +
+                                `Part 2: ${pointIndex + 1} points`);
+        if (!confirmed) return;
+        
+        try {
+            // Create two new routes
+            const originalName = this.currentRouteData.name;
+            const splitTimestamp = this.currentRouteData.points[pointIndex].timestamp;
+            
+            const route1 = {
+                ...this.currentRouteData,
+                id: this.currentRouteData.id + '_part1',
+                name: originalName + ' (Part 1)',
+                points: this.currentRouteData.points.slice(0, pointIndex + 1),
+                endTime: splitTimestamp,
+                status: 'completed'
+            };
+            
+            const route2 = {
+                ...this.currentRouteData,  
+                id: this.currentRouteData.id + '_part2',
+                name: originalName + ' (Part 2)',
+                points: this.currentRouteData.points.slice(pointIndex),
+                startTime: splitTimestamp
+            };
+            
+            // Recalculate distances for both parts
+            route1.totalDistance = this.calculateRouteDistance(route1.points);
+            route2.totalDistance = this.calculateRouteDistance(route2.points);
+            
+            // Save split routes to server
+            const response1 = await this.apiCall(`/api/routes/new`, {
+                method: 'POST',
+                body: JSON.stringify(route1)
+            });
+            
+            const response2 = await this.apiCall(`/api/routes/new`, {
+                method: 'POST',
+                body: JSON.stringify(route2)
+            });
+            
+            if (response1.ok && response2.ok) {
+                this.showNotification(`Route split successfully! Created "${route1.name}" and "${route2.name}"`, 'success');
+                
+                // Optionally archive original route
+                const archiveOriginal = confirm('Archive the original route?');
+                if (archiveOriginal) {
+                    await this.archiveRoute(this.currentRouteData.id);
+                }
+                
+                this.exitEditMode(false);
+                await this.loadRoutesList();
+                
+                // Load the first part of the split route
+                this.displayRoute(route1);
+            } else {
+                throw new Error('Failed to save split routes');
+            }
+            
+        } catch (error) {
+            console.error('Route split error:', error);
+            this.showNotification('Failed to split route: ' + error.message, 'error');
+        }
+    }
+
+    // Add a pause marker at specified location
+    addPauseMarker(lat, lng) {
+        this.map.closePopup();
+        
+        if (!this.currentRouteData.analysis) {
+            this.currentRouteData.analysis = { segments: [], pausePoints: [], splitPoints: [] };
+        }
+        
+        const pausePoint = {
+            lat: lat,
+            lng: lng,
+            startTime: new Date().toISOString(),
+            endTime: new Date().toISOString(),
+            duration: 0,
+            manual: true,
+            pointIndices: [],
+            approaches: [],
+            departures: []
+        };
+        
+        this.currentRouteData.analysis.pausePoints.push(pausePoint);
+        
+        // Redraw with new pause point
+        this.displayRoute(this.currentRouteData);
+        this.showNotification('Manual pause point added', 'success');
+    }
+
+    // Trigger route analysis
+    async triggerRouteAnalysis() {
+        if (this.map?.closePopup) this.map.closePopup();
+        
+        if (!this.currentRouteData?.points?.length) {
+            console.log('No route data to analyze');
+            return;
+        }
+        
+        this.showNotification('Analyzing route...', 'info');
+        
+        try {
+            const response = await this.apiCall(`/api/routes/${this.currentRouteData.id}/analyze`, {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                const updatedRoute = await response.json();
+                this.currentRouteData = updatedRoute;
+                // Use smart display for analyzed routes
+                if (updatedRoute.analysis) {
+                    this.clearRoute();
+                    this.displaySmartRoute(updatedRoute);
+                }
+                this.showNotification('Route analysis completed!', 'success');
+            } else {
+                console.log('Analysis failed, keeping simple display');
+            }
+        } catch (error) {
+            console.error('Route analysis error:', error);
+            this.showNotification('Route analysis failed: ' + error.message, 'error');
+        }
+    }
+
+    // Toggle visualization features
+    toggleVisualizationFeature(feature) {
+        this.map.closePopup();
+        
+        if (!this.currentRouteData?.visualization) return;
+        
+        this.currentRouteData.visualization[feature] = !this.currentRouteData.visualization[feature];
+        
+        // Redraw route with updated visualization settings
+        this.displayRoute(this.currentRouteData);
+        
+        const status = this.currentRouteData.visualization[feature] ? 'enabled' : 'disabled';
+        this.showNotification(`${feature.replace(/([A-Z])/g, ' $1').toLowerCase()} ${status}`, 'info');
+    }
+
+    // ========================================================= 
+    // POINT MERGING FUNCTIONALITY
+    // ========================================================= 
+    
+    toggleMergeMode() {
+        this.mergeMode = !this.mergeMode;
+        const btn = document.getElementById('merge-mode-btn');
+        const executeBtn = document.getElementById('execute-merge-btn');
+        
+        if (this.mergeMode) {
+            this.enterMergeMode();
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-warning');
+            btn.innerHTML = '<i class="fas fa-times"></i> Cancel Merge';
+            executeBtn.style.display = 'inline-block';
+        } else {
+            this.exitMergeMode();
+            btn.classList.remove('btn-warning');
+            btn.classList.add('btn-primary');
+            btn.innerHTML = '<i class="fas fa-object-group"></i> Merge Points';
+            executeBtn.style.display = 'none';
+        }
+    }
+    
+    // Reset merge mode UI after successful merge
+    resetMergeMode() {
+        const btn = document.getElementById('merge-mode-btn');
+        const executeBtn = document.getElementById('execute-merge-btn');
+        
+        if (btn) {
+            btn.classList.remove('btn-warning');
+            btn.classList.add('btn-primary');
+            btn.innerHTML = '<i class="fas fa-object-group"></i> Merge Points';
+        }
+        
+        if (executeBtn) {
+            executeBtn.style.display = 'none';
+        }
+    }
+    
+    enterMergeMode() {
+        if (!this.editMode) {
+            this.showNotification('Enter edit mode first', 'warning');
+            return;
+        }
+        
+        this.mergeMode = true;
+        this.selectedPoints = new Set(); // Track selected point indices
+        this.selectionRectangle = null;
+        this.drawing = false;
+        this.startPoint = null;
+        
+        // Disable map dragging and interactions
+        this.map.dragging.disable();
+        this.map.touchZoom.disable();
+        this.map.doubleClickZoom.disable();
+        this.map.scrollWheelZoom.disable();
+        this.map.boxZoom.disable();
+        this.map.keyboard.disable();
+        
+        // Set up drawing and selection event handlers
+        this.map.on('mousedown', this.startRectangleSelection.bind(this));
+        this.map.on('mousemove', this.updateRectangleSelection.bind(this));
+        this.map.on('mouseup', this.finishRectangleSelection.bind(this));
+        this.map.on('click', this.handlePointSelection.bind(this));
+        
+        // Add visual feedback for selected points
+        this.updateEditMarkers();
+        
+        this.showNotification('Merge mode: Draw rectangle to select points · Alt+click for individual points · Press Merge to combine', 'info');
+    }
+    
+    exitMergeMode() {
+        this.mergeMode = false;
+        this.drawing = false;
+        this.selectedPoints = new Set();
+        
+        // Re-enable map interactions
+        this.map.dragging.enable();
+        this.map.touchZoom.enable();
+        this.map.doubleClickZoom.enable();
+        this.map.scrollWheelZoom.enable();
+        this.map.boxZoom.enable();
+        this.map.keyboard.enable();
+        
+        // Remove event handlers
+        this.map.off('mousedown', this.startRectangleSelection.bind(this));
+        this.map.off('mousemove', this.updateRectangleSelection.bind(this));
+        this.map.off('mouseup', this.finishRectangleSelection.bind(this));
+        this.map.off('click', this.handlePointSelection.bind(this));
+        
+        // Clear selection rectangle
+        if (this.selectionRectangle) {
+            this.map.removeLayer(this.selectionRectangle);
+            this.selectionRectangle = null;
+        }
+        
+        // Reset edit markers to normal appearance
+        this.updateEditMarkers();
+    }
+    
+    // Set up keyboard listeners for Alt+drag map control in edit mode
+    setupEditModeKeyListeners() {
+        this.editModeKeyDown = (e) => {
+            if (e.altKey && !this.map.dragging.enabled()) {
+                this.map.dragging.enable();
+            }
+        };
+        
+        this.editModeKeyUp = (e) => {
+            if (!e.altKey && this.map.dragging.enabled()) {
+                this.map.dragging.disable();
+            }
+        };
+        
+        document.addEventListener('keydown', this.editModeKeyDown);
+        document.addEventListener('keyup', this.editModeKeyUp);
+        
+        // Also listen for Alt key release when focus leaves window
+        window.addEventListener('blur', () => {
+            if (this.editMode) this.map.dragging.disable();
+        });
+    }
+    
+    // Remove edit mode keyboard listeners
+    removeEditModeKeyListeners() {
+        if (this.editModeKeyDown) {
+            document.removeEventListener('keydown', this.editModeKeyDown);
+            this.editModeKeyDown = null;
+        }
+        if (this.editModeKeyUp) {
+            document.removeEventListener('keyup', this.editModeKeyUp);
+            this.editModeKeyUp = null;
+        }
+        
+        window.removeEventListener('blur', () => {
+            if (this.editMode) this.map.dragging.disable();
+        });
+    }
+    
+    startRectangleSelection(e) {
+        if (!this.mergeMode || e.originalEvent.defaultPrevented) return;
+        
+        // Only start rectangle selection with left mouse button (no modifiers)
+        if (e.originalEvent.altKey || e.originalEvent.ctrlKey || e.originalEvent.shiftKey) return;
+        
+        this.drawing = true;
+        this.startPoint = e.latlng;
+        
+        // Clear previous selection rectangle
+        if (this.selectionRectangle) {
+            this.map.removeLayer(this.selectionRectangle);
+        }
+        
+        // Create new rectangle
+        this.selectionRectangle = L.rectangle([[e.latlng.lat, e.latlng.lng], [e.latlng.lat, e.latlng.lng]], {
+            color: '#3498db',
+            weight: 2,
+            opacity: 0.8,
+            fillColor: '#3498db',
+            fillOpacity: 0.1,
+            dashArray: '5, 5'
+        }).addTo(this.map);
+        
+        e.originalEvent.preventDefault();
+        e.originalEvent.stopPropagation();
+    }
+    
+    updateRectangleSelection(e) {
+        if (!this.drawing || !this.mergeMode || !this.startPoint) return;
+        
+        // Update rectangle bounds
+        const bounds = L.latLngBounds(this.startPoint, e.latlng);
+        this.selectionRectangle.setBounds(bounds);
+    }
+    
+    finishRectangleSelection(e) {
+        if (!this.drawing || !this.mergeMode) return;
+        
+        this.drawing = false;
+        
+        if (!this.startPoint) return;
+        
+        // Find points within the rectangle
+        const bounds = L.latLngBounds(this.startPoint, e.latlng);
+        const pointsInRectangle = this.findPointsInBounds(bounds);
+        
+        if (pointsInRectangle.length === 0) {
+            this.showNotification('No points found in selection area', 'info');
+            this.map.removeLayer(this.selectionRectangle);
+            return;
+        }
+        
+        // Add points to selection
+        pointsInRectangle.forEach(pointData => {
+            this.selectedPoints.add(pointData.index);
+        });
+        
+        this.updateEditMarkers();
+        this.showNotification(`Selected ${pointsInRectangle.length} points (${this.selectedPoints.size} total selected)`, 'info');
+        
+        // Clear rectangle
+        this.map.removeLayer(this.selectionRectangle);
+        this.selectionRectangle = null;
+        this.startPoint = null;
+    }
+    
+    handlePointSelection(e) {
+        if (!this.mergeMode || !e.originalEvent.altKey) return;
+        
+        // Find closest point to click
+        const clickPoint = e.latlng;
+        let closestPointIndex = -1;
+        let minDistance = Infinity;
+        
+        this.currentRouteData.points.forEach((point, index) => {
+            const distance = this.calculateDistance(
+                clickPoint.lat, clickPoint.lng,
+                point.lat, point.lng
+            );
+            
+            if (distance < minDistance && distance < 100) { // Within 100 meters
+                minDistance = distance;
+                closestPointIndex = index;
+            }
+        });
+        
+        if (closestPointIndex >= 0) {
+            if (this.selectedPoints.has(closestPointIndex)) {
+                this.selectedPoints.delete(closestPointIndex);
+                this.showNotification(`Point deselected (${this.selectedPoints.size} selected)`, 'info');
+            } else {
+                this.selectedPoints.add(closestPointIndex);
+                this.showNotification(`Point selected (${this.selectedPoints.size} selected)`, 'info');
+            }
+            
+            this.updateEditMarkers();
+        }
+        
+        e.originalEvent.preventDefault();
+        e.originalEvent.stopPropagation();
+    }
+    
+    findPointsInBounds(bounds) {
+        if (!this.currentRouteData?.points) return [];
+        
+        const pointsInBounds = [];
+        
+        for (let i = 0; i < this.currentRouteData.points.length; i++) {
+            const point = this.currentRouteData.points[i];
+            const latlng = L.latLng(point.lat, point.lng);
+            
+            if (bounds.contains(latlng)) {
+                pointsInBounds.push({ index: i, point: point });
+            }
+        }
+        
+        return pointsInBounds;
+    }
+    
+    updateEditMarkers() {
+        // Rebuild edit markers with selection highlighting and merged point special styling
+        this.editMarkersGroup.clearLayers();
+        
+        if (!this.currentRouteData?.points) return;
+        
+        this.currentRouteData.points.forEach((point, index) => {
+            const isSelected = this.selectedPoints && this.selectedPoints.has(index);
+            const isMerged = point._merged === true;
+            
+            let radius, color, fillColor, weight, className;
+            
+            if (isMerged) {
+                // Special styling for merged points
+                radius = 10;
+                color = '#e67e22';
+                fillColor = '#f39c12';
+                weight = 3;
+                className = 'edit-point-marker merged-point';
+            } else if (isSelected) {
+                // Selected points
+                radius = 8;
+                color = '#e74c3c';
+                fillColor = '#c0392b';
+                weight = 3;
+                className = 'edit-point-marker selected-point';
+            } else {
+                // Normal points
+                radius = 6;
+                color = '#3498db';
+                fillColor = '#2980b9';
+                weight = 2;
+                className = 'edit-point-marker';
+            }
+            
+            const marker = L.circleMarker([point.lat, point.lng], {
+                radius,
+                color,
+                fillColor,
+                fillOpacity: 0.8,
+                weight,
+                className
+            });
+            
+            // Add custom drag functionality for circle markers (not in merge mode)
+            if (!this.mergeMode) {
+                this.makeMarkerDraggable(marker, index);
+            }
+            
+            // Add popup with point info and action buttons
+            let popupContent = `
+                <div style="font-size:12px;">
+                    📍 Point ${index + 1}<br>
+                    ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}<br>
+                    ${point.timestamp ? new Date(point.timestamp).toLocaleString() : ''}
+            `;
+            
+            if (isMerged) {
+                popupContent += `<br><strong>🔗 MERGED POINT</strong><br><small>Combined ${point.merged_from} points</small>`;
+            } else if (isSelected) {
+                popupContent += '<br><strong>SELECTED</strong>';
+            }
+            
+            // Add action buttons to popup
+            popupContent += `
+                <hr style="margin: 8px 0;">
+                <div style="text-align: center;">
+                    <button onclick="window.routeTracker.addPointAfter(${index})" 
+                            style="margin: 2px; padding: 4px 8px; background: #27ae60; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">
+                        ➕ Add After
+                    </button>
+                    <button onclick="window.routeTracker.deletePoint(${index})" 
+                            style="margin: 2px; padding: 4px 8px; background: #e74c3c; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">
+                        ❌ Delete
+                    </button>
+                </div>
+                </div>
+            `;
+            
+            marker.bindPopup(popupContent);
+            
+            this.editMarkersGroup.addLayer(marker);
+        });
+        
+        if (!this.map.hasLayer(this.editMarkersGroup)) {
+            this.editMarkersGroup.addTo(this.map);
+        }
+        
+        // Update polyline if in edit mode
+        if (this.editMode) {
+            this.redrawMergedEditPolyline();
+        }
+    }
+    
+    // Make circle marker draggable with custom implementation
+    makeMarkerDraggable(marker, pointIndex) {
+        let isDragging = false;
+        let dragStarted = false;
+        
+        marker.on('mousedown', (e) => {
+            // Only start dragging if not holding Alt (Alt is for map movement)
+            if (e.originalEvent.altKey) return;
+            
+            isDragging = true;
+            dragStarted = false;
+            
+            e.originalEvent.preventDefault();
+            e.originalEvent.stopPropagation();
+            
+            // Add temporary mouse move listener to the map
+            const onMouseMove = (moveEvent) => {
+                if (isDragging) {
+                    dragStarted = true;
+                    // Update marker position during drag
+                    marker.setLatLng(moveEvent.latlng);
+                }
+            };
+            
+            const onMouseUp = (upEvent) => {
+                if (isDragging) {
+                    isDragging = false;
+                    
+                    if (dragStarted) {
+                        // Update the actual point data
+                        const newPos = marker.getLatLng();
+                        this.currentRouteData.points[pointIndex].lat = +newPos.lat.toFixed(7);
+                        this.currentRouteData.points[pointIndex].lng = +newPos.lng.toFixed(7);
+                        
+                        // Redraw route line
+                        this.redrawMergedEditPolyline();
+                    }
+                }
+                
+                // Clean up event listeners
+                this.map.off('mousemove', onMouseMove);
+                this.map.off('mouseup', onMouseUp);
+                document.removeEventListener('mouseup', onMouseUp);
+            };
+            
+            // Attach temporary listeners
+            this.map.on('mousemove', onMouseMove);
+            this.map.on('mouseup', onMouseUp);
+            document.addEventListener('mouseup', onMouseUp); // Backup for mouse leaving map area
+        });
+    }
+    
+    // Simplified context menu functions for point operations
+    addPointAfter(pointIndex) {
+        console.log(`Adding point after index ${pointIndex}`);
+        const pts = this.currentRouteData.points;
+        
+        let newPt;
+        if (pointIndex < pts.length - 1) {
+            // Midpoint between pointIndex and pointIndex+1
+            const tA = new Date(pts[pointIndex].timestamp).getTime();
+            const tB = new Date(pts[pointIndex + 1].timestamp).getTime();
+            newPt = {
+                lat: +((pts[pointIndex].lat + pts[pointIndex + 1].lat) / 2).toFixed(7),
+                lng: +((pts[pointIndex].lng + pts[pointIndex + 1].lng) / 2).toFixed(7),
+                timestamp: new Date((tA + tB) / 2).toISOString(),
+                alt: (pts[pointIndex].alt !== null && pts[pointIndex + 1].alt !== null)
+                    ? (pts[pointIndex].alt + pts[pointIndex + 1].alt) / 2
+                    : pts[pointIndex].alt,
+                speed: null,
+                accuracy: null,
+                _new: true
+            };
+        } else {
+            // Last point — copy it with a tiny offset so it's visible
+            newPt = { ...pts[pointIndex], lat: +(pts[pointIndex].lat + 0.00005).toFixed(7), _new: true };
+        }
+        
+        pts.splice(pointIndex + 1, 0, newPt);
+        console.log(`Point added at index ${pointIndex + 1}, total points now: ${pts.length}`);
+        
+        // Refresh the display
+        this.updateEditMarkers();
+        this.redrawMergedEditPolyline();
+        this.showNotification('New point added — drag it to the right location', 'info');
+    }
+    
+    deletePoint(pointIndex) {
+        console.log(`Deleting point at index ${pointIndex}`);
+        const pts = this.currentRouteData.points;
+        
+        if (pts.length <= 2) {
+            this.showNotification('Cannot delete: route needs at least 2 points', 'warning');
+            return;
+        }
+        
+        pts.splice(pointIndex, 1);
+        console.log(`Point deleted, total points now: ${pts.length}`);
+        
+        // Refresh the display
+        this.updateEditMarkers();
+        this.redrawMergedEditPolyline();
+        this.showNotification('Point deleted', 'info');
+    }
+    
+    closeContextMenu() {
+        this.map.closePopup();
+    }
+
+    executePointMerge() {
+        if (!this.selectedPoints || this.selectedPoints.size < 2) {
+            this.showNotification('Select at least 2 points to merge', 'warning');
+            return;
+        }
+        
+        // Convert Set to array and prepare for merging
+        const pointsToMerge = Array.from(this.selectedPoints).map(index => ({
+            index: index,
+            point: this.currentRouteData.points[index]
+        }));
+        
+        // Sort by index for proper processing
+        pointsToMerge.sort((a, b) => a.index - b.index);
+        
+        // Confirm merge
+        if (confirm(`Merge ${pointsToMerge.length} selected points into one representative point?\nStay in edit mode to adjust final position.`)) {
+            const mergedPointIndex = this.mergeSelectedPoints(pointsToMerge);
+            this.selectedPoints.clear();
+            
+            // Exit merge mode but stay in edit mode
+            this.exitMergeMode();
+            this.resetMergeMode();
+            
+            // Refresh edit markers and highlight the merged point
+            this.updateEditMarkers();
+            
+            // Focus on merged point for immediate editing
+            this.highlightMergedPoint(mergedPointIndex);
+            
+            this.showNotification(`Merged ${pointsToMerge.length} points. You can now move the merged point to its final position.`, 'success');
+        }
+    }
+    
+    mergeSelectedPoints(pointsToMerge) {
+        if (pointsToMerge.length < 2) return;
+        
+        // Calculate center position of selection (geometric center)
+        const avgLat = pointsToMerge.reduce((sum, p) => sum + p.point.lat, 0) / pointsToMerge.length;
+        const avgLng = pointsToMerge.reduce((sum, p) => sum + p.point.lng, 0) / pointsToMerge.length;
+        
+        // Find the optimal insertion point (middle of the sequence)
+        const firstIndex = pointsToMerge[0].index;
+        const lastIndex = pointsToMerge[pointsToMerge.length - 1].index;
+        const middleIndex = Math.floor((firstIndex + lastIndex) / 2);
+        
+        // Create merged point with averaged position and metadata from middle point
+        let basePoint = pointsToMerge[0].point;
+        if (pointsToMerge.length > 2) {
+            const middlePointData = pointsToMerge.find(p => p.index === middleIndex) || pointsToMerge[Math.floor(pointsToMerge.length / 2)];
+            basePoint = middlePointData.point;
+        }
+        
+        const mergedPoint = {
+            ...basePoint,
+            lat: avgLat,
+            lng: avgLng,
+            merged_from: pointsToMerge.length,
+            merge_timestamp: new Date().toISOString(),
+            _merged: true // Mark as merged point for special handling
+        };
+        
+        // Get indices in reverse order for safe removal
+        const indices = pointsToMerge.map(p => p.index).sort((a, b) => b - a);
+        
+        // Remove all selected points
+        indices.forEach(index => {
+            this.currentRouteData.points.splice(index, 1);
+        });
+        
+        // Insert merged point at the position of the first removed point
+        const insertIndex = indices[indices.length - 1]; // First index (smallest)
+        this.currentRouteData.points.splice(insertIndex, 0, mergedPoint);
+        
+        console.log(`📍 Point merge: ${pointsToMerge.length} points → 1 point at ${avgLat.toFixed(6)}, ${avgLng.toFixed(6)} (index ${insertIndex})`);
+        
+        return insertIndex; // Return index of merged point
+    }
+
+    contextMenuAddAfter(pointIndex = null) {
         this.hideEditContextMenu();
-        const menu = document.getElementById('route-context-menu');
-        const i = parseInt(menu.dataset.pointIndex);
+        
+        // Get point index from parameter or fallback to menu dataset
+        let i;
+        if (pointIndex !== null) {
+            i = pointIndex;
+        } else {
+            const menu = document.getElementById('route-context-menu');
+            i = parseInt(menu.dataset.pointIndex);
+        }
+        
         const pts = this.currentRouteData.points;
 
         let newPt;
@@ -483,14 +1555,22 @@ class RouteTracker {
         }
 
         pts.splice(i + 1, 0, newPt);
-        this.buildEditMarkers();
+        this.updateEditMarkers();
         this.showNotification('New point added in blue — drag it to the right location', 'info');
     }
 
-    contextMenuDelete() {
+    contextMenuDelete(pointIndex = null) {
         this.hideEditContextMenu();
-        const menu = document.getElementById('route-context-menu');
-        const i = parseInt(menu.dataset.pointIndex);
+        
+        // Get point index from parameter or fallback to menu dataset
+        let i;
+        if (pointIndex !== null) {
+            i = pointIndex;
+        } else {
+            const menu = document.getElementById('route-context-menu');
+            i = parseInt(menu.dataset.pointIndex);
+        }
+        
         const pts = this.currentRouteData.points;
 
         if (pts.length <= 2) {
@@ -498,7 +1578,7 @@ class RouteTracker {
             return;
         }
         pts.splice(i, 1);
-        this.buildEditMarkers();
+        this.updateEditMarkers();
         this.showNotification('Point deleted', 'info');
     }
 
@@ -634,6 +1714,9 @@ routeList.innerHTML = routes.map(route => {
                     </button>
                     <button class="btn btn-sm btn-info admin-only" onclick="routeTracker.editRoute('${route.id}', '${route.name.replace(/'/g, "\\'") }', '${route.color || '#e74c3c'}')">
                         <i class="fas fa-pencil-alt"></i> Rename
+                    </button>
+                    <button class="btn btn-sm btn-warning admin-only" onclick="routeTracker.copyRoute('${route.id}', '${route.name.replace(/'/g, "\\'") }')" title="Copy route for testing/debugging">
+                        <i class="fas fa-copy"></i> Copy
                     </button>
                     <button class="btn btn-sm btn-danger admin-only" onclick="routeTracker.deleteRoute('${route.id}')">
                         <i class="fas fa-trash"></i> Delete
@@ -836,6 +1919,38 @@ routeList.innerHTML = routes.map(route => {
             }
         } catch (error) {
             this.showNotification('Error deleting route: ' + error.message, 'error');
+        }
+    }
+    
+    async copyRoute(routeId, routeName) {
+        const newName = prompt(`Copy route "${routeName}" with new name:`, `${routeName} (Copy)`);
+        if (!newName || newName.trim() === '') return;
+        
+        try {
+            const response = await this.apiCall(`/api/routes/${routeId}/copy`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    name: newName.trim(),
+                    deviceId: this.selectedDeviceId
+                })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                this.showNotification(`Route copied successfully as "${newName}"`, 'success');
+                await this.loadDevicesAndRoutes();
+                
+                // Optionally load the new route
+                if (confirm('Load the copied route?')) {
+                    this.viewRoute(result.newRouteId);
+                }
+            } else {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(errorData.error || 'Failed to copy route');
+            }
+        } catch (error) {
+            console.error('Error copying route:', error);
+            this.showNotification('Failed to copy route: ' + error.message, 'error');
         }
     }
 
@@ -1180,6 +2295,53 @@ routeList.innerHTML = routes.map(route => {
         console.log('GPS monitoring stopped');
         this.showNotification('GPS monitoring stopped', 'info');
     }
+
+    // Helper function to calculate total route distance
+    calculateRouteDistance(points) {
+        if (!points || points.length < 2) return 0;
+        
+        let totalDistance = 0;
+        for (let i = 1; i < points.length; i++) {
+            const distance = this.calculateDistance(
+                points[i-1].lat, points[i-1].lng,
+                points[i].lat, points[i].lng
+            );
+            totalDistance += distance;
+        }
+        return totalDistance;
+    }
+
+    // Calculate distance between two points (Haversine formula)
+    calculateDistance(lat1, lng1, lat2, lng2) {
+        const R = 6371; // Earth's radius in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLng/2) * Math.sin(dLng/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
+    // Archive a route (mark as archived or move to archive)
+    async archiveRoute(routeId) {
+        try {
+            const response = await this.apiCall(`/api/routes/${routeId}/archive`, {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                this.showNotification('Route archived', 'success');
+                return true;
+            } else {
+                throw new Error('Archive failed');
+            }
+        } catch (error) {
+            console.error('Archive route error:', error);
+            this.showNotification('Failed to archive route: ' + error.message, 'error');
+            return false;
+        }
+    }
 }
 
 // User Interface Helper Functions
@@ -1330,17 +2492,55 @@ function logout() {
         .finally(() => { window.location.href = './login.html'; });
 }
 
-// Clear live GPS route function
+// Improved zoom to fit function
 function zoomToFit() {
     const rt = window.routeTracker;
     if (!rt || !rt.map) return;
-    if (rt.currentRoute) {
-        rt.map.fitBounds(rt.currentRoute.getBounds(), { padding: [30, 30], maxZoom: 17 });
+    
+    // Stop auto-refresh to avoid conflicts
+    clearInterval(rt.refreshInterval);
+    
+    // Check for enhanced route layers first (smart route display)
+    if (rt.routeLayers && rt.routeLayers.length > 0) {
+        // Calculate bounds from all route layers
+        let bounds = null;
+        rt.routeLayers.forEach(layer => {
+            if (layer.getBounds && typeof layer.getBounds === 'function') {
+                if (!bounds) {
+                    bounds = layer.getBounds();
+                } else {
+                    bounds.extend(layer.getBounds());
+                }
+            }
+        });
+        
+        if (bounds && bounds.isValid()) {
+            rt.map.fitBounds(bounds, { 
+                padding: [50, 50], 
+                maxZoom: 15 
+            });
+        }
+    } else if (rt.currentRoute) {
+        // Fallback to simple route display
+        rt.map.fitBounds(rt.currentRoute.getBounds(), { 
+            padding: [50, 50], 
+            maxZoom: 15 
+        });
     } else if (rt.liveTrail && rt.liveTrail.length > 1) {
-        rt.map.fitBounds(L.latLngBounds(rt.liveTrail).pad(0.1), { maxZoom: 16, padding: [20, 20] });
+        rt.map.fitBounds(L.latLngBounds(rt.liveTrail).pad(0.1), { 
+            maxZoom: 16, 
+            padding: [50, 50] 
+        });
     } else if (rt.liveTrail && rt.liveTrail.length === 1) {
         rt.map.setView(rt.liveTrail[0], 15);
     }
+    
+    // Restart auto-refresh after zoom settles
+    setTimeout(() => {
+        if (rt.autoRefreshEnabled) {
+            rt.startAutoRefresh();
+        }
+    }, 1000);
 }
 
 function resetMapView() {
@@ -1385,6 +2585,14 @@ function toggleDataPoints() {
 
 function toggleEditMode() {
     if (window.routeTracker) window.routeTracker.toggleEditMode();
+}
+
+function toggleMergeMode() {
+    if (window.routeTracker) window.routeTracker.toggleMergeMode();
+}
+
+function executeMerge() {
+    if (window.routeTracker) window.routeTracker.executePointMerge();
 }
 
 function saveRouteEdits() {
@@ -1444,6 +2652,15 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSetupDisplay();
     }, 100);
 });
+
+// Helper function to update setup display
+function updateSetupDisplay() {
+    // Update OwnTracks setup display with current API URL
+    const urlElement = document.querySelector('code');
+    if (urlElement && urlElement.textContent === 'Loading...') {
+        urlElement.textContent = window.location.origin + '/route-tracker/api/gps';
+    }
+}
 
 // ═══════════════════════════════════════════════════════════
 //  MEDIA — photos & YouTube videos on the map

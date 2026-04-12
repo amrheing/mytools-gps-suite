@@ -685,7 +685,13 @@
                     </div>
                     <!-- Edit mode toolbar (shown while in edit mode) -->
                     <div id="edit-toolbar">
-                        <span><i class="fas fa-info-circle"></i> Edit mode — right-click a point to add/delete · drag to move</span>
+                        <span><i class="fas fa-info-circle"></i> Edit mode — right-click a point to add/delete · drag to move · select area to merge</span>
+                        <button class="btn btn-sm btn-primary" onclick="toggleMergeMode()" id="merge-mode-btn">
+                            <i class="fas fa-object-group"></i> Merge Points
+                        </button>
+                        <button class="btn btn-sm btn-warning" onclick="executeMerge()" id="execute-merge-btn" style="display:none;">
+                            <i class="fas fa-compress-arrows-alt"></i> Execute Merge
+                        </button>
                         <button class="btn btn-sm btn-success" onclick="saveRouteEdits()">
                             <i class="fas fa-save"></i> Save
                         </button>
