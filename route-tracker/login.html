@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Route Tracker – Login</title>
+    <title data-i18n="login.title">Route Tracker – Login</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -44,6 +44,34 @@
             color: rgba(255,255,255,0.5);
             font-size: 0.85rem;
             margin-top: 5px;
+        }
+        /* === LANGUAGE SWITCHER === */
+        .language-switcher {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 8px;
+            z-index: 100;
+        }
+        .language-option {
+            cursor: pointer;
+            padding: 6px 10px;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: rgba(255,255,255,0.8);
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+        .language-option:hover {
+            background: rgba(255,255,255,0.15);
+        }
+        .language-option.active {
+            background: rgba(46,204,113,0.2);
+            border-color: rgba(46,204,113,0.4);
+            color: #2ecc71;
+            font-weight: 600;
         }
         .form-group {
             margin-bottom: 20px;
@@ -198,37 +226,46 @@
     </style>
 </head>
 <body>
+    <!-- Language Switcher -->
+    <div class="language-switcher">
+        <div class="language-option" data-lang="en" title="English" style="display: flex; align-items: center; gap: 4px;">
+            <img src="data/media/flags/english.svg" alt="EN" style="width: 16px; height: 12px;"> EN
+        </div>
+        <div class="language-option" data-lang="de" title="Deutsch" style="display: flex; align-items: center; gap: 4px;">
+            <img src="data/media/flags/german.svg" alt="DE" style="width: 16px; height: 12px;"> DE
+        </div>
+    </div>
     <div class="login-card">
         <div class="logo">
             <i class="fas fa-route"></i>
-            <h1>Route Tracker</h1>
-            <p>GPS Route Monitoring</p>
+            <h1 data-i18n="app.title">Route Tracker</h1>
+            <p data-i18n="login.subtitle">GPS Route Monitoring</p>
         </div>
 
         <form id="login-form" onsubmit="handleLogin(event)">
             <div class="form-group">
-                <label for="username">Username</label>
+                <label for="username" data-i18n="login.username">Username</label>
                 <div class="input-wrap">
                     <i class="fas fa-user"></i>
-                    <input type="text" id="username" placeholder="Enter username" autocomplete="username" required>
+                    <input type="text" id="username" data-i18n-placeholder="login.username_placeholder" placeholder="Enter username" autocomplete="username" required>
                 </div>
             </div>
             <div class="form-group">
-                <label for="password">Password</label>
+                <label for="password" data-i18n="login.password">Password</label>
                 <div class="input-wrap">
                     <i class="fas fa-lock"></i>
-                    <input type="password" id="password" placeholder="Enter password" autocomplete="current-password" required>
+                    <input type="password" id="password" data-i18n-placeholder="login.password_placeholder" placeholder="Enter password" autocomplete="current-password" required>
                 </div>
             </div>
             <button type="submit" class="btn-login" id="login-btn">
-                <i class="fas fa-sign-in-alt"></i> Sign In
+                <i class="fas fa-sign-in-alt"></i> <span data-i18n="login.sign_in">Sign In</span>
             </button>
         </form>
 
         <div id="passkey-section">
-            <div class="divider"><span>or</span></div>
+            <div class="divider"><span data-i18n="login.or">or</span></div>
             <button class="btn-passkey hidden" id="passkey-btn" onclick="loginWithPasskey()">
-                <i class="fas fa-fingerprint"></i> Sign in with Passkey
+                <i class="fas fa-fingerprint"></i> <span data-i18n="login.passkey_signin">Sign in with Passkey</span>
             </button>
         </div>
 
@@ -237,12 +274,12 @@
         <!-- Passkey upgrade prompt (shown after password login) -->
         <div class="passkey-prompt" id="passkey-prompt">
             <div class="pk-icon"><i class="fas fa-fingerprint"></i></div>
-            <h2>Save a Passkey?</h2>
-            <p>Sign in faster next time with Face ID or Touch ID — no password needed.</p>
+            <h2 data-i18n="login.passkey_save_title">Save a Passkey?</h2>
+            <p data-i18n="login.passkey_save_desc">Sign in faster next time with Face ID or Touch ID — no password needed.</p>
             <button class="btn-setup-passkey" id="setup-passkey-btn" onclick="setupPasskeyNow()">
-                <i class="fas fa-fingerprint"></i> Set Up Passkey
+                <i class="fas fa-fingerprint"></i> <span data-i18n="login.setup_passkey">Set Up Passkey</span>
             </button>
-            <button class="btn-skip" onclick="doRedirect()">Maybe Later</button>
+            <button class="btn-skip" onclick="doRedirect()" data-i18n="login.maybe_later">Maybe Later</button>
             <div class="pk-status" id="pk-status"></div>
         </div>
     </div>
@@ -438,5 +475,38 @@
             if (r.ok) window.location.href = './index.html';
         }).catch(() => {});
     </script>
+
+    <!-- Translation System -->
+    <script src="translations.js"></script>
+    
+    <script>
+        // Add login-specific translations immediately after translations.js loads
+        if (window.translations) {
+            // Add login-specific translations to main translation object
+            window.translations.en['login.subtitle'] = 'GPS Route Monitoring';
+            window.translations.de['login.subtitle'] = 'GPS-Routen-Überwachung';
+            window.translations.en['login.username'] = 'Username';
+            window.translations.de['login.username'] = 'Benutzername';
+            window.translations.en['login.username_placeholder'] = 'Enter username';
+            window.translations.de['login.username_placeholder'] = 'Benutzername eingeben';
+            window.translations.en['login.password_placeholder'] = 'Enter password';
+            window.translations.de['login.password_placeholder'] = 'Passwort eingeben';
+            window.translations.en['login.sign_in'] = 'Sign In';
+            window.translations.de['login.sign_in'] = 'Anmelden';
+            window.translations.en['login.passkey_signin'] = 'Sign in with Passkey';
+            window.translations.de['login.passkey_signin'] = 'Mit Passkey anmelden';
+            window.translations.en['login.passkey_save_title'] = 'Save a Passkey?';
+            window.translations.de['login.passkey_save_title'] = 'Passkey speichern?';
+            window.translations.en['login.passkey_save_desc'] = 'Sign in faster next time with Face ID or Touch ID — no password needed.';
+            window.translations.de['login.passkey_save_desc'] = 'Melden Sie sich beim nächsten Mal schneller mit Face ID oder Touch ID an — kein Passwort erforderlich.';
+            window.translations.en['login.setup_passkey'] = 'Set Up Passkey';
+            window.translations.de['login.setup_passkey'] = 'Passkey Einrichten';
+            window.translations.en['login.maybe_later'] = 'Maybe Later';
+            window.translations.de['login.maybe_later'] = 'Vielleicht Später';
+        }
+    </script>
+    
+    <script src="i18n.js"></script>
+
 </body>
 </html>

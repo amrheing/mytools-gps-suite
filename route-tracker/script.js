@@ -11,6 +11,9 @@ class RouteTracker {
         this.autoRefresh = true;
         this.refreshRate = 5000; // 5 seconds default
         
+        // Reference to translation function
+        this.t = window.t;
+        
         // Initialize the application
         this.init();
     }
@@ -78,7 +81,7 @@ class RouteTracker {
                 const sharedRoute = urlParams2.get('route') || (me.role === 'share' ? me.shareRouteId : null);
                 if (sharedRoute) {
                     await this.loadRoute(sharedRoute);
-                    this.showNotification('Loaded shared route', 'success');
+                    this.showNotification(window.t ? window.t('notify.route_loaded', 'Loaded shared route') : 'Loaded shared route', 'success');
                 }
                 
                 // Auto-start GPS monitoring
@@ -92,7 +95,7 @@ class RouteTracker {
             console.log('Route Tracker GPS Receiver initialized successfully');
         } catch (error) {
             console.error('Failed to initialize Route Tracker:', error);
-            this.showNotification('Failed to initialize: ' + error.message, 'error');
+            this.showNotification(window.t ? window.t('error.failed_initialize', 'Failed to initialize') + ': ' + error.message : 'Failed to initialize: ' + error.message, 'error');
         }
     }
 
@@ -138,7 +141,7 @@ class RouteTracker {
         const s2 = document.getElementById('device-selector-viewer');
         if (s1) s1.value = value;
         if (s2) s2.value = value;
-        this.showNotification(`Switched to device: ${value}`, 'info');
+        this.showNotification(window.t ? window.t('notify.device_switched', 'Switched to device') + `: ${value}` : `Switched to device: ${value}`, 'info');
         this.loadDevicesAndRoutes();
     }
 
@@ -1731,7 +1734,7 @@ class RouteTracker {
         );
         
         if (routes.length === 0) {
-            routeList.innerHTML = '<div class="route-item"><div class="route-info"><p>No routes received yet. Configure your Overlander app to send GPS data to this server.</p></div></div>';
+            routeList.innerHTML = `<div class="route-item"><div class="route-info"><p>${this.t ? this.t('history.no_routes', 'No routes received yet. Configure your Overlander app to send GPS data to this server.') : 'No routes received yet. Configure your Overlander app to send GPS data to this server.'}</p></div></div>`;
             this._updateMergeButton();
             return;
         }
@@ -1765,27 +1768,27 @@ routeList.innerHTML = routes.map(route => {
                 </div>
                 <div class="route-actions">
                     <button class="btn btn-sm btn-primary" onclick="routeTracker.viewRoute('${route.id}')">
-                        <i class="fas fa-eye"></i> View
+                        <i class="fas fa-eye"></i> ${this.t ? this.t('history.view', 'View') : 'View'}
                     </button>
                     <button class="btn btn-sm btn-secondary" onclick="routeTracker.exportRoute('${route.id}')">
-                        <i class="fas fa-download"></i> Export
+                        <i class="fas fa-download"></i> ${this.t ? this.t('history.export', 'Export') : 'Export'}
                     </button>
                     <button class="btn btn-sm btn-info admin-only" onclick="routeTracker.editRoute('${route.id}', '${route.name.replace(/'/g, "\\'") }', '${route.color || '#e74c3c'}')">
-                        <i class="fas fa-pencil-alt"></i> Rename
+                        <i class="fas fa-pencil-alt"></i> ${this.t ? this.t('history.rename', 'Rename') : 'Rename'}
                     </button>
                     <button class="btn btn-sm btn-warning admin-only" onclick="routeTracker.copyRoute('${route.id}', '${route.name.replace(/'/g, "\\'") }')" title="Copy route for testing/debugging">
-                        <i class="fas fa-copy"></i> Copy
+                        <i class="fas fa-copy"></i> ${this.t ? this.t('history.copy', 'Copy') : 'Copy'}
                     </button>
                     <button class="btn btn-sm btn-danger admin-only" onclick="routeTracker.deleteRoute('${route.id}')">
-                        <i class="fas fa-trash"></i> Delete
+                        <i class="fas fa-trash"></i> ${this.t ? this.t('history.delete', 'Delete') : 'Delete'}
                     </button>
                     ${route.status === 'active' ? `
                         <button class="btn btn-sm btn-warning admin-only" onclick="routeTracker.stopRoute('${route.id}')">
-                            <i class="fas fa-stop"></i> Stop
+                            <i class="fas fa-stop"></i> ${this.t ? this.t('history.stop', 'Stop') : 'Stop'}
                         </button>
                     ` : `
                         <button class="btn btn-sm btn-success admin-only" onclick="routeTracker.activateRoute('${route.id}')" title="Set as active — GPS will append here">
-                            <i class="fas fa-play"></i> Set Active
+                            <i class="fas fa-play"></i> ${this.t ? this.t('history.set_active', 'Set Active') : 'Set Active'}
                         </button>
                     `}
                 </div>

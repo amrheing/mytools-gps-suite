@@ -557,6 +557,22 @@
         .route-merge-check input[type="checkbox"] {
             width: 16px; height: 16px; cursor: pointer;
         }
+        
+        /* === LANGUAGE SWITCHER & DROPDOWN STYLES === */
+        .language-switcher .language-option:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        .language-switcher .language-option.active {
+            background: rgba(46,204,113,0.2);
+            color: #2ecc71;
+            font-weight: 600;
+        }
+        .dropdown-menu a:hover {
+            background: #f8f9fa !important;
+        }
+        .dropdown-toggle:hover {
+            opacity: 0.8;
+        }
     </style>
 </head>
 <body>
@@ -575,27 +591,51 @@
                     <div class="header-content" style="width: 100%;">
                         <div class="breadcrumb" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                             <a href="/"><i class="fas fa-arrow-left"></i> Back to Tools</a>
-                            <div style="display: flex; gap: 1rem; margin-left: auto;">
+                            <div style="display: flex; gap: 1rem; margin-left: auto; align-items: center;">
+                                <!-- Documentation Menu -->
+                                <div class="dropdown" style="position: relative;">
+                                    <a href="#" class="dropdown-toggle" style="color: var(--secondary-color); text-decoration: none;" onclick="toggleDropdown('docs-dropdown'); return false;">
+                                        <i class="fas fa-book"></i> <span data-i18n="nav.docs">Documentation</span> <i class="fas fa-chevron-down" style="font-size: 0.8rem; margin-left: 4px;"></i>
+                                    </a>
+                                    <div id="docs-dropdown" class="dropdown-menu" style="display: none; position: absolute; top: 100%; right: 0; background: white; border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 200px; z-index: 1000; margin-top: 5px;">
+                                        <a href="docs/user-guide.de.md" target="_blank" style="display: block; padding: 8px 15px; color: #333; text-decoration: none; border-bottom: 1px solid #eee;">
+                                            <i class="fas fa-file-alt"></i> User Guide (DE)
+                                        </a>
+                                        <a href="docs/user-guide.md" target="_blank" style="display: block; padding: 8px 15px; color: #333; text-decoration: none;">
+                                            <i class="fas fa-file-alt"></i> User Guide (EN)
+                                        </a>
+                                    </div>
+                                </div>
+                                <!-- Language Switcher -->
+                                <div class="language-switcher" style="display: flex; gap: 5px; align-items: center;">
+                                    <span style="color: rgba(255,255,255,0.7); font-size: 0.85rem; margin-right: 5px;" data-i18n="nav.language">Language:</span>
+                                    <div class="language-option" data-lang="en" style="cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: background 0.2s; display: flex; align-items: center; gap: 4px;" title="English">
+                                        <img src="data/media/flags/english.svg" alt="EN" style="width: 16px; height: 12px;"> EN
+                                    </div>
+                                    <div class="language-option" data-lang="de" style="cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: background 0.2s; display: flex; align-items: center; gap: 4px;" title="Deutsch">
+                                        <img src="data/media/flags/german.svg" alt="DE" style="width: 16px; height: 12px;"> DE
+                                    </div>
+                                </div>
                                 <a href="./admin.html" id="admin-link" style="display:none; color: var(--secondary-color); text-decoration: none;">
-                                    <i class="fas fa-cog"></i> Admin
+                                    <i class="fas fa-cog"></i> <span data-i18n="nav.admin">Admin</span>
                                 </a>
                                 <a href="#" onclick="logout(); return false;" style="color: var(--secondary-color); text-decoration: none;">
-                                    <i class="fas fa-sign-out-alt"></i> Logout
+                                    <i class="fas fa-sign-out-alt"></i> <span data-i18n="nav.logout">Logout</span>
                                 </a>
                             </div>
                         </div>
-                        <h1><i class="fas fa-route"></i> Route Tracker</h1>
-                        <p class="subtitle">Real-time Route and Location Tracking</p>
+                        <h1><i class="fas fa-route"></i> <span data-i18n="app.title">Route Tracker</span></h1>
+                        <p class="subtitle" data-i18n="app.subtitle">Real-time Route and Location Tracking</p>
                     </div>
                 </header>
                 <!-- === 1. CONTROL PANEL === -->
                 <section class="control-panel">
                     <div class="section-header">
                         <h3 class="section-title">
-                            <i class="fas fa-satellite-dish"></i> GPS Control Center
+                            <i class="fas fa-satellite-dish"></i> <span data-i18n="gps.title">GPS Control Center</span>
                         </h3>
                         <button id="gps-status-btn" class="btn btn-success" onclick="toggleGPSMonitoring()">
-                            <i class="fas fa-satellite"></i> GPS Active
+                            <i class="fas fa-satellite"></i> <span data-i18n="gps.active">GPS Active</span>
                         </button>
                     </div>
 
@@ -604,39 +644,39 @@
                     <div id="main-app" style="display: none;">
                         <div class="control-grid">
                             <div class="status-panel">
-                                <h4><i class="fas fa-info-circle"></i> Status</h4>
+                                <h4><i class="fas fa-info-circle"></i> <span data-i18n="gps.status">Status</span></h4>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
                                     <div class="admin-only" style="margin-bottom:4px;">
-                                        <small>Device:</small><br>
-                                        <span id="device-name" class="status-text">Unknown</span>
+                                        <small data-i18n="gps.device">Device:</small><br>
+                                        <span id="device-name" class="status-text" data-i18n="gps.unknown">Unknown</span>
                                     </div>
                                     <div>
-                                        <small>Status:</small><br>
-                                        <span id="device-status" class="status-inactive">No Data</span>
+                                        <small data-i18n="gps.status">Status:</small><br>
+                                        <span id="device-status" class="status-inactive" data-i18n="gps.no_data">No Data</span>
                                     </div>
                                     <div>
-                                        <small>Last Update:</small><br>
-                                        <span id="last-update" class="status-text">Never</span>
+                                        <small data-i18n="gps.last_update">Last Update:</small><br>
+                                        <span id="last-update" class="status-text" data-i18n="gps.never">Never</span>
                                     </div>
                                 </div>
                             </div>
                             <div class="status-panel admin-only">
-                                <h4><i class="fas fa-cogs"></i> Controls</h4>
+                                <h4><i class="fas fa-cogs"></i> <span data-i18n="controls.title">Controls</span></h4>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
                                     <button id="auto-refresh-btn" class="btn btn-warning" onclick="toggleAutoRefresh()">
-                                        <i class="fas fa-pause"></i> Pause Refresh
+                                        <i class="fas fa-pause"></i> <span data-i18n="controls.pause_refresh">Pause Refresh</span>
                                     </button>
                                     <button class="btn btn-primary" onclick="refreshData()">
-                                        <i class="fas fa-sync"></i> Refresh
+                                        <i class="fas fa-sync"></i> <span data-i18n="controls.refresh">Refresh</span>
                                     </button>
                                     <select id="refresh-rate" class="form-control" onchange="changeRefreshRate()">
-                                        <option value="2000">2 seconds</option>
-                                        <option value="5000" selected>5 seconds</option>
-                                        <option value="10000">10 seconds</option>
-                                        <option value="30000">30 seconds</option>
+                                        <option value="2000" data-i18n="controls.2_seconds">2 seconds</option>
+                                        <option value="5000" selected data-i18n="controls.5_seconds">5 seconds</option>
+                                        <option value="10000" data-i18n="controls.10_seconds">10 seconds</option>
+                                        <option value="30000" data-i18n="controls.30_seconds">30 seconds</option>
                                     </select>
                                     <button class="btn btn-secondary" onclick="clearApiToken()">
-                                        <i class="fas fa-sign-out-alt"></i> Disconnect
+                                        <i class="fas fa-sign-out-alt"></i> <span data-i18n="controls.disconnect">Disconnect</span>
                                     </button>
                                     <select id="device-selector" class="form-control" style="grid-column: span 2;">
                                         <option value="default-device">default-device</option>
@@ -659,51 +699,51 @@
                 <section class="map-section">
                     <div class="map-header">
                         <h3 style="margin: 0; color: var(--primary-color);">
-                            <i class="fas fa-map"></i> Live Route Tracking
+                            <i class="fas fa-map"></i> <span data-i18n="map.title">Live Route Tracking</span>
                         </h3>
                         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                             <button class="btn btn-sm btn-danger admin-only" onclick="clearLiveRoute()">
-                                <i class="fas fa-trash"></i> Clear Route
+                                <i class="fas fa-trash"></i> <span data-i18n="map.clear_route">Clear Route</span>
                             </button>
                             <button class="btn btn-sm btn-success admin-only" onclick="openMediaUpload()">
-                                <i class="fas fa-camera"></i> Add Media
+                                <i class="fas fa-camera"></i> <span data-i18n="map.add_media">Add Media</span>
                             </button>
                             <button class="btn btn-sm btn-secondary" onclick="zoomToFit()">
-                                <i class="fas fa-compress-arrows-alt"></i> Zoom to Fit
+                                <i class="fas fa-compress-arrows-alt"></i> <span data-i18n="map.zoom_fit">Zoom to Fit</span>
                             </button>
                             <button class="btn btn-sm btn-secondary" onclick="resetMapView()">
-                                <i class="fas fa-expand-arrows-alt"></i> Reset View
+                                <i class="fas fa-expand-arrows-alt"></i> <span data-i18n="map.reset_view">Reset View</span>
                             </button>
                             <button id="data-points-btn" class="btn btn-sm btn-secondary" onclick="toggleDataPoints()">
-                                <i class="fas fa-circle"></i><span> Show Points</span>
+                                <i class="fas fa-circle"></i><span data-i18n="map.show_points"> Show Points</span>
                             </button>
                             <button id="edit-mode-btn" class="btn btn-sm btn-secondary admin-only" onclick="toggleEditMode()">
-                                <i class="fas fa-pencil-alt"></i> Edit Points
+                                <i class="fas fa-pencil-alt"></i> <span data-i18n="map.edit_points">Edit Points</span>
                             </button>
                         </div>
                     </div>
                     <!-- Edit mode toolbar (shown while in edit mode) -->
                     <div id="edit-toolbar">
-                        <span><i class="fas fa-info-circle"></i> Edit mode — right-click a point to add/delete · drag to move · select area to merge</span>
+                        <span><i class="fas fa-info-circle"></i> <span data-i18n="map.edit_help">Edit mode — right-click a point to add/delete · drag to move · select area to merge</span></span>
                         <button class="btn btn-sm btn-primary" onclick="toggleMergeMode()" id="merge-mode-btn">
-                            <i class="fas fa-object-group"></i> Merge Points
+                            <i class="fas fa-object-group"></i> <span data-i18n="map.merge_points">Merge Points</span>
                         </button>
                         <button class="btn btn-sm btn-warning" onclick="executeMerge()" id="execute-merge-btn" style="display:none;">
-                            <i class="fas fa-compress-arrows-alt"></i> Execute Merge
+                            <i class="fas fa-compress-arrows-alt"></i> <span data-i18n="map.execute_merge">Execute Merge</span>
                         </button>
                         <button class="btn btn-sm btn-success" onclick="saveRouteEdits()">
-                            <i class="fas fa-save"></i> Save
+                            <i class="fas fa-save"></i> <span data-i18n="map.save">Save</span>
                         </button>
                         <button class="btn btn-sm btn-secondary" onclick="discardRouteEdits()">
-                            <i class="fas fa-times"></i> Discard
+                            <i class="fas fa-times"></i> <span data-i18n="map.discard">Discard</span>
                         </button>
                     </div>
                     <div class="map-container">
                         <div id="map"></div>
                     </div>
-                    <p style="margin: 4px 0 0; font-size: 0.78em; color: #888; text-align: center;">
+                        <p style="margin: 4px 0 0; font-size: 0.78em; color: #888; text-align: center;">
                         <i class="fas fa-info-circle"></i>
-                        Use the <kbd style="font-size:0.9em;padding:1px 4px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">+</kbd> / <kbd style="font-size:0.9em;padding:1px 4px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">−</kbd> controls to zoom &nbsp;·&nbsp; or hold <kbd style="font-size:0.9em;padding:1px 4px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">Alt</kbd> and scroll
+                        <span data-i18n="map.zoom_help">Use the + / − controls to zoom · or hold Alt and scroll</span>
                     </p>
                 </section>
 
@@ -711,33 +751,33 @@
                 <section class="stats-dashboard">
                     <div class="section-header">
                         <h3 class="section-title">
-                            <i class="fas fa-chart-line"></i> Route Statistics
+                            <i class="fas fa-chart-line"></i> <span data-i18n="stats.title">Route Statistics</span>
                         </h3>
                     </div>
                     <div class="stats-grid">
                         <div class="stat-card">
                             <span class="stat-value" id="total-distance">0.0</span>
-                            <div class="stat-label">Distance (km)</div>
+                            <div class="stat-label" data-i18n="stats.distance">Distance (km)</div>
                         </div>
                         <div class="stat-card">
                             <span class="stat-value" id="total-time">00:00:00</span>
-                            <div class="stat-label">Duration</div>
+                            <div class="stat-label" data-i18n="stats.duration">Duration</div>
                         </div>
                         <div class="stat-card">
                             <span class="stat-value" id="avg-speed">0.0</span>
-                            <div class="stat-label">Avg Speed (km/h)</div>
+                            <div class="stat-label" data-i18n="stats.avg_speed">Avg Speed (km/h)</div>
                         </div>
                         <div class="stat-card">
                             <span class="stat-value" id="current-speed">0.0</span>
-                            <div class="stat-label">Current Speed (km/h)</div>
+                            <div class="stat-label" data-i18n="stats.current_speed">Current Speed (km/h)</div>
                         </div>
                         <div class="stat-card">
                             <span class="stat-value" id="elevation">0</span>
-                            <div class="stat-label">Elevation (m)</div>
+                            <div class="stat-label" data-i18n="stats.elevation">Elevation (m)</div>
                         </div>
                         <div class="stat-card">
                             <span class="stat-value" id="waypoints">0</span>
-                            <div class="stat-label">Waypoints</div>
+                            <div class="stat-label" data-i18n="stats.waypoints">Waypoints</div>
                         </div>
                     </div>
                 </section>
@@ -747,21 +787,21 @@
                     <div class="export-panel">
                         <div class="section-header">
                             <h3 class="section-title">
-                                <i class="fas fa-download"></i> Export Route
+                                <i class="fas fa-download"></i> <span data-i18n="export.title">Export Route</span>
                             </h3>
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                             <button class="btn btn-primary" onclick="exportCurrentRoute()">
-                                <i class="fas fa-file-code"></i> Export GPX
+                                <i class="fas fa-file-code"></i> <span data-i18n="export.gpx">Export GPX</span>
                             </button>
                             <button class="btn btn-primary" onclick="exportRoute('kml')">
-                                <i class="fas fa-file-export"></i> Export KML
+                                <i class="fas fa-file-export"></i> <span data-i18n="export.kml">Export KML</span>
                             </button>
                             <button class="btn btn-primary" onclick="exportRoute('json')">
-                                <i class="fas fa-file-alt"></i> Export JSON
+                                <i class="fas fa-file-alt"></i> <span data-i18n="export.json">Export JSON</span>
                             </button>
                             <button class="btn btn-secondary admin-only" onclick="shareRoute()">
-                                <i class="fas fa-share-alt"></i> Share Route
+                                <i class="fas fa-share-alt"></i> <span data-i18n="export.share">Share Route</span>
                             </button>
                         </div>
                     </div>
@@ -769,10 +809,10 @@
                     <div class="route-history">
                         <div class="section-header">
                             <h3 class="section-title">
-                                <i class="fas fa-history"></i> Route History
+                                <i class="fas fa-history"></i> <span data-i18n="history.title">Route History</span>
                             </h3>
                             <button id="merge-routes-btn" class="btn btn-sm btn-warning admin-only" onclick="mergeSelectedRoutes()" style="display:none;">
-                                <i class="fas fa-compress-arrows-alt"></i> Merge Routes
+                                <i class="fas fa-compress-arrows-alt"></i> <span data-i18n="history.merge_routes">Merge Routes</span>
                             </button>
                         </div>
                         <div id="route-list">
@@ -816,20 +856,20 @@
                 <section class="config-section admin-only">
                     <div class="section-header">
                         <h3 class="section-title">
-                            <i class="fas fa-mobile-alt"></i> OwnTracks Setup
+                            <i class="fas fa-mobile-alt"></i> <span data-i18n="setup.title">OwnTracks Setup</span>
                         </h3>
                     </div>
                     <div class="status-panel">
                         <p><strong>Configure OwnTracks (HTTP mode):</strong></p>
                         <ol style="margin: 15px 0;">
-                            <li>Set <strong>Mode</strong>: <code>HTTP</code></li>
-                            <li>Set <strong>URL</strong>: <code id="endpoint-url">Loading...</code></li>
-                            <li>Enable <strong>Authentication</strong> and <strong>Password</strong></li>
-                            <li>Set <strong>UserID</strong>: your username</li>
+                            <li>Set <strong data-i18n="setup.mode">Mode</strong>: <code>HTTP</code></li>
+                            <li>Set <strong data-i18n="setup.url">URL</strong>: <code id="endpoint-url">Loading...</code></li>
+                            <li>Enable <strong data-i18n="setup.auth">Authentication</strong> and <strong>Password</strong></li>
+                            <li>Set <strong data-i18n="setup.userid">UserID</strong>: your username</li>
                             <li>Set <strong>Password</strong>: your app password</li>
-                            <li>Set <strong>DeviceID</strong>: any name (e.g. <code>iphone</code>) — auto-registers on first push</li>
+                            <li>Set <strong data-i18n="setup.deviceid">DeviceID</strong>: any name (e.g. <code>iphone</code>) — auto-registers on first push</li>
                         </ol>
-                        <p style="color: var(--text-light); font-size: 0.9em;">The DeviceID you set becomes the device name visible on the map.</p>
+                        <p style="color: var(--text-light); font-size: 0.9em;" data-i18n="setup.description">The DeviceID you set becomes the device name visible on the map.</p>
                     </div>
                 </section>
 
@@ -894,9 +934,38 @@
     <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/exifr@7.1.3/dist/lite.umd.cjs"></script>
+    <script src="translations.js"></script>
+    <script src="i18n.js"></script>
     <script src="user-manager.js"></script>
     <script src="script.js"></script>
     <script src="export-manager.js"></script>
+    
+    <script>
+        // Dropdown toggle functionality
+        function toggleDropdown(dropdownId) {
+            const dropdown = document.getElementById(dropdownId);
+            const isVisible = dropdown.style.display !== 'none';
+            
+            // Close all dropdowns first
+            document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                menu.style.display = 'none';
+            });
+            
+            // Toggle current dropdown
+            if (!isVisible) {
+                dropdown.style.display = 'block';
+            }
+        }
+        
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.dropdown')) {
+                document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                    menu.style.display = 'none';
+                });
+            }
+        });
+    </script>
 
     <!-- ═══ MEDIA UPLOAD DIALOG ═══ -->
     <dialog id="media-upload-dialog" style="border:none;border-radius:12px;padding:0;max-width:520px;width:95%;box-shadow:0 8px 40px rgba(0,0,0,0.3);">
