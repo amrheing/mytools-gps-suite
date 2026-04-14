@@ -919,9 +919,9 @@ class RouteTracker {
         
         console.log('Showing confirmation dialog...');
         const part1Count = pointIndex + 1;
-        const part2Count = this.currentRouteData.points.length - pointIndex - 1;
-        const confirmed = confirm(`Split route at point ${pointIndex + 1}? This will create 2 separate routes:\\n\\n` +
-                                `Part 1: ${part1Count} points (start to split point)\\n` +
+        const part2Count = this.currentRouteData.points.length - (pointIndex + 1);
+        const confirmed = confirm(`Split route at point ${pointIndex + 1}? This will create 2 separate routes:\n\n` +
+                                `Part 1: ${part1Count} points (start to split point)\n` +
                                 `Part 2: ${part2Count} points (after split point to end)`);
         if (!confirmed) {
             console.log('User cancelled split operation');
