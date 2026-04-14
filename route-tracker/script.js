@@ -237,9 +237,10 @@ class RouteTracker {
 
     async loadRoute(routeId) {
         try {
-            const response = await this.apiCall(`/api/routes/${routeId}`);
+            const response = await this.apiCall(`/api/routes/${routeId}?_t=${Date.now()}`); // Add cache buster
             if (response.ok) {
                 const routeData = await response.json();
+                console.log(`🔍 Loaded route ${routeId}: ${routeData.name} - ${routeData.points?.length} points`);
                 this.currentRouteData = routeData;
                 this.currentRouteId = routeId;
                 this.displayRoute(routeData);
@@ -267,6 +268,10 @@ class RouteTracker {
     displayRoute(routeData) {
         // Exit edit mode before loading a new route
         if (this.editMode) this.exitEditMode(false);
+        
+        console.log(`🗺️ Displaying route: ${routeData.name} - ${routeData.points?.length} points`);
+        console.log('First few points:', routeData.points?.slice(0, 3));
+        console.log('Last few points:', routeData.points?.slice(-3));
         
         // Store current route data for editing
         this.currentRouteData = routeData;
@@ -655,6 +660,11 @@ class RouteTracker {
             this.showNotification('Load a route first to edit its points', 'warning');
             return;
         }
+        
+        console.log(`✏️ Entering edit mode for: ${this.currentRouteData.name} - ${this.currentRouteData.points?.length} points`);
+        console.log('Edit mode - First few points:', this.currentRouteData.points?.slice(0, 3));
+        console.log('Edit mode - Last few points:', this.currentRouteData.points?.slice(-3));
+        
         this.editMode = true;
         this.mergeMode = false;
         // Record when editing started — used to preserve GPS points that arrive during the session
@@ -800,8 +810,16 @@ class RouteTracker {
     }
 
     showEditContextMenu(event, pointIndex) {
+        // Prevent default context menu and stop propagation immediately
+        event.preventDefault();
+        event.stopPropagation();
+        
         const menu = document.getElementById('route-context-menu');
         if (!menu) return;
+        
+        // Close any open popups
+        this.map.closePopup();
+        
         // Position near cursor but keep inside viewport
         const x = Math.min(event.clientX, window.innerWidth - 180);
         const y = Math.min(event.clientY, window.innerHeight - 90);
@@ -809,7 +827,8 @@ class RouteTracker {
         menu.style.top  = y + window.scrollY + 'px';
         menu.style.display = 'block';
         menu.dataset.pointIndex = pointIndex;
-        event.preventDefault();
+        
+        console.log(`Context menu shown for point ${pointIndex} at (${x}, ${y})`);
     }
 
     hideEditContextMenu() {
@@ -889,27 +908,37 @@ class RouteTracker {
 
     // Split route at specified location
     async splitRouteAt(lat, lng, pointIndex) {
+        console.log('splitRouteAt called with:', { lat, lng, pointIndex });
         this.map.closePopup();
         
         if (pointIndex <= 0 || pointIndex >= this.currentRouteData.points.length - 1) {
+            console.log('Cannot split at route boundaries. Index:', pointIndex, 'Length:', this.currentRouteData.points.length);
             this.showNotification('Cannot split at route start or end', 'warning');
             return;
         }
         
+        console.log('Showing confirmation dialog...');
+        const part1Count = pointIndex + 1;
+        const part2Count = this.currentRouteData.points.length - pointIndex - 1;
         const confirmed = confirm(`Split route at point ${pointIndex + 1}? This will create 2 separate routes:\\n\\n` +
-                                `Part 1: ${this.currentRouteData.points.length - pointIndex} points\\n` +
-                                `Part 2: ${pointIndex + 1} points`);
-        if (!confirmed) return;
+                                `Part 1: ${part1Count} points (start to split point)\\n` +
+                                `Part 2: ${part2Count} points (after split point to end)`);
+        if (!confirmed) {
+            console.log('User cancelled split operation');
+            return;
+        }
         
+        console.log('User confirmed split, proceeding...');
         try {
             // Create two new routes
             const originalName = this.currentRouteData.name;
             const splitTimestamp = this.currentRouteData.points[pointIndex].timestamp;
+            const timestamp = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
             
             const route1 = {
                 ...this.currentRouteData,
-                id: this.currentRouteData.id + '_part1',
-                name: originalName + ' (Part 1)',
+                id: this.currentRouteData.id + '_part1_' + timestamp,
+                name: originalName + ` (Part 1 - ${timestamp})`,
                 points: this.currentRouteData.points.slice(0, pointIndex + 1),
                 endTime: splitTimestamp,
                 status: 'completed'
@@ -917,9 +946,9 @@ class RouteTracker {
             
             const route2 = {
                 ...this.currentRouteData,  
-                id: this.currentRouteData.id + '_part2',
-                name: originalName + ' (Part 2)',
-                points: this.currentRouteData.points.slice(pointIndex),
+                id: this.currentRouteData.id + '_part2_' + timestamp,
+                name: originalName + ` (Part 2 - ${timestamp})`,
+                points: this.currentRouteData.points.slice(pointIndex + 1), // No overlap - start from next point
                 startTime: splitTimestamp
             };
             
@@ -927,38 +956,221 @@ class RouteTracker {
             route1.totalDistance = this.calculateRouteDistance(route1.points);
             route2.totalDistance = this.calculateRouteDistance(route2.points);
             
-            // Save split routes to server
-            const response1 = await this.apiCall(`/api/routes/new`, {
-                method: 'POST',
-                body: JSON.stringify(route1)
+            console.log('Route 1 data:', { 
+                name: route1.name, 
+                points: route1.points.length, 
+                distance: route1.totalDistance,
+                firstPoint: route1.points[0],
+                lastPoint: route1.points[route1.points.length - 1],
+                pointRange: `0 to ${pointIndex}`,
+                actualSlice: `slice(0, ${pointIndex + 1})`
+            });
+            console.log('Route 2 data:', { 
+                name: route2.name, 
+                points: route2.points.length, 
+                distance: route2.totalDistance,
+                firstPoint: route2.points[0],
+                lastPoint: route2.points[route2.points.length - 1],
+                pointRange: `${pointIndex + 1} to ${this.currentRouteData.points.length - 1}`,
+                actualSlice: `slice(${pointIndex + 1})`
             });
             
-            const response2 = await this.apiCall(`/api/routes/new`, {
-                method: 'POST',
-                body: JSON.stringify(route2)
+            // Verify no overlap
+            const totalOriginal = this.currentRouteData.points.length;
+            const totalSplit = route1.points.length + route2.points.length;
+            console.log('Point verification:', {
+                originalTotal: totalOriginal,
+                splitTotal: totalSplit,
+                difference: totalOriginal - totalSplit,
+                splitIndex: pointIndex
             });
             
-            if (response1.ok && response2.ok) {
-                this.showNotification(`Route split successfully! Created "${route1.name}" and "${route2.name}"`, 'success');
+            // Validate split makes sense
+            if (route1.points.length === 0 || route2.points.length === 0) {
+                throw new Error('Route split resulted in empty route - invalid split point');
+            }
+            if (totalSplit !== totalOriginal) {
+                throw new Error(`Point count mismatch: Original ${totalOriginal}, Split total ${totalSplit}, should be equal`);
+            }
+            if (Math.abs(route1.points.length - route2.points.length) < 2) {
+                console.warn('WARNING: Split routes have very similar point counts - possible split logic issue');
+            }
+            
+            // Save split routes using copy endpoint pattern
+            console.log('Creating first route copy...');
+            const response1 = await this.apiCall(`/api/routes/${this.currentRouteData.id}/copy`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    name: route1.name,
+                    deviceId: this.selectedDeviceId
+                })
+            });
+            
+            let route1Updated = false;
+            let route2Updated = false;
+            
+            // Create second route by copying first split result
+            let route1Result = null;
+            if (response1.ok) {
+                try {
+                    route1Result = await response1.json();
+                    console.log('First route created:', route1Result?.newRouteId);
+                    console.log('Full route1Result:', route1Result);
+                } catch (e) {
+                    console.error('Failed to parse route1 response JSON:', e);
+                    const responseText = await response1.text();
+                    console.error('Route1 response text:', responseText);
+                    throw new Error(`Failed to parse first route response: ${e.message}`);
+                }
+                
+                // Now manually update the first route with correct points
+                if (route1Result?.newRouteId) {
+                    console.log('Updating first route points...');
+                    console.log('Route 1 points to update:', route1.points.length, 'first:', route1.points[0], 'last:', route1.points[route1.points.length-1]);
+                    const updateResponse1 = await this.apiCall(`/api/routes/${route1Result.newRouteId}/points`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ points: route1.points })
+                    });
+                    console.log('First route points update response:', updateResponse1.status);
+                    if (!updateResponse1.ok) {
+                        const errorText = await updateResponse1.text();
+                        console.error('Failed to update route 1 points:', errorText);
+                    } else {
+                        const updateResult1 = await updateResponse1.json();
+                        console.log('Route 1 update result:', updateResult1);
+                        route1Updated = true;
+                        console.log(`Route 1 points updated: ${route1.points.length} points`);
+                    }
+                } else {
+                    console.error('Cannot update route 1 points - no route ID');
+                }
+            } else {
+                console.error('Failed to create first route:', response1.status);
+                const errorText = await response1.text();
+                console.error('Response1 error:', errorText);
+            }
+            
+            console.log('Creating second route copy...');
+            const response2 = await this.apiCall(`/api/routes/${this.currentRouteData.id}/copy`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    name: route2.name,
+                    deviceId: this.selectedDeviceId
+                })
+            });
+            
+            let route2Result = null;
+            if (response2.ok) {
+                try {
+                    route2Result = await response2.json();
+                    console.log('Second route created:', route2Result?.newRouteId);
+                    console.log('Full route2Result:', route2Result);
+                } catch (e) {
+                    console.error('Failed to parse route2 response JSON:', e);
+                    const responseText = await response2.text();
+                    console.error('Route2 response text:', responseText);
+                    throw new Error(`Failed to parse second route response: ${e.message}`);
+                }
+                
+                // Update the second route with correct points
+                if (route2Result?.newRouteId) {
+                    console.log('Updating second route points...');
+                    console.log('Route 2 points to update:', route2.points.length, 'first:', route2.points[0], 'last:', route2.points[route2.points.length-1]);
+                    const updateResponse2 = await this.apiCall(`/api/routes/${route2Result.newRouteId}/points`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ points: route2.points })
+                    });
+                    console.log('Second route points update response:', updateResponse2.status);
+                    if (!updateResponse2.ok) {
+                        const errorText = await updateResponse2.text();
+                        console.error('Failed to update route 2 points:', errorText);
+                    } else {
+                        const updateResult2 = await updateResponse2.json();
+                        console.log('Route 2 update result:', updateResult2);
+                        route2Updated = true;
+                        console.log(`Route 2 points updated: ${route2.points.length} points`);
+                    }
+                } else {
+                    console.error('Cannot update route 2 points - no route ID');
+                }
+            } else {
+                console.error('Failed to create second route:', response2.status);
+                const errorText = await response2.text();
+                console.error('Response2 error:', errorText);
+            }
+            
+            if (response1.ok && response2.ok && route1Result && route2Result && route1Updated && route2Updated) {
+                console.log('Both split routes saved and updated successfully');
+                console.log('Route 1 result:', route1Result);
+                console.log('Route 2 result:', route2Result);
+                
+                // Validate response structure
+                if (!route1Result?.newRouteId) {
+                    throw new Error('Route 1 response missing newRouteId');
+                }
+                if (!route2Result?.newRouteId) {
+                    throw new Error('Route 2 response missing newRouteId');
+                }
+                
+                this.showNotification(`Route split successfully! Created "${route1Result.newRouteName}" and "${route2Result.newRouteName}"`, 'success');
                 
                 // Optionally archive original route
                 const archiveOriginal = confirm('Archive the original route?');
+                console.log('Archive original?', archiveOriginal);
                 if (archiveOriginal) {
                     await this.archiveRoute(this.currentRouteData.id);
+                    console.log('Original route archived');
                 }
                 
                 this.exitEditMode(false);
-                await this.loadRoutesList();
+                console.log('Exited edit mode, waiting for server to process updates...');
                 
-                // Load the first part of the split route
-                this.displayRoute(route1);
+                // Wait a moment for server to finish processing
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                console.log('Reloading routes list...');
+                await this.loadDevicesAndRoutes(); // Full refresh instead of just route list
+                
+                // Load the first part of the split route with fresh data
+                console.log('Loading first split route with fresh data:', route1Result.newRouteId);
+                await this.loadRoute(route1Result.newRouteId);
             } else {
-                throw new Error('Failed to save split routes');
+                console.error('Failed to save split routes completely.');
+                console.error('Response1 ok:', response1.ok, 'Response2 ok:', response2.ok);
+                console.error('Route1 updated:', route1Updated, 'Route2 updated:', route2Updated);
+                console.error('Route1Result:', route1Result);
+                console.error('Route2Result:', route2Result);
+                
+                let errorMsg = 'Failed to split route: ';
+                if (!response1.ok) {
+                    errorMsg += 'First route creation failed. ';
+                } else if (!route1Result) {
+                    errorMsg += 'First route response was empty. ';
+                } else if (!route1Result.newRouteId) {
+                    errorMsg += 'First route response missing newRouteId. ';
+                } else if (!route1Updated) {
+                    errorMsg += 'Route 1 points update failed. ';
+                }
+                
+                if (!response2.ok) {
+                    errorMsg += 'Second route creation failed. ';
+                } else if (!route2Result) {
+                    errorMsg += 'Second route response was empty. ';
+                } else if (!route2Result.newRouteId) {
+                    errorMsg += 'Second route response missing newRouteId. ';
+                } else if (!route2Updated) {
+                    errorMsg += 'Route 2 points update failed. ';
+                }
+                
+                throw new Error(errorMsg);
             }
             
         } catch (error) {
             console.error('Route split error:', error);
-            this.showNotification('Failed to split route: ' + error.message, 'error');
+            console.error('Error stack:', error.stack);
+            const errorMsg = 'Failed to split route: ' + error.message;
+            this.showNotification(errorMsg, 'error', 10000); // Show error for 10 seconds
+            alert('Route Split Error:\\n\\n' + errorMsg + '\\n\\nCheck console for details.');
         }
     }
 
@@ -1342,9 +1554,26 @@ class RouteTracker {
                 className
             });
             
+            // Create larger clickable area (3x bigger) with light grey background
+            const clickRadius = radius * 3;
+            const clickArea = L.circleMarker([point.lat, point.lng], {
+                radius: clickRadius,
+                color: '#cccccc',
+                fillColor: 'transparent',
+                fillOpacity: 0,
+                weight: 1,
+                className: 'edit-point-clickarea'
+            });
+            
+            // Add both markers to a group so they move together
+            // Put clickArea first so it's behind the visual marker
+            const markerGroup = L.layerGroup([clickArea, marker]);
+            
             // Add custom drag functionality for circle markers (not in merge mode)
             if (!this.mergeMode) {
-                this.makeMarkerDraggable(marker, index);
+                // Make both the click area and visual marker draggable
+                this.addDragHandlers(clickArea, marker, index);
+                this.addDragHandlers(marker, marker, index);
             }
             
             // Add popup with point info and action buttons
@@ -1361,25 +1590,26 @@ class RouteTracker {
                 popupContent += '<br><strong>SELECTED</strong>';
             }
             
-            // Add action buttons to popup
-            popupContent += `
-                <hr style="margin: 8px 0;">
-                <div style="text-align: center;">
-                    <button onclick="window.routeTracker.addPointAfter(${index})" 
-                            style="margin: 2px; padding: 4px 8px; background: #27ae60; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">
-                        ➕ Add After
-                    </button>
-                    <button onclick="window.routeTracker.deletePoint(${index})" 
-                            style="margin: 2px; padding: 4px 8px; background: #e74c3c; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">
-                        ❌ Delete
-                    </button>
-                </div>
-                </div>
-            `;
+            // Note: Action buttons removed - use right-click context menu instead
+            popupContent += `</div>`;
             
+            // Bind all interactions to both the larger clickable area and the visual marker
+            clickArea.bindPopup(popupContent);
             marker.bindPopup(popupContent);
             
-            this.editMarkersGroup.addLayer(marker);
+            // Add context menu for right-click on both areas
+            const contextMenuHandler = (e) => {
+                // Don't show popup on right-click
+                clickArea.closePopup();
+                marker.closePopup();
+                this.showEditContextMenu(e.originalEvent, index);
+                return false; // Prevent event bubbling
+            };
+            
+            clickArea.on('contextmenu', contextMenuHandler);
+            marker.on('contextmenu', contextMenuHandler);
+            
+            this.editMarkersGroup.addLayer(markerGroup);
         });
         
         if (!this.map.hasLayer(this.editMarkersGroup)) {
@@ -1392,12 +1622,12 @@ class RouteTracker {
         }
     }
     
-    // Make circle marker draggable with custom implementation
-    makeMarkerDraggable(marker, pointIndex) {
+    // Add drag handlers to a marker
+    addDragHandlers(dragTarget, visualMarker, pointIndex) {
         let isDragging = false;
         let dragStarted = false;
         
-        marker.on('mousedown', (e) => {
+        dragTarget.on('mousedown', (e) => {
             // Only start dragging if not holding Alt (Alt is for map movement)
             if (e.originalEvent.altKey) return;
             
@@ -1411,8 +1641,12 @@ class RouteTracker {
             const onMouseMove = (moveEvent) => {
                 if (isDragging) {
                     dragStarted = true;
-                    // Update marker position during drag
-                    marker.setLatLng(moveEvent.latlng);
+                    // Update visual marker position during drag
+                    visualMarker.setLatLng(moveEvent.latlng);
+                    // If dragging the click area, update it too
+                    if (dragTarget !== visualMarker) {
+                        dragTarget.setLatLng(moveEvent.latlng);
+                    }
                 }
             };
             
@@ -1422,7 +1656,60 @@ class RouteTracker {
                     
                     if (dragStarted) {
                         // Update the actual point data
-                        const newPos = marker.getLatLng();
+                        const newPos = visualMarker.getLatLng();
+                        this.currentRouteData.points[pointIndex].lat = +newPos.lat.toFixed(7);
+                        this.currentRouteData.points[pointIndex].lng = +newPos.lng.toFixed(7);
+                        
+                        // Redraw route line
+                        this.redrawMergedEditPolyline();
+                    }
+                }
+                
+                // Clean up event listeners
+                this.map.off('mousemove', onMouseMove);
+                this.map.off('mouseup', onMouseUp);
+                document.removeEventListener('mouseup', onMouseUp);
+            };
+            
+            // Attach temporary listeners
+            this.map.on('mousemove', onMouseMove);
+            this.map.on('mouseup', onMouseUp);
+            document.addEventListener('mouseup', onMouseUp); // Backup for mouse leaving map area
+        });
+    }
+
+    // Make circle marker draggable with custom implementation (legacy method)
+    makeMarkerDraggable(clickArea, visualMarker, pointIndex) {
+        let isDragging = false;
+        let dragStarted = false;
+        
+        clickArea.on('mousedown', (e) => {
+            // Only start dragging if not holding Alt (Alt is for map movement)
+            if (e.originalEvent.altKey) return;
+            
+            isDragging = true;
+            dragStarted = false;
+            
+            e.originalEvent.preventDefault();
+            e.originalEvent.stopPropagation();
+            
+            // Add temporary mouse move listener to the map
+            const onMouseMove = (moveEvent) => {
+                if (isDragging) {
+                    dragStarted = true;
+                    // Update both markers' positions during drag
+                    clickArea.setLatLng(moveEvent.latlng);
+                    visualMarker.setLatLng(moveEvent.latlng);
+                }
+            };
+            
+            const onMouseUp = (upEvent) => {
+                if (isDragging) {
+                    isDragging = false;
+                    
+                    if (dragStarted) {
+                        // Update the actual point data
+                        const newPos = visualMarker.getLatLng();
                         this.currentRouteData.points[pointIndex].lat = +newPos.lat.toFixed(7);
                         this.currentRouteData.points[pointIndex].lng = +newPos.lng.toFixed(7);
                         
@@ -1618,6 +1905,46 @@ class RouteTracker {
         pts.splice(i + 1, 0, newPt);
         this.updateEditMarkers();
         this.showNotification('New point added in blue — drag it to the right location', 'info');
+    }
+
+    contextMenuSplitRoute(pointIndex = null) {
+        console.log('contextMenuSplitRoute called with pointIndex:', pointIndex);
+        this.hideEditContextMenu();
+        
+        // Get point index from parameter or fallback to menu dataset
+        let i;
+        if (pointIndex !== null) {
+            i = pointIndex;
+        } else {
+            const menu = document.getElementById('route-context-menu');
+            i = parseInt(menu.dataset.pointIndex);
+            console.log('Got point index from menu dataset:', i);
+        }
+        
+        console.log('Current route data:', this.currentRouteData);
+        console.log('Points length:', this.currentRouteData?.points?.length);
+        console.log('Attempting to split at index:', i);
+        
+        if (i >= 0 && i < this.currentRouteData.points.length) {
+            const splitPoint = this.currentRouteData.points[i];
+            console.log('Split point details:', {
+                index: i,
+                point: splitPoint,
+                timestamp: splitPoint.timestamp,
+                coordinates: [splitPoint.lat, splitPoint.lng]
+            });
+        }
+        
+        // Get the coordinates of the split point for the splitRouteAt function
+        const pts = this.currentRouteData.points;
+        if (i >= 0 && i < pts.length) {
+            const point = pts[i];
+            console.log('Calling splitRouteAt with:', point.lat, point.lng, i);
+            this.splitRouteAt(point.lat, point.lng, i);
+        } else {
+            console.error('Invalid point index:', i, 'for points length:', pts.length);
+            this.showNotification(this.t ? this.t('error.invalid_split_point', 'Invalid split point selected') : 'Invalid split point selected', 'error');
+        }
     }
 
     contextMenuDelete(pointIndex = null) {
@@ -2240,7 +2567,7 @@ routeList.innerHTML = routes.map(route => {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
 
-    showNotification(message, type = 'success') {
+    showNotification(message, type = 'success', timeout = 5000) {
         const notification = document.createElement('div');
         notification.className = `notification ${type}`;
         notification.innerHTML = `
@@ -2253,12 +2580,12 @@ routeList.innerHTML = routes.map(route => {
         // Show notification
         setTimeout(() => notification.classList.add('show'), 100);
 
-        // Auto remove after 5 seconds
+        // Auto remove after specified timeout
         setTimeout(() => {
             if (notification.parentElement) {
                 notification.remove();
             }
-        }, 5000);
+        }, timeout);
     }
 
     startAutoGPSMonitoring() {
@@ -2669,6 +2996,10 @@ function discardRouteEdits() {
 
 function contextMenuAddAfter() {
     if (window.routeTracker) window.routeTracker.contextMenuAddAfter();
+}
+
+function contextMenuSplitRoute() {
+    if (window.routeTracker) window.routeTracker.contextMenuSplitRoute();
 }
 
 function contextMenuDelete() {

@@ -2049,6 +2049,7 @@ app.patch('/api/routes/:routeId', requireLogin, requireAdmin, async (req, res) =
 app.put('/api/routes/:routeId/points', requireLogin, requireAdmin, async (req, res) => {
     try {
         const { points, editSnapshotTime } = req.body;
+        console.log(`📝 Updating route ${req.params.routeId} points: ${points?.length} points`);
         if (!Array.isArray(points) || points.length < 2) {
             return res.status(400).json({ error: 'points array with at least 2 entries is required' });
         }
@@ -2087,6 +2088,7 @@ app.put('/api/routes/:routeId/points', requireLogin, requireAdmin, async (req, r
             route.endTime = finalPoints[finalPoints.length - 1].timestamp || route.endTime;
         }
         await saveRoute(route);
+        console.log(`✅ Route ${req.params.routeId} points updated successfully: ${finalPoints.length} points, ${totalDistance.toFixed(2)}km`);
         res.json({ success: true, totalPoints: finalPoints.length, totalDistance });
     } catch (error) {
         res.status(404).json({ error: 'Route not found' });

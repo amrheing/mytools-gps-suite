@@ -153,6 +153,12 @@ window.translations = {
         'error.invalid_credentials': 'Invalid credentials',
         'error.network_error': 'Network error',
         'error.permission_denied': 'Permission denied',
+        'error.invalid_split_point': 'Invalid split point selected',
+        
+        // === CONTEXT MENU ===
+        'context.add_after': 'Add point after',
+        'context.split_route': 'Split route here',
+        'context.delete_point': 'Delete point',
     },
     
     de: {
@@ -306,5 +312,11 @@ window.translations = {
         'error.invalid_credentials': 'Ungültige Anmeldedaten',
         'error.network_error': 'Netzwerkfehler',
         'error.permission_denied': 'Zugriff verweigert',
+        'error.invalid_split_point': 'Ungültiger Teilungspunkt ausgewählt',
+        
+        // === CONTEXT MENU ===
+        'context.add_after': 'Punkt danach hinzufügen',
+        'context.split_route': 'Route hier teilen',
+        'context.delete_point': 'Punkt löschen',
     }
 };

@@ -517,7 +517,7 @@
         #route-context-menu {
             display: none;
             position: absolute;
-            z-index: 10000;
+            z-index: 10001;
             background: white;
             border: 1px solid #ddd;
             border-radius: 8px;
@@ -1059,11 +1059,15 @@
     <!-- Route point editing context menu -->
     <div id="route-context-menu">
         <div class="ctx-item" onclick="contextMenuAddAfter()">
-            <i class="fas fa-plus-circle" style="color:#3498db;"></i> Add point after
+            <i class="fas fa-plus-circle" style="color:#3498db;"></i> <span data-i18n="context.add_after">Add point after</span>
+        </div>
+        <div class="ctx-separator"></div>
+        <div class="ctx-item" onclick="contextMenuSplitRoute()">
+            <i class="fas fa-cut" style="color:#f39c12;"></i> <span data-i18n="context.split_route">Split route here</span>
         </div>
         <div class="ctx-separator"></div>
         <div class="ctx-item ctx-danger" onclick="contextMenuDelete()">
-            <i class="fas fa-trash-alt" style="color:#e74c3c;"></i> Delete point
+            <i class="fas fa-trash-alt" style="color:#e74c3c;"></i> <span data-i18n="context.delete_point">Delete point</span>
         </div>
     </div>
 
