@@ -228,10 +228,10 @@
     </div>
 
     <!-- OwnTracks Setup -->
-    <h2><i class="fas fa-mobile-alt"></i> OwnTracks Setup</h2>
+    <h2><i class="fas fa-mobile-alt"></i> <span data-i18n="admin.owntracks_title">OwnTracks Setup</span></h2>
     <div class="card">
-        <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;">
-            Configure OwnTracks in <strong>HTTP</strong> mode. Each user authenticates with their own username and password.
+        <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;" data-i18n="admin.owntracks_help">
+            Configure OwnTracks in HTTP mode. Each user authenticates with their own username and password.
         </p>
         <div style="background:#0f1117; border:1px solid #2a2d3e; border-radius:8px; padding:16px; margin-bottom:15px;">
             <div style="margin-bottom:12px;">
@@ -270,27 +270,27 @@
     </div>
 
     <!-- Shared Links -->
-    <h2><i class="fas fa-share-alt"></i> Shared Links</h2>
+    <h2><i class="fas fa-share-alt"></i> <span data-i18n="admin.shares_title">Shared Links</span></h2>
     <div class="card">
-        <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;">
+        <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;" data-i18n="admin.shares_help">
             Share links give temporary read-only access to a specific route without requiring a login.
         </p>
         <div id="shares-list" style="margin-bottom:20px;"><p class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</p></div>
     </div>
 
     <!-- Device Management -->
-    <h2><i class="fas fa-hdd"></i> Device Management</h2>
+    <h2><i class="fas fa-hdd"></i> <span data-i18n="admin.devices_title">Device Management</span></h2>
     <div class="card">
-        <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;">
+        <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;" data-i18n="admin.devices_help">
             Registered GPS devices. Deleting a device permanently removes all its routes, media and references from users.
         </p>
         <div id="devices-list"><p class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</p></div>
     </div>
 
     <!-- Media Management -->
-    <h2><i class="fas fa-photo-video"></i> Media Management</h2>
+    <h2><i class="fas fa-photo-video"></i> <span data-i18n="admin.media_title">Media Management</span></h2>
     <div class="card">
-        <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;">
+        <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;" data-i18n="admin.media_help">
             Photos and YouTube videos attached to device routes. Expand a device to view, edit or delete entries.
         </p>
         <div id="media-sections"><p class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</p></div>
@@ -1131,22 +1131,6 @@ function renderLogs(logs) {
 <!-- Translation System -->
 <script src="translations.js"></script>
 <script src="i18n.js"></script>
-
-<script>
-// Initialize i18n after translations are loaded
-document.addEventListener('DOMContentLoaded', function() {
-    // Additional translations for admin-specific terms
-    if (window.translations) {
-        // Add admin-specific translations not in main file
-        window.translations.en['nav.map'] = 'Map';
-        window.translations.de['nav.map'] = 'Karte';
-        window.translations.en['admin.log_access'] = 'Log Viewer Access';
-        window.translations.de['admin.log_access'] = 'Log-Viewer-Zugriff';
-        window.translations.en['admin.log_access_desc'] = 'Allow this admin to access the GPS incoming log viewer';
-        window.translations.de['admin.log_access_desc'] = 'Diesem Admin Zugriff auf den GPS-Eingangslog-Viewer erlauben';
-    }
-});
-</script>
 
 </body>
 </html>

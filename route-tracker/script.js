@@ -13,6 +13,27 @@ class RouteTracker {
         
         // Reference to translation function
         this.t = window.t;
+
+        // Dynamic UI parts (route history list, mode buttons) need an explicit refresh on language change.
+        document.addEventListener('languageChange', async () => {
+            this.t = window.t;
+            try {
+                await this.loadRoutesList();
+            } catch (error) {
+                console.warn('Failed to refresh routes list after language change:', error);
+            }
+
+            this._setResetBtnMode(this._historyViewMode ? 'history' : 'live');
+
+            const editBtn = document.getElementById('edit-mode-btn');
+            if (editBtn) {
+                if (this.editMode) {
+                    editBtn.innerHTML = `<i class="fas fa-times"></i> ${this.t ? this.t('map.exit_edit', 'Exit Edit') : 'Exit Edit'}`;
+                } else {
+                    editBtn.innerHTML = `<i class="fas fa-pencil-alt"></i> ${this.t ? this.t('map.edit_points', 'Edit Points') : 'Edit Points'}`;
+                }
+            }
+        });
         
         // Initialize the application
         this.init();
@@ -725,7 +746,7 @@ class RouteTracker {
         if (btn) {
             btn.classList.remove('btn-secondary');
             btn.classList.add('btn-warning');
-            btn.innerHTML = '<i class="fas fa-times"></i> Exit Edit';
+            btn.innerHTML = `<i class="fas fa-times"></i> ${this.t ? this.t('map.exit_edit', 'Exit Edit') : 'Exit Edit'}`;
         }
         this.showNotification('Edit mode — Alt+drag to move map · drag points to move · right-click for options · Esc to exit', 'info');
     }
@@ -771,7 +792,7 @@ class RouteTracker {
         if (btn) {
             btn.classList.remove('btn-warning');
             btn.classList.add('btn-secondary');
-            btn.innerHTML = '<i class="fas fa-pencil-alt"></i> Edit Points';
+            btn.innerHTML = `<i class="fas fa-pencil-alt"></i> ${this.t ? this.t('map.edit_points', 'Edit Points') : 'Edit Points'}`;
         }
     }
 
@@ -2239,11 +2260,11 @@ routeList.innerHTML = routes.map(route => {
         const btn = document.querySelector('button[onclick="resetMapView()"]');
         if (!btn) return;
         if (mode === 'history') {
-            btn.innerHTML = '<i class="fas fa-broadcast-tower"></i> Back to Live';
+            btn.innerHTML = `<i class="fas fa-broadcast-tower"></i> ${this.t ? this.t('map.back_to_live', 'Back to Live') : 'Back to Live'}`;
             btn.classList.remove('btn-secondary');
             btn.classList.add('btn-warning');
         } else {
-            btn.innerHTML = '<i class="fas fa-expand-arrows-alt"></i> Reset View';
+            btn.innerHTML = `<i class="fas fa-expand-arrows-alt"></i> ${this.t ? this.t('map.reset_view', 'Reset View') : 'Reset View'}`;
             btn.classList.remove('btn-warning');
             btn.classList.add('btn-secondary');
         }

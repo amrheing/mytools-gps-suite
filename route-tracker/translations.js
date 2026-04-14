@@ -10,6 +10,7 @@ window.translations = {
         
         // === NAVIGATION ===
         'nav.admin': 'Admin',
+        'nav.map': 'Map',
         'nav.logout': 'Logout',
         'nav.login': 'Login',
         'nav.register': 'Register',
@@ -50,6 +51,8 @@ window.translations = {
         'map.show_points': 'Show Points',
         'map.hide_points': 'Hide Points',
         'map.edit_points': 'Edit Points',
+        'map.exit_edit': 'Exit Edit',
+        'map.back_to_live': 'Back to Live',
         'map.edit_help': 'Edit mode — right-click a point to add/delete · drag to move · select area to merge',
         'map.merge_points': 'Merge Points',
         'map.execute_merge': 'Execute Merge',
@@ -132,6 +135,16 @@ window.translations = {
         'admin.role_admin': 'Admin',
         'admin.role_viewer': 'Viewer',
         'admin.language_pref': 'Language Preference',
+        'admin.owntracks_title': 'OwnTracks Setup',
+        'admin.owntracks_help': 'Configure OwnTracks in HTTP mode. Each user authenticates with their own username and password.',
+        'admin.shares_title': 'Shared Links',
+        'admin.shares_help': 'Share links give temporary read-only access to a specific route without requiring a login.',
+        'admin.devices_title': 'Device Management',
+        'admin.devices_help': 'Registered GPS devices. Deleting a device permanently removes all its routes, media and references from users.',
+        'admin.media_title': 'Media Management',
+        'admin.media_help': 'Photos and YouTube videos attached to device routes. Expand a device to view, edit or delete entries.',
+        'admin.log_access': 'Log Viewer Access',
+        'admin.log_access_desc': 'Allow this admin to access the GPS incoming log viewer',
         
         // === NOTIFICATIONS ===
         'notify.route_saved': 'Route saved successfully',
@@ -165,10 +178,11 @@ window.translations = {
         // === APP CORE ===
         'app.title': 'Routen-Tracker',
         'app.subtitle': 'Echtzeit-Routen- und Standortverfolgung',
-        'app.admin': 'Administration',
+        'app.admin': 'Admin',
         
         // === NAVIGATION ===
-        'nav.admin': 'Administration',
+        'nav.admin': 'Admin',
+        'nav.map': 'Karte',
         'nav.logout': 'Abmelden',
         'nav.login': 'Anmelden',
         'nav.register': 'Registrieren',
@@ -209,6 +223,8 @@ window.translations = {
         'map.show_points': 'Punkte Anzeigen',
         'map.hide_points': 'Punkte Ausblenden',
         'map.edit_points': 'Punkte Bearbeiten',
+        'map.exit_edit': 'Bearbeitung Beenden',
+        'map.back_to_live': 'Zurück zu Live',
         'map.edit_help': 'Bearbeitungsmodus — Rechtsklick auf Punkt für hinzufügen/löschen · ziehen zum bewegen · Bereich auswählen zum zusammenführen',
         'map.merge_points': 'Punkte Zusammenführen',
         'map.execute_merge': 'Zusammenführung Ausführen',
@@ -233,7 +249,7 @@ window.translations = {
         'export.share': 'Route Teilen',
         
         // === ROUTE HISTORY ===
-        'history.title': 'Routen-Geschichte',
+        'history.title': 'Routenverlauf',
         'history.merge_routes': 'Routen Zusammenführen',
         'history.view': 'Anzeigen',
         'history.export': 'Exportieren',
@@ -291,6 +307,16 @@ window.translations = {
         'admin.role_admin': 'Administrator',
         'admin.role_viewer': 'Betrachter',
         'admin.language_pref': 'Spracheinstellung',
+        'admin.owntracks_title': 'OwnTracks Einrichtung',
+        'admin.owntracks_help': 'Konfigurieren Sie OwnTracks im HTTP-Modus. Jeder Benutzer authentifiziert sich mit eigenem Benutzernamen und Passwort.',
+        'admin.shares_title': 'Geteilte Links',
+        'admin.shares_help': 'Geteilte Links geben temporären schreibgeschützten Zugriff auf eine bestimmte Route ohne Login.',
+        'admin.devices_title': 'Geräteverwaltung',
+        'admin.devices_help': 'Registrierte GPS-Geräte. Das Löschen eines Geräts entfernt dauerhaft alle zugehörigen Routen, Medien und Benutzerverweise.',
+        'admin.media_title': 'Medienverwaltung',
+        'admin.media_help': 'Fotos und YouTube-Videos, die Geräte-Routen zugeordnet sind. Gerät aufklappen, um Einträge anzuzeigen, zu bearbeiten oder zu löschen.',
+        'admin.log_access': 'Log-Viewer-Zugriff',
+        'admin.log_access_desc': 'Diesem Admin Zugriff auf den GPS-Eingangslog-Viewer erlauben',
         
         // === NOTIFICATIONS ===
         'notify.route_saved': 'Route erfolgreich gespeichert',
