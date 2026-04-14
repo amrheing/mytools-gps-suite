@@ -2083,10 +2083,21 @@ app.put('/api/routes/:routeId/points', requireLogin, requireAdmin, async (req, r
             totalDistance += calculateDistance(finalPoints[i-1].lat, finalPoints[i-1].lng, finalPoints[i].lat, finalPoints[i].lng);
         }
         route.totalDistance = totalDistance;
+        route.totalPoints = finalPoints.length;
         route.startTime = finalPoints[0].timestamp || route.startTime;
         if (route.status !== 'active') {
             route.endTime = finalPoints[finalPoints.length - 1].timestamp || route.endTime;
         }
+
+        // Points changed: previous analysis geometry is stale and can render wrong paths.
+        route.analysis = {
+            segments: [],
+            pausePoints: [],
+            splitPoints: [],
+            lastAnalyzed: null,
+            version: '2.0'
+        };
+
         await saveRoute(route);
         console.log(`✅ Route ${req.params.routeId} points updated successfully: ${finalPoints.length} points, ${totalDistance.toFixed(2)}km`);
         res.json({ success: true, totalPoints: finalPoints.length, totalDistance });

@@ -277,8 +277,8 @@ class RouteTracker {
         this.currentRouteData = routeData;
 
         // Clear existing layers
-        this.clearRoute();
-        
+        this.clearAllLayers();
+
         // Check if route has enhanced analysis data - use smart display if available
         if (routeData && routeData.analysis && routeData.analysis.segments && routeData.analysis.segments.length > 0) {
             this.displaySmartRoute(routeData);
@@ -541,35 +541,58 @@ class RouteTracker {
     }
 
     // Clear all route layers
-    clearRoute() {
-        // Clear old route layer
-        if (this.currentRoute) {
+    clearAllLayers() {
+        console.log('Clearing all route layers from the map...');
+
+        // Ensure shared layer groups always exist (other methods call clearLayers on them)
+        if (!this.dataPointsLayerGroup) this.dataPointsLayerGroup = L.layerGroup();
+        if (!this.editMarkersGroup) this.editMarkersGroup = L.layerGroup();
+
+        // Remove main polyline
+        if (this.currentRoute && this.map.hasLayer(this.currentRoute)) {
             this.map.removeLayer(this.currentRoute);
-            this.currentRoute = null;
         }
-        
-        // Clear all route-related layers
-        if (this.routeLayers) {
+        this.currentRoute = null;
+
+        // Remove segmented polylines
+        if (this.routeLayers && this.routeLayers.length > 0) {
             this.routeLayers.forEach(layer => {
                 if (this.map.hasLayer(layer)) {
                     this.map.removeLayer(layer);
                 }
             });
-            this.routeLayers = [];
         }
+        this.routeLayers = [];
+
+        // Remove data point markers
+        if (this.dataPointsLayerGroup && this.map.hasLayer(this.dataPointsLayerGroup)) {
+            this.map.removeLayer(this.dataPointsLayerGroup);
+        }
+        this.dataPointsLayerGroup.clearLayers();
+
+        // Remove edit mode markers
+        if (this.editMarkersGroup && this.map.hasLayer(this.editMarkersGroup)) {
+            this.map.removeLayer(this.editMarkersGroup);
+        }
+        this.editMarkersGroup.clearLayers();
+
+        // Remove pause point markers and layers
+        if (this.pausePointsLayer && this.map.hasLayer(this.pausePointsLayer)) {
+            this.map.removeLayer(this.pausePointsLayer);
+        }
+        this.pausePointsLayer = null;
+
+        // Remove start/end markers
+        if (this.startMarker && this.map.hasLayer(this.startMarker)) {
+            this.map.removeLayer(this.startMarker);
+        }
+        this.startMarker = null;
+        if (this.endMarker && this.map.hasLayer(this.endMarker)) {
+            this.map.removeLayer(this.endMarker);
+        }
+        this.endMarker = null;
         
-        // Clear legacy layers (backward compatibility)
-        this.map.eachLayer(layer => {
-            if (layer instanceof L.Marker || layer instanceof L.Polyline || layer instanceof L.Circle) {
-                // Don't remove the base map tiles
-                if (layer.options && (layer.options.className?.includes('route') || 
-                    layer.options.className?.includes('pause') ||
-                    layer.options.className?.includes('approach') ||
-                    layer.options.className?.includes('departure'))) {
-                    this.map.removeLayer(layer);
-                }
-            }
-        });
+        console.log('All layers cleared.');
     }
 
     // Simplify points for display performance using distance-based decimation
@@ -761,8 +784,24 @@ class RouteTracker {
     redrawMergedEditPolyline() {
         if (!this.currentRouteData?.points) return;
         
-        // Clear existing route display
-        this.clearRoute();
+        // Clear only route visuals, keep edit markers on map
+        if (this.currentRoute && this.map.hasLayer(this.currentRoute)) {
+            this.map.removeLayer(this.currentRoute);
+        }
+        this.currentRoute = null;
+
+        if (this.routeLayers && this.routeLayers.length > 0) {
+            this.routeLayers.forEach(layer => {
+                if (this.map.hasLayer(layer)) {
+                    this.map.removeLayer(layer);
+                }
+            });
+        }
+        this.routeLayers = [];
+        if (this.pausePointsLayer && this.map.hasLayer(this.pausePointsLayer)) {
+            this.map.removeLayer(this.pausePointsLayer);
+        }
+        this.pausePointsLayer = null;
         
         // Draw clean polyline connecting all points including merged points
         const routePoints = this.currentRouteData.points.map(p => [p.lat, p.lng]);
@@ -937,8 +976,8 @@ class RouteTracker {
             
             const route1 = {
                 ...this.currentRouteData,
-                id: this.currentRouteData.id + '_part1_' + timestamp,
-                name: originalName + ` (Part 1 - ${timestamp})`,
+                id: `${this.currentRouteData.id}_part1_${timestamp}`,
+                name: `${originalName} (Part 1 - ${timestamp})`,
                 points: this.currentRouteData.points.slice(0, pointIndex + 1),
                 endTime: splitTimestamp,
                 status: 'completed'
@@ -946,9 +985,9 @@ class RouteTracker {
             
             const route2 = {
                 ...this.currentRouteData,  
-                id: this.currentRouteData.id + '_part2_' + timestamp,
-                name: originalName + ` (Part 2 - ${timestamp})`,
-                points: this.currentRouteData.points.slice(pointIndex + 1), // No overlap - start from next point
+                id: `${this.currentRouteData.id}_part2_${timestamp}`,
+                name: `${originalName} (Part 2 - ${timestamp})`,
+                points: this.currentRouteData.points.slice(pointIndex + 1),
                 startTime: splitTimestamp
             };
             
@@ -1222,7 +1261,7 @@ class RouteTracker {
                 this.currentRouteData = updatedRoute;
                 // Use smart display for analyzed routes
                 if (updatedRoute.analysis) {
-                    this.clearRoute();
+                    this.clearAllLayers();
                     this.displaySmartRoute(updatedRoute);
                 }
                 this.showNotification('Route analysis completed!', 'success');
@@ -3174,7 +3213,6 @@ function startMapCoordPicker() {
             document.getElementById('media-photo-lng').value = lng;
             document.getElementById('media-photo-loc-text').textContent = coordText;
             document.getElementById('media-photo-loc-gps').style.display = '';
-            document.getElementById('media-photo-loc-none').style.display = 'none';
         } else {
             document.getElementById('media-yt-lat').value = lat;
             document.getElementById('media-yt-lng').value = lng;
