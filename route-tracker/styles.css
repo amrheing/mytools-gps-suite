@@ -6,21 +6,25 @@
 
 /* ── 1. CSS Variables ─────────────────────────────────────── */
 :root {
-    --primary-color: #2c3e50;
+    --primary-color: #e0e0e0;
     --secondary-color: #3498db;
-    --success-color: #27ae60;
+    --success-color: #2ecc71;
     --warning-color: #f39c12;
     --error-color: #e74c3c;
-    --light-bg: #ecf0f1;
-    --text-color: #2c3e50;
-    --text-dark: #2c3e50;
-    --text-light: #7f8c8d;
-    --border-color: #bdc3c7;
-    --shadow: 0 1px 4px rgba(0,0,0,0.12);
-    --shadow-hover: 0 2px 8px rgba(0,0,0,0.16);
+    --light-bg: #1f2235;
+    --text-color: #e0e0e0;
+    --text-dark: #e0e0e0;
+    --text-light: rgba(255,255,255,0.45);
+    --border-color: #2a2d3e;
+    --shadow: 0 1px 4px rgba(0,0,0,0.4);
+    --shadow-hover: 0 2px 8px rgba(0,0,0,0.5);
     --border-radius: 8px;
     --transition: all 0.3s ease;
-    --gradient-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --gradient-bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    --bg-body: #0f1117;
+    --bg-card: #1a1d2e;
+    --bg-card-inner: #161929;
+    --bg-input: rgba(255,255,255,0.06);
 }
 
 /* ── 2. Reset & Base ──────────────────────────────────────── */
@@ -33,7 +37,7 @@
 html, body {
     overflow-x: hidden;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    background: var(--gradient-bg);
+    background: var(--bg-body);
     min-height: 100vh;
     color: var(--text-color);
     line-height: 1.6;
@@ -59,7 +63,8 @@ html, body {
 /* ── 4. Header ────────────────────────────────────────────── */
 /* Reset shared-styles.css .header which adds padding:2rem and margin:2rem */
 .header {
-    background: white;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
     padding: 10px 14px;
     margin: 0;
     border-radius: var(--border-radius);
@@ -161,7 +166,7 @@ html, body {
     align-items: center;
     margin-bottom: 10px;
     padding-bottom: 8px;
-    border-bottom: 2px solid #f8f9fa;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .section-title {
@@ -173,60 +178,75 @@ html, body {
 
 /* ── 7. Panels ────────────────────────────────────────────── */
 .control-panel {
-    background: white;
+    background: var(--bg-card);
     padding: 12px 14px;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
-    border-left: 4px solid var(--primary-color);
+    border-left: 4px solid #3498db;
+    border-top: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .stats-dashboard {
-    background: white;
+    background: var(--bg-card);
     padding: 12px 14px;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
-    border-left: 4px solid #28a745;
+    border-left: 4px solid #2ecc71;
+    border-top: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .export-panel {
-    background: white;
+    background: var(--bg-card);
     padding: 12px 14px;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
-    border-left: 4px solid #ffc107;
+    border-left: 4px solid #f39c12;
+    border-top: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
     align-self: start;
     height: fit-content;
 }
 
 .route-history {
-    background: white;
+    background: var(--bg-card);
     padding: 12px 14px;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
     border-left: 4px solid #17a2b8;
+    border-top: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .config-section {
-    background: white;
+    background: var(--bg-card);
     padding: 12px 14px;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
-    border-left: 4px solid #6f42c1;
+    border-left: 4px solid #9b59b6;
+    border-top: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .status-panel {
-    background: #f8f9fa;
+    background: var(--bg-card-inner);
     padding: 12px;
     border-radius: var(--border-radius);
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--border-color);
     min-width: 0;
 }
 
 .device-selector-panel {
-    background: #f8f9fa;
+    background: var(--bg-card-inner);
     padding: 15px;
     border-radius: var(--border-radius);
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--border-color);
 }
 
 /* ── 8. Grids — Mobile-first (1-column default) ───────────── */
@@ -288,10 +308,10 @@ html, body {
 
 /* ── 9. Stat Cards ────────────────────────────────────────── */
 .stat-card {
-    background: linear-gradient(135deg, #f8f9fa, #ffffff);
+    background: var(--bg-card-inner);
     padding: 10px 8px;
     border-radius: var(--border-radius);
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--border-color);
     text-align: center;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     min-width: 0;
@@ -321,11 +341,11 @@ html, body {
 
 /* ── 10. Map ──────────────────────────────────────────────── */
 .map-section {
-    background: white;
+    background: var(--bg-card);
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-hover);
     overflow: hidden;
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--border-color);
 }
 
 .map-section.map-edit-fullscreen {
@@ -345,9 +365,9 @@ html, body {
 }
 
 .map-header {
-    background: #f8f9fa;
+    background: var(--bg-card-inner);
     padding: 12px 16px;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid var(--border-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -364,7 +384,7 @@ html, body {
     width: 100%;
 }
 
-.leaflet-container { background: #ddd; }
+.leaflet-container { background: #1a1d2e; }
 .leaflet-tile { max-width: none !important; max-height: none !important; }
 
 /* ── 11. Route Items ──────────────────────────────────────── */
@@ -372,15 +392,15 @@ html, body {
     display: flex;
     flex-direction: column;
     padding: 12px 14px;
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
     margin-bottom: 10px;
-    background: #fafbfc;
+    background: var(--bg-card-inner);
     transition: all 0.2s ease;
 }
 
 .route-item:hover {
-    background: white;
+    background: #1f2438;
     box-shadow: var(--shadow);
     transform: translateY(-1px);
 }
@@ -394,7 +414,7 @@ html, body {
 
 .route-info h4 {
     margin: 0;
-    color: var(--primary-color);
+    color: #e0e0e0;
     font-size: 1rem;
 }
 
@@ -431,16 +451,19 @@ html, body {
 
 .history-filters input[type="date"] {
     padding: 6px 8px;
-    border: 1px solid #d9dee5;
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     font-size: 0.8rem;
     width: 100%;
+    background: var(--bg-input);
+    color: var(--text-color);
+    color-scheme: dark;
 }
 
 /* ── 13. Archive Calendar ─────────────────────────────────── */
 .archive-calendar {
     margin-top: 14px;
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid var(--border-color);
     padding-top: 12px;
 }
 
@@ -489,8 +512,8 @@ html, body {
 }
 
 .archive-calendar-day {
-    border: 1px solid #d9dee5;
-    background: #fff;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card-inner);
     border-radius: 6px;
     font-size: 0.76rem;
     line-height: 1;
@@ -500,12 +523,12 @@ html, body {
     justify-content: center;
     cursor: pointer;
     position: relative;
-    color: var(--text-dark);
+    color: var(--text-color);
 }
 
 .archive-calendar-day.empty    { border-color: transparent; background: transparent; cursor: default; }
-.archive-calendar-day.has-archive { border-color: #2ecc71; background: #eaf9f0; font-weight: 700; }
-.archive-calendar-day.selected { border-color: #3498db; background: #e8f2fd; box-shadow: inset 0 0 0 1px #3498db; }
+.archive-calendar-day.has-archive { border-color: #2ecc71; background: rgba(46,204,113,0.15); font-weight: 700; }
+.archive-calendar-day.selected { border-color: #3498db; background: rgba(52,152,219,0.2); box-shadow: inset 0 0 0 1px #3498db; }
 
 .archive-calendar-day-count {
     position: absolute;
@@ -525,7 +548,8 @@ html, body {
 /* ── 14. Status Indicators ────────────────────────────────── */
 .status-text {
     font-family: monospace;
-    background: #f8f9fa;
+    background: rgba(255,255,255,0.06);
+    color: #e0e0e0;
     padding: 4px 8px;
     border-radius: 4px;
     font-size: 0.9em;
@@ -554,16 +578,25 @@ html, body {
     border-radius: var(--border-radius);
     font-size: 0.9rem;
     font-family: inherit;
-    background: #fafbfc;
+    background: var(--bg-input);
+    color: var(--text-color);
     min-width: 0;
+}
+
+.form-group input::placeholder { color: var(--text-light); }
+.form-control::placeholder      { color: var(--text-light); }
+
+select.form-control option {
+    background: #1a1d2e;
+    color: #e0e0e0;
 }
 
 .form-control:focus,
 .form-group input:focus {
     outline: none;
     border-color: var(--secondary-color);
-    background: white;
-    box-shadow: 0 0 0 3px rgba(52,152,219,0.1);
+    background: rgba(255,255,255,0.08);
+    box-shadow: 0 0 0 3px rgba(52,152,219,0.15);
 }
 
 /* ── 16. Overlays & Modals ────────────────────────────────── */
@@ -583,7 +616,8 @@ html, body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: white;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
     padding: 30px;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-hover);
@@ -638,10 +672,10 @@ html, body {
     display: none;
     position: absolute;
     z-index: 10001;
-    background: white;
-    border: 1px solid #ddd;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
     overflow: hidden;
     min-width: 170px;
 }
@@ -654,24 +688,25 @@ html, body {
     align-items: center;
     gap: 8px;
     transition: background 0.15s;
+    color: var(--text-color);
 }
 
-.ctx-item:hover               { background: #f0f4ff; }
-.ctx-item.ctx-danger:hover    { background: #fff0f0; color: #c0392b; }
-.ctx-separator                { height: 1px; background: #eee; margin: 0; }
+.ctx-item:hover               { background: rgba(255,255,255,0.07); }
+.ctx-item.ctx-danger:hover    { background: rgba(231,76,60,0.15); color: #e74c3c; }
+.ctx-separator                { height: 1px; background: var(--border-color); margin: 0; }
 
 /* ── 20. Edit Toolbar ─────────────────────────────────────── */
 #edit-toolbar {
     display: none;
     align-items: center;
     gap: 8px;
-    background: #fff3cd;
-    border-bottom: 2px solid #ffc107;
+    background: rgba(243,156,18,0.12);
+    border-bottom: 2px solid #f39c12;
     padding: 8px 16px;
     font-size: 0.9em;
 }
 
-#edit-toolbar span { flex: 1; color: #856404; }
+#edit-toolbar span { flex: 1; color: #f39c12; }
 
 /* ── 21. Route Point Editing ──────────────────────────────── */
 .edit-point-dot {
@@ -701,7 +736,7 @@ html, body {
 .route-merge-check input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
 
 /* ── 23. Main App Border ──────────────────────────────────── */
-#main-app { border: 2px solid var(--success-color); }
+#main-app { border: none; }
 
 /* ── 24. Role-based Visibility ────────────────────────────── */
 .role-viewer .admin-only          { display: none !important; }
@@ -710,16 +745,19 @@ html, body {
 
 /* ── 25. Endpoint / Setup Info ────────────────────────────── */
 .endpoint-info {
-    background: #e3f2fd;
+    background: rgba(52,152,219,0.1);
+    border: 1px solid rgba(52,152,219,0.25);
     padding: 15px;
     border-radius: var(--border-radius);
     margin-top: 10px;
     font-family: monospace;
     font-size: 0.9em;
+    color: #7ec8e3;
 }
 
 .setup-section {
-    background: #f8f9fa;
+    background: var(--bg-card-inner);
+    border: 1px solid var(--border-color);
     padding: 15px;
     border-radius: var(--border-radius);
     margin-top: 15px;
@@ -736,7 +774,7 @@ html, body {
 /* ── 26. Language Switcher ────────────────────────────────── */
 .language-switcher .language-option:hover  { background: rgba(255,255,255,0.1); }
 .language-switcher .language-option.active { background: rgba(46,204,113,0.2); color: #2ecc71; font-weight: 600; }
-.dropdown-menu a:hover { background: #f8f9fa !important; }
+.dropdown-menu a:hover { background: rgba(255,255,255,0.07) !important; }
 .dropdown-toggle:hover { opacity: 0.8; }
 
 /* ── 27. Misc shared elements ─────────────────────────────── */
@@ -747,6 +785,21 @@ html, body {
 #device-selector-viewer {
     min-width: 0;
 }
+
+/* Dark theme: re-colour native elements inside dark panels */
+.status-panel h4,
+.status-panel small,
+.control-panel h4,
+.config-section p,
+.config-section li,
+.config-section ol,
+.config-section strong {
+    color: var(--text-color);
+}
+
+.status-panel small { color: var(--text-light); }
+
+.map-header h3 { color: #e0e0e0 !important; }
 
 /* ============================================================
    RESPONSIVE BREAKPOINTS
