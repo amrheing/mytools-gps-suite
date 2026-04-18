@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Route Tracker – Admin</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
@@ -170,6 +170,65 @@
             color: #2ecc71;
             font-weight: 600;
         }
+
+        /* === RESPONSIVE PROFILES (iPhone + iPad) === */
+        @media (max-width: 1024px) {
+            .container {
+                padding: 20px 14px;
+            }
+
+            .card {
+                padding: 16px;
+            }
+
+            .table-wrap {
+                overflow-x: auto;
+            }
+
+            table {
+                min-width: 760px;
+            }
+        }
+
+        @media (max-width: 834px) {
+            nav {
+                height: auto;
+                min-height: 60px;
+                padding: 10px 14px;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            .nav-actions {
+                width: 100%;
+                flex-wrap: wrap;
+                justify-content: flex-start;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 430px) {
+            body {
+                padding-left: env(safe-area-inset-left);
+                padding-right: env(safe-area-inset-right);
+                padding-top: env(safe-area-inset-top);
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+
+            .btn {
+                min-height: 36px;
+                padding: 8px 12px;
+            }
+
+            .modal {
+                max-width: 100%;
+                margin: 0 10px;
+                padding: 18px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -201,7 +260,7 @@
 
     <!-- User List -->
     <h2><i class="fas fa-users"></i> <span data-i18n="admin.title">User Management</span></h2>
-    <div class="card">
+    <div class="card table-wrap">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
             <span style="color:rgba(255,255,255,0.5); font-size:0.85rem;" id="user-count">Loading...</span>
             <button class="btn btn-primary" onclick="openCreateModal()">
@@ -294,6 +353,21 @@
             Photos and YouTube videos attached to device routes. Expand a device to view, edit or delete entries.
         </p>
         <div id="media-sections"><p class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</p></div>
+    </div>
+
+    <!-- Route Basket -->
+    <h2><i class="fas fa-trash-restore"></i> <span data-i18n="admin.route_basket_title">Route Basket</span></h2>
+    <div class="card">
+        <p style="color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:15px;" data-i18n="admin.route_basket_help">
+            Routes moved to basket are hidden from history until restored or permanently deleted.
+        </p>
+        <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="loadRouteBasket()"><i class="fas fa-sync"></i> <span data-i18n="admin.basket_refresh">Refresh Basket</span></button>
+            <button class="btn btn-success btn-sm" onclick="restoreSelectedBasketRoutes()"><i class="fas fa-undo"></i> <span data-i18n="admin.basket_restore">Restore</span></button>
+            <button class="btn btn-danger btn-sm" onclick="deleteSelectedBasketRoutes()"><i class="fas fa-trash"></i> <span data-i18n="admin.basket_delete_selected">Delete Selected Permanently</span></button>
+            <button class="btn btn-danger btn-sm" onclick="deleteAllBasketRoutes()"><i class="fas fa-trash-alt"></i> <span data-i18n="admin.basket_delete_all">Delete All Permanently</span></button>
+        </div>
+        <div id="route-basket-list"><p class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</p></div>
     </div>
 
 </div>
@@ -440,6 +514,14 @@
             </select>
         </div>
 
+        <div class="form-group" style="margin-bottom:20px;">
+            <label data-i18n="admin.history_limit">History Routes In List</label>
+            <input type="number" id="modal-history-limit" min="1" step="1" placeholder="e.g. 50">
+            <div style="color:rgba(255,255,255,0.45); font-size:0.78rem; margin-top:6px;" data-i18n="admin.history_limit_help">
+                How many routes this user sees in history (empty = unlimited).
+            </div>
+        </div>
+
         <div class="form-actions">
             <button class="btn btn-primary" onclick="saveUser()">
                 <i class="fas fa-save"></i> Save
@@ -464,7 +546,7 @@ async function init() {
     // Set OwnTracks endpoint URL
     const ep = document.getElementById('owntracks-endpoint');
     if (ep) ep.textContent = window.location.origin + '/route-tracker/api/gps';
-    await Promise.all([loadUsers(), loadDevices(), loadShares(), loadMediaAdmin(), loadAdminDevices()]);
+    await Promise.all([loadUsers(), loadDevices(), loadShares(), loadMediaAdmin(), loadAdminDevices(), loadRouteBasket()]);
     if (me.canViewLogs) {
         document.getElementById('log-viewer-section').style.display = 'block';
         loadGPSLogs();
@@ -578,6 +660,7 @@ function openCreateModal() {
     document.getElementById('modal-alert').classList.remove('show');
     document.getElementById('modal-date-from').value = '';
     document.getElementById('modal-date-to').value = '';
+    document.getElementById('modal-history-limit').value = '';
     renderDeviceCheckboxes([]);
     document.getElementById('user-modal').classList.add('show');
 }
@@ -599,6 +682,7 @@ function openEditModal(userId) {
     document.getElementById('modal-alert').classList.remove('show');
     document.getElementById('modal-date-from').value = user.dataWindow?.from || '';
     document.getElementById('modal-date-to').value = user.dataWindow?.to || '';
+    document.getElementById('modal-history-limit').value = user.historyRouteLimit || '';
     renderDeviceCheckboxes(user.allowedDevices || []);
     document.getElementById('user-modal').classList.add('show');
 }
@@ -633,11 +717,13 @@ async function saveUser() {
     }
 
     const canViewLogs = document.getElementById('modal-can-view-logs').checked;
+    const historyRouteLimitRaw = document.getElementById('modal-history-limit').value;
     const body = {
         role,
         email: email || null,
         allowedDevices,
         canViewLogs: role === 'admin' ? canViewLogs : false,
+        historyRouteLimit: historyRouteLimitRaw === '' ? null : Number(historyRouteLimitRaw),
         dataWindow: {
             from: document.getElementById('modal-date-from').value || null,
             to: document.getElementById('modal-date-to').value || null
@@ -1082,6 +1168,100 @@ async function editMediaDesc(deviceId, id, currentDesc) {
     } else {
         showAlert('Failed to update description.', 'error');
     }
+}
+
+// ---- Route Basket ----
+async function loadRouteBasket() {
+    const container = document.getElementById('route-basket-list');
+    if (!container) return;
+    const t = (k, d) => window.t ? window.t(k, d) : d;
+    container.innerHTML = `<p class="empty-state"><i class="fas fa-spinner fa-spin"></i> ${t('admin.loading', 'Loading...')}</p>`;
+
+    const res = await fetch('./api/admin/routes/basket');
+    if (!res.ok) {
+        container.innerHTML = `<p class="empty-state">${t('admin.basket_load_failed', 'Failed to load basket.')}</p>`;
+        return;
+    }
+
+    const data = await res.json();
+    const routes = data.routes || [];
+    if (routes.length === 0) {
+        container.innerHTML = `<p class="empty-state">${window.t ? window.t('admin.basket_empty', 'Basket is empty.') : 'Basket is empty.'}</p>`;
+        return;
+    }
+
+    container.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;font-size:0.86rem;">
+            <thead>
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.12);">
+                    <th style="padding:8px;text-align:left;"><input type="checkbox" onchange="toggleBasketAll(this.checked)"></th>
+                    <th style="padding:8px;text-align:left;">${t('admin.basket_col_route', 'Route')}</th>
+                    <th style="padding:8px;text-align:left;">${t('admin.basket_col_device', 'Device')}</th>
+                    <th style="padding:8px;text-align:right;">${t('admin.basket_col_points', 'Points')}</th>
+                    <th style="padding:8px;text-align:left;">${t('admin.basket_col_deleted_at', 'Deleted At')}</th>
+                    <th style="padding:8px;text-align:left;">${t('admin.basket_col_by', 'By')}</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${routes.map(r => `
+                    <tr style="border-top:1px solid rgba(255,255,255,0.06);">
+                        <td style="padding:8px;"><input class="basket-route-check" type="checkbox" value="${escHtml(r.id)}"></td>
+                        <td style="padding:8px;">${escHtml(r.name || r.id)}</td>
+                        <td style="padding:8px;color:rgba(255,255,255,0.6);">${escHtml(r.deviceId || '—')}</td>
+                        <td style="padding:8px;text-align:right;">${Number(r.totalPoints || 0).toLocaleString()}</td>
+                        <td style="padding:8px;color:rgba(255,255,255,0.6);">${r.deletedAt ? new Date(r.deletedAt).toLocaleString() : '—'}</td>
+                        <td style="padding:8px;color:rgba(255,255,255,0.6);">${escHtml(r.deletedBy || '—')}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function toggleBasketAll(checked) {
+    document.querySelectorAll('.basket-route-check').forEach(cb => { cb.checked = !!checked; });
+}
+
+function getSelectedBasketRouteIds() {
+    return [...document.querySelectorAll('.basket-route-check:checked')].map(cb => cb.value);
+}
+
+async function restoreSelectedBasketRoutes() {
+    const t = (k, d) => window.t ? window.t(k, d) : d;
+    const ids = getSelectedBasketRouteIds();
+    if (ids.length === 0) return showAlert(t('admin.basket_select_one', 'Select at least one route.'), 'error');
+    for (const id of ids) {
+        const res = await fetch(`./api/admin/routes/${encodeURIComponent(id)}/restore`, { method: 'POST' });
+        if (!res.ok) return showAlert(t('admin.basket_restore_failed', 'Failed to restore one or more routes.'), 'error');
+    }
+    showAlert(t('admin.basket_restored', 'Selected routes restored.'), 'success');
+    await loadRouteBasket();
+}
+
+async function deleteSelectedBasketRoutes() {
+    const t = (k, d) => window.t ? window.t(k, d) : d;
+    const ids = getSelectedBasketRouteIds();
+    if (ids.length === 0) return showAlert(t('admin.basket_select_one', 'Select at least one route.'), 'error');
+    if (!confirm(t('admin.basket_confirm_delete_selected', 'Permanently delete selected routes? This cannot be undone.').replace('{count}', String(ids.length)))) return;
+    const res = await fetch('./api/admin/routes/basket', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ routeIds: ids })
+    });
+    if (!res.ok) return showAlert(t('admin.basket_delete_failed', 'Failed to permanently delete selected routes.'), 'error');
+    const data = await res.json();
+    showAlert(t('admin.basket_deleted_count', 'Deleted {count} route(s) permanently.').replace('{count}', String(data.deletedCount || 0)), 'success');
+    await loadRouteBasket();
+}
+
+async function deleteAllBasketRoutes() {
+    const t = (k, d) => window.t ? window.t(k, d) : d;
+    if (!confirm(t('admin.basket_confirm_delete_all', 'Permanently delete ALL routes in basket? This cannot be undone.'))) return;
+    const res = await fetch('./api/admin/routes/basket/all', { method: 'DELETE' });
+    if (!res.ok) return showAlert(t('admin.basket_delete_all_failed', 'Failed to permanently delete basket routes.'), 'error');
+    const data = await res.json();
+    showAlert(t('admin.basket_deleted_count', 'Deleted {count} route(s) permanently.').replace('{count}', String(data.deletedCount || 0)), 'success');
+    await loadRouteBasket();
 }
 
 // ---- GPS Log Viewer ----

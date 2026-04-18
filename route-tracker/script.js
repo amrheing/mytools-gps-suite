@@ -10,6 +10,14 @@ class RouteTracker {
         this.selectedDeviceId = localStorage.getItem('selectedDeviceId') || 'default-device';
         this.autoRefresh = true;
         this.refreshRate = 5000; // 5 seconds default
+        this._allRoutes = [];
+        this.historyFilters = {
+            dateFrom: '',
+            dateTo: '',
+            favoritesOnly: false
+        };
+        const now = new Date();
+        this.archiveCalendarMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         
         // Reference to translation function
         this.t = window.t;
@@ -34,6 +42,8 @@ class RouteTracker {
                 }
             }
         });
+
+        this._onResponsiveLayoutChange = () => this.enforceResponsiveControlPanelLayout();
         
         // Initialize the application
         this.init();
@@ -87,6 +97,7 @@ class RouteTracker {
             // Show main app immediately (no token gate)
             const mainApp = document.getElementById('main-app');
             if (mainApp) mainApp.style.display = 'block';
+            this.enforceResponsiveControlPanelLayout();
 
             // Set OwnTracks endpoint URL in config section (admin only)
             const epEl = document.getElementById('endpoint-url');
@@ -94,6 +105,12 @@ class RouteTracker {
             
             await this.loadAndPopulateDevices();
             this.setupDeviceSelector();
+            this.setupHistoryFilters();
+            this.setupArchiveCalendar();
+            this.enforceResponsiveControlPanelLayout();
+
+            window.addEventListener('resize', this._onResponsiveLayoutChange, { passive: true });
+            window.addEventListener('orientationchange', this._onResponsiveLayoutChange, { passive: true });
             await this.loadDevicesAndRoutes();
             this.startAutoRefresh();
 
@@ -279,11 +296,229 @@ class RouteTracker {
             const response = await this.apiCall(`/api/devices/${this.selectedDeviceId}/routes`);
             if (response.ok) {
                 const data = await response.json();
-                this.updateRoutesList(data.routes);
+                this._allRoutes = Array.isArray(data.routes) ? data.routes : [];
+                this.refreshRouteHistoryView();
             }
         } catch (error) {
             console.error('Error loading routes list:', error);
         }
+    }
+
+    setupHistoryFilters() {
+        const fromInput = document.getElementById('history-date-from');
+        const toInput = document.getElementById('history-date-to');
+        const favoritesOnly = document.getElementById('history-favorites-only');
+        const clearBtn = document.getElementById('history-filter-clear');
+
+        if (!fromInput || !toInput || !favoritesOnly || !clearBtn) return;
+
+        fromInput.addEventListener('change', () => {
+            this.historyFilters.dateFrom = fromInput.value || '';
+            this.refreshRouteHistoryView();
+        });
+        toInput.addEventListener('change', () => {
+            this.historyFilters.dateTo = toInput.value || '';
+            this.refreshRouteHistoryView();
+        });
+        favoritesOnly.addEventListener('change', () => {
+            this.historyFilters.favoritesOnly = !!favoritesOnly.checked;
+            this.refreshRouteHistoryView();
+        });
+        clearBtn.addEventListener('click', () => {
+            fromInput.value = '';
+            toInput.value = '';
+            favoritesOnly.checked = false;
+            this.historyFilters = { dateFrom: '', dateTo: '', favoritesOnly: false };
+            this.refreshRouteHistoryView();
+        });
+    }
+
+    enforceResponsiveControlPanelLayout() {
+        // Set ios-phone class so the .ios-phone CSS fallback rules activate.
+        // The class-based CSS media queries handle the actual layout now;
+        // we no longer need to override inline styles via JS.
+        const ua = navigator.userAgent || '';
+        const isIPhone = /iPhone|iPod/i.test(ua);
+        const minScreenSide = Math.min(window.screen?.width || 0, window.screen?.height || 0);
+        const hasTouch = (navigator.maxTouchPoints || 0) > 1;
+        const isPhoneFormFactor = hasTouch && minScreenSide > 0 && minScreenSide <= 500;
+        document.body.classList.toggle('ios-phone', isIPhone || isPhoneFormFactor);
+    }
+
+    setupArchiveCalendar() {
+        const prevBtn = document.getElementById('archive-cal-prev');
+        const nextBtn = document.getElementById('archive-cal-next');
+
+        if (prevBtn) {
+            prevBtn.addEventListener('click', () => {
+                this.archiveCalendarMonth = new Date(
+                    this.archiveCalendarMonth.getFullYear(),
+                    this.archiveCalendarMonth.getMonth() - 1,
+                    1
+                );
+                this.renderArchiveCalendar();
+            });
+        }
+
+        if (nextBtn) {
+            nextBtn.addEventListener('click', () => {
+                this.archiveCalendarMonth = new Date(
+                    this.archiveCalendarMonth.getFullYear(),
+                    this.archiveCalendarMonth.getMonth() + 1,
+                    1
+                );
+                this.renderArchiveCalendar();
+            });
+        }
+
+        this.renderArchiveCalendar();
+    }
+
+    _toDateKey(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    _getRouteFilterDate(route) {
+        if (!route) return null;
+        // Keep calendar marker dates and date-filter behavior consistent.
+        const iso = route.status !== 'active'
+            ? (route.endTime || route.startTime)
+            : route.startTime;
+        if (!iso) return null;
+        const date = new Date(iso);
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    _getArchivedDateCounts() {
+        const counts = new Map();
+        for (const route of this._allRoutes) {
+            const isArchived = route && route.status !== 'active';
+            if (!isArchived) continue;
+
+            const date = this._getRouteFilterDate(route);
+            if (!date) continue;
+
+            const key = this._toDateKey(date);
+            counts.set(key, (counts.get(key) || 0) + 1);
+        }
+        return counts;
+    }
+
+    renderArchiveCalendar() {
+        const monthEl = document.getElementById('archive-cal-month');
+        const weekdaysEl = document.getElementById('archive-cal-weekdays');
+        const daysEl = document.getElementById('archive-cal-days');
+        if (!monthEl || !weekdaysEl || !daysEl) return;
+
+        const lang = (window.currentLanguage === 'de') ? 'de-DE' : 'en-US';
+        const monthLabel = this.archiveCalendarMonth.toLocaleDateString(lang, { month: 'long', year: 'numeric' });
+        monthEl.textContent = monthLabel;
+
+        const archivedCounts = this._getArchivedDateCounts();
+        const selectedDay = (this.historyFilters.dateFrom && this.historyFilters.dateFrom === this.historyFilters.dateTo)
+            ? this.historyFilters.dateFrom
+            : '';
+
+        weekdaysEl.innerHTML = '';
+        const baseMonday = new Date(Date.UTC(2026, 0, 5));
+        for (let i = 0; i < 7; i++) {
+            const wd = new Date(baseMonday.getTime() + i * 24 * 3600 * 1000);
+            const node = document.createElement('div');
+            node.className = 'archive-calendar-weekday';
+            node.textContent = wd.toLocaleDateString(lang, { weekday: 'short' });
+            weekdaysEl.appendChild(node);
+        }
+
+        const year = this.archiveCalendarMonth.getFullYear();
+        const month = this.archiveCalendarMonth.getMonth();
+        const first = new Date(year, month, 1);
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+        let offset = first.getDay() - 1;
+        if (offset < 0) offset = 6;
+
+        daysEl.innerHTML = '';
+        for (let i = 0; i < offset; i++) {
+            const empty = document.createElement('div');
+            empty.className = 'archive-calendar-day empty';
+            daysEl.appendChild(empty);
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(year, month, day);
+            const key = this._toDateKey(date);
+            const count = archivedCounts.get(key) || 0;
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'archive-calendar-day';
+            if (count > 0) btn.classList.add('has-archive');
+            if (selectedDay && selectedDay === key) btn.classList.add('selected');
+            btn.textContent = String(day);
+            btn.title = count > 0
+                ? `${count} ${this.t ? this.t('history.archive_items', 'archived route(s)') : 'archived route(s)'}`
+                : (this.t ? this.t('history.no_archives_day', 'No archived routes on this day') : 'No archived routes on this day');
+
+            if (count > 0) {
+                const badge = document.createElement('span');
+                badge.className = 'archive-calendar-day-count';
+                badge.textContent = String(count);
+                btn.appendChild(badge);
+            }
+
+            btn.addEventListener('click', () => {
+                const fromInput = document.getElementById('history-date-from');
+                const toInput = document.getElementById('history-date-to');
+
+                if (this.historyFilters.dateFrom === key && this.historyFilters.dateTo === key) {
+                    this.historyFilters.dateFrom = '';
+                    this.historyFilters.dateTo = '';
+                    if (fromInput) fromInput.value = '';
+                    if (toInput) toInput.value = '';
+                } else {
+                    this.historyFilters.dateFrom = key;
+                    this.historyFilters.dateTo = key;
+                    if (fromInput) fromInput.value = key;
+                    if (toInput) toInput.value = key;
+                }
+
+                this.refreshRouteHistoryView();
+            });
+
+            daysEl.appendChild(btn);
+        }
+    }
+
+    getFilteredSortedRoutes(routes) {
+        if (!Array.isArray(routes)) return [];
+
+        const sorted = [...routes].sort((a, b) => new Date(b.startTime || 0) - new Date(a.startTime || 0));
+
+        return sorted.filter(route => {
+            if (this.historyFilters.favoritesOnly && !route.favorite) return false;
+
+            const routeDate = this._getRouteFilterDate(route);
+            const t = routeDate ? routeDate.getTime() : null;
+            if (!t || Number.isNaN(t)) return true;
+
+            if (this.historyFilters.dateFrom) {
+                const from = new Date(`${this.historyFilters.dateFrom}T00:00:00`).getTime();
+                if (t < from) return false;
+            }
+            if (this.historyFilters.dateTo) {
+                const to = new Date(`${this.historyFilters.dateTo}T23:59:59`).getTime();
+                if (t > to) return false;
+            }
+            return true;
+        });
+    }
+
+    refreshRouteHistoryView() {
+        this.renderArchiveCalendar();
+        this.updateRoutesList(this.getFilteredSortedRoutes(this._allRoutes));
     }
 
     displayRoute(routeData) {
@@ -2121,7 +2356,11 @@ class RouteTracker {
         );
         
         if (routes.length === 0) {
-            routeList.innerHTML = `<div class="route-item"><div class="route-info"><p>${this.t ? this.t('history.no_routes', 'No routes received yet. Configure your Overlander app to send GPS data to this server.') : 'No routes received yet. Configure your Overlander app to send GPS data to this server.'}</p></div></div>`;
+            const hasFilters = !!(this.historyFilters.dateFrom || this.historyFilters.dateTo || this.historyFilters.favoritesOnly);
+            const msg = hasFilters
+                ? (this.t ? this.t('history.no_matches', 'No routes match current filters.') : 'No routes match current filters.')
+                : (this.t ? this.t('history.no_routes', 'No routes received yet. Configure your Overlander app to send GPS data to this server.') : 'No routes received yet. Configure your Overlander app to send GPS data to this server.');
+            routeList.innerHTML = `<div class="route-item"><div class="route-info"><p>${msg}</p></div></div>`;
             this._updateMergeButton();
             return;
         }
@@ -2129,11 +2368,22 @@ class RouteTracker {
 routeList.innerHTML = routes.map(route => {
             const start = route.startTime ? new Date(route.startTime) : null;
             const end   = route.endTime   ? new Date(route.endTime)   : null;
-            const fmt = (d) => d ? d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '—';
+            const fmt = (d) => {
+                if (!d) return '—';
+                try {
+                    return d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+                } catch {
+                    // Older Safari can throw on dateStyle/timeStyle.
+                    return d.toLocaleString();
+                }
+            };
             const statusBadge = route.status === 'active'
                 ? `<span style="background:#27ae60;color:#fff;font-size:0.74em;padding:1px 6px;border-radius:10px;font-weight:600;">LIVE</span>`
                 : '';
             const routeColor = route.color || '#e74c3c';
+            const favIcon = route.favorite
+                ? '<i class="fas fa-star" style="color:#f1c40f;margin-left:6px;"></i>'
+                : '';
             const colorDot = `<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${routeColor};border:1px solid rgba(0,0,0,0.18);flex-shrink:0;margin-right:4px;vertical-align:middle;"></span>`;
             const metaParts = [
                 `<i class="fas fa-hdd" style="margin-right:3px;"></i>${route.deviceId || this.selectedDeviceId}`,
@@ -2149,32 +2399,35 @@ routeList.innerHTML = routes.map(route => {
                         <input type="checkbox" class="merge-checkbox" data-route-id="${route.id}" data-route-name="${route.name.replace(/"/g,'&quot;')}" data-route-start="${route.startTime}" onchange="routeTracker._updateMergeButton()">
                     </label>
                     <div class="route-info" style="flex:1;min-width:0;">
-                        <h4>${colorDot}${route.name} ${statusBadge}</h4>
+                        <h4>${colorDot}${route.name}${favIcon} ${statusBadge}</h4>
                         <div class="route-meta">${metaParts}</div>
                     </div>
                 </div>
                 <div class="route-actions">
-                    <button class="btn btn-sm btn-primary" onclick="routeTracker.viewRoute('${route.id}')">
+                    <button class="btn btn-sm btn-primary history-action-btn" onclick="routeTracker.viewRoute('${route.id}')">
                         <i class="fas fa-eye"></i> ${this.t ? this.t('history.view', 'View') : 'View'}
                     </button>
-                    <button class="btn btn-sm btn-secondary" onclick="routeTracker.exportRoute('${route.id}')">
+                    <button class="btn btn-sm btn-secondary history-action-btn" onclick="routeTracker.exportRoute('${route.id}')">
                         <i class="fas fa-download"></i> ${this.t ? this.t('history.export', 'Export') : 'Export'}
                     </button>
-                    <button class="btn btn-sm btn-info admin-only" onclick="routeTracker.editRoute('${route.id}', '${route.name.replace(/'/g, "\\'") }', '${route.color || '#e74c3c'}')">
+                    <button class="btn btn-sm btn-info admin-only history-action-btn" onclick="routeTracker.editRoute('${route.id}', '${route.name.replace(/'/g, "\\'") }', '${route.color || '#e74c3c'}')">
                         <i class="fas fa-pencil-alt"></i> ${this.t ? this.t('history.rename', 'Rename') : 'Rename'}
                     </button>
-                    <button class="btn btn-sm btn-warning admin-only" onclick="routeTracker.copyRoute('${route.id}', '${route.name.replace(/'/g, "\\'") }')" title="Copy route for testing/debugging">
+                    <button class="btn btn-sm btn-warning admin-only history-action-btn" onclick="routeTracker.copyRoute('${route.id}', '${route.name.replace(/'/g, "\\'") }')" title="Copy route for testing/debugging">
                         <i class="fas fa-copy"></i> ${this.t ? this.t('history.copy', 'Copy') : 'Copy'}
                     </button>
-                    <button class="btn btn-sm btn-danger admin-only" onclick="routeTracker.deleteRoute('${route.id}')">
-                        <i class="fas fa-trash"></i> ${this.t ? this.t('history.delete', 'Delete') : 'Delete'}
+                    <button class="btn btn-sm btn-secondary admin-only history-action-btn" onclick="routeTracker.toggleRouteFavorite('${route.id}', ${route.favorite === true})" title="${route.favorite ? (this.t ? this.t('history.unfavorite', 'Unfavorite') : 'Unfavorite') : (this.t ? this.t('history.favorite', 'Favorite') : 'Favorite')}">
+                        <i class="${route.favorite ? 'fas' : 'far'} fa-star"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger admin-only history-action-btn" onclick="routeTracker.deleteRoute('${route.id}')">
+                        <i class="fas fa-trash"></i> ${this.t ? this.t('history.move_to_basket', 'Move to Basket') : 'Move to Basket'}
                     </button>
                     ${route.status === 'active' ? `
-                        <button class="btn btn-sm btn-warning admin-only" onclick="routeTracker.stopRoute('${route.id}')">
+                        <button class="btn btn-sm btn-warning admin-only history-action-btn" onclick="routeTracker.stopRoute('${route.id}')">
                             <i class="fas fa-stop"></i> ${this.t ? this.t('history.stop', 'Stop') : 'Stop'}
                         </button>
                     ` : `
-                        <button class="btn btn-sm btn-success admin-only" onclick="routeTracker.activateRoute('${route.id}')" title="Set as active — GPS will append here">
+                        <button class="btn btn-sm btn-success admin-only history-action-btn" onclick="routeTracker.activateRoute('${route.id}')" title="Set as active — GPS will append here">
                             <i class="fas fa-play"></i> ${this.t ? this.t('history.set_active', 'Set Active') : 'Set Active'}
                         </button>
                     `}
@@ -2354,24 +2607,43 @@ routeList.innerHTML = routes.map(route => {
     }
 
     async deleteRoute(routeId) {
-        if (!confirm('Delete this route permanently? This cannot be undone.')) return;
+        if (!confirm('Move this route to basket? It can be restored in Admin.')) return;
         try {
             const response = await this.apiCall(`/api/routes/${routeId}`, {
                 method: 'DELETE'
             });
             if (response.ok) {
-                this.showNotification('Route deleted', 'success');
+                this.showNotification(this.t ? this.t('history.move_to_basket', 'Move to Basket') : 'Moved to basket', 'success');
                 await this.loadDevicesAndRoutes();
             } else {
-                this.showNotification('Failed to delete route', 'error');
+                this.showNotification('Failed to move route to basket', 'error');
             }
         } catch (error) {
-            this.showNotification('Error deleting route: ' + error.message, 'error');
+            this.showNotification('Error moving route to basket: ' + error.message, 'error');
+        }
+    }
+
+    async toggleRouteFavorite(routeId, currentFavorite) {
+        try {
+            const response = await this.apiCall(`/api/routes/${routeId}/favorite`, {
+                method: 'PATCH',
+                body: JSON.stringify({ favorite: !currentFavorite })
+            });
+            if (response.ok) {
+                await this.loadRoutesList();
+            } else {
+                this.showNotification('Failed to update favorite state', 'error');
+            }
+        } catch (error) {
+            this.showNotification('Error updating favorite: ' + error.message, 'error');
         }
     }
     
     async copyRoute(routeId, routeName) {
-        const newName = prompt(`Copy route "${routeName}" with new name:`, `${routeName} (Copy)`);
+        const newName = await this.askForText(
+            this.t ? this.t('history.copy_prompt', 'Copy route with new name:') : 'Copy route with new name:',
+            `${routeName} (Copy)`
+        );
         if (!newName || newName.trim() === '') return;
         
         try {
@@ -2400,6 +2672,68 @@ routeList.innerHTML = routes.map(route => {
             console.error('Error copying route:', error);
             this.showNotification('Failed to copy route: ' + error.message, 'error');
         }
+    }
+
+    async askForText(message, defaultValue = '') {
+        return await new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = [
+                'position:fixed',
+                'inset:0',
+                'background:rgba(0,0,0,0.55)',
+                'z-index:10050',
+                'display:flex',
+                'align-items:center',
+                'justify-content:center',
+                'padding:16px'
+            ].join(';');
+
+            const modal = document.createElement('div');
+            modal.style.cssText = [
+                'width:min(520px,100%)',
+                'background:#fff',
+                'border-radius:12px',
+                'box-shadow:0 16px 40px rgba(0,0,0,0.25)',
+                'padding:16px'
+            ].join(';');
+
+            modal.innerHTML = `
+                <div style="font-size:0.95rem;font-weight:600;color:#2c3e50;margin-bottom:10px;">${message}</div>
+                <input id="rt-copy-name-input" type="text" style="width:100%;padding:10px 12px;border:1px solid #d9dee5;border-radius:8px;font-size:0.9rem;" />
+                <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+                    <button id="rt-copy-cancel" class="btn btn-sm btn-secondary" type="button">${this.t ? this.t('common.cancel', 'Cancel') : 'Cancel'}</button>
+                    <button id="rt-copy-ok" class="btn btn-sm btn-primary" type="button">OK</button>
+                </div>
+            `;
+
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+
+            const input = modal.querySelector('#rt-copy-name-input');
+            const okBtn = modal.querySelector('#rt-copy-ok');
+            const cancelBtn = modal.querySelector('#rt-copy-cancel');
+
+            if (input) {
+                input.value = defaultValue || '';
+                input.focus();
+                input.select();
+            }
+
+            const cleanup = (value) => {
+                overlay.remove();
+                resolve(value);
+            };
+
+            okBtn?.addEventListener('click', () => cleanup(input ? input.value : defaultValue));
+            cancelBtn?.addEventListener('click', () => cleanup(null));
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) cleanup(null);
+            });
+            input?.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') cleanup(input.value);
+                if (e.key === 'Escape') cleanup(null);
+            });
+        });
     }
 
     startAutoRefresh() {

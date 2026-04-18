@@ -30,6 +30,22 @@ const { generateRegistrationOptions, verifyRegistrationResponse, generateAuthent
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || '/app/data';
+
+// File logger
+const LOG_FILE = path.join(DATA_DIR, 'server.log');
+const fsSync = require('fs');
+function log(...args) {
+    const line = new Date().toISOString() + ' ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+    console.log(line);
+    try { fsSync.appendFileSync(LOG_FILE, line + '\n'); } catch (_) {}
+}
+// Patch console for unified output
+const _consoleLog = console.log.bind(console);
+console.log = (...args) => {
+    const line = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+    _consoleLog(line);
+    try { fsSync.appendFileSync(LOG_FILE, new Date().toISOString() + ' ' + line + '\n'); } catch (_) {}
+};
 const MEDIA_DIR = path.join(DATA_DIR, 'media');
 const RP_NAME = 'Route Tracker';
 const RP_ID = process.env.RP_ID || 'tools.amrhein.info';
@@ -77,6 +93,13 @@ app.use(session({
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
+const noCacheHeaders = (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    next();
+};
+app.use(noCacheHeaders);
 app.use(express.static('/app'));
 app.use('/shared', express.static('/app/shared'));
 
@@ -173,18 +196,18 @@ const requireLogAccess = async (req, res, next) => {
 };
 
 // Store incoming request logs for debugging — file-backed so all workers share the same log
-const LOG_FILE = require('path').join(DATA_DIR, 'gps-request-log.json');
+const GPS_LOG_FILE = require('path').join(DATA_DIR, 'gps-request-log.json');
 const MAX_LOGS = 100;
 
 const loadRequestLogs = () => {
-    try { return JSON.parse(require('fs').readFileSync(LOG_FILE, 'utf8')); } catch { return []; }
+    try { return JSON.parse(require('fs').readFileSync(GPS_LOG_FILE, 'utf8')); } catch { return []; }
 };
 const saveRequestLog = (entry) => {
     try {
         let logs = loadRequestLogs();
         logs.unshift(entry);
         if (logs.length > MAX_LOGS) logs = logs.slice(0, MAX_LOGS);
-        require('fs').writeFileSync(LOG_FILE, JSON.stringify(logs));
+        require('fs').writeFileSync(GPS_LOG_FILE, JSON.stringify(logs));
     } catch { /* non-fatal */ }
 };
 // In-memory cache for reads (refreshed each request to /api/admin/logs)
@@ -444,6 +467,10 @@ const createNewRoute = (deviceId, routeName) => {
             source: 'owntracks',
             version: '1.0'
         },
+        favorite: false,
+        deleted: false,
+        deletedAt: null,
+        deletedBy: null,
         // Enhanced analysis data
         analysis: {
             segments: [],
@@ -1148,6 +1175,7 @@ app.get('/api/admin/users', requireLogin, requireAdmin, async (req, res) => {
         hasPassword: !!u.passwordHash,
         allowedDevices: u.allowedDevices || [],
         devices: u.devices || [],
+        historyRouteLimit: (u.historyRouteLimit ?? null),
         dataWindow: u.dataWindow || { from: null, to: null },
         canViewLogs: u.canViewLogs || false,
         passkeyCount: (u.passkeys || []).length,
@@ -1169,7 +1197,7 @@ app.delete('/api/admin/users/:id/passkeys', requireLogin, requireAdmin, async (r
 
 // Create user (admin only)
 app.post('/api/admin/users', requireLogin, requireAdmin, async (req, res) => {
-    const { username, password, email, role, allowedDevices, dataWindow } = req.body;
+    const { username, password, email, role, allowedDevices, dataWindow, historyRouteLimit } = req.body;
     if (!username) return res.status(400).json({ error: 'Username required' });
     if (!password && !email) return res.status(400).json({ error: 'Password or email address required' });
 
@@ -1188,6 +1216,9 @@ app.post('/api/admin/users', requireLogin, requireAdmin, async (req, res) => {
         allowedDevices: allowedDevices || [],
         devices: [],
         canViewLogs: false,
+        historyRouteLimit: (historyRouteLimit === null || historyRouteLimit === '' || Number.isNaN(Number(historyRouteLimit)))
+            ? null
+            : Math.max(1, parseInt(historyRouteLimit, 10)),
         dataWindow: dataWindow || { from: null, to: null },
         created: new Date().toISOString(),
         lastLogin: null
@@ -1211,6 +1242,10 @@ app.put('/api/admin/users/:id', requireLogin, requireAdmin, async (req, res) => 
     if (req.body.dataWindow !== undefined) user.dataWindow = req.body.dataWindow;
     if (req.body.canViewLogs !== undefined) user.canViewLogs = !!req.body.canViewLogs;
     if (req.body.email !== undefined) user.email = req.body.email ? req.body.email.trim().toLowerCase() : null;
+    if (req.body.historyRouteLimit !== undefined) {
+        const v = req.body.historyRouteLimit;
+        user.historyRouteLimit = (v === null || v === '' || Number.isNaN(Number(v))) ? null : Math.max(1, parseInt(v, 10));
+    }
 
     await saveUsers(users);
     res.json({ success: true });
@@ -1306,10 +1341,46 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// Debug beacon — logs client viewport/UA info to console
+app.post('/api/debug-beacon', (req, res) => {
+    const data = req.body || {};
+    const ua = req.headers['user-agent'] || 'unknown';
+    console.log('[DEBUG-BEACON]', JSON.stringify({
+        time: new Date().toISOString(),
+        ua,
+        ...data
+    }, null, 2));
+    res.json({ ok: true });
+});
+
 app.get('/api/admin/media-devices', requireLogin, requireAdmin, async (req, res) => {
     try {
         const entries = await fs.readdir(MEDIA_DIR, { withFileTypes: true }).catch(() => []);
-        const deviceIds = entries.filter(e => e.isDirectory()).map(e => e.name);
+        const mediaDirs = entries.filter(e => e.isDirectory()).map(e => e.name);
+
+        const devicesDir = path.join(DATA_DIR, 'devices');
+        const deviceFiles = await fs.readdir(devicesDir).catch(() => []);
+        const registeredDeviceIds = new Set(
+            deviceFiles
+                .filter(f => f.endsWith('.json'))
+                .map(f => f.replace(/\.json$/, ''))
+        );
+
+        const deviceIds = [];
+        for (const deviceId of mediaDirs) {
+            if (!registeredDeviceIds.has(deviceId)) continue;
+            const mediaJsonFile = path.join(MEDIA_DIR, deviceId, 'media.json');
+            let mediaItems = [];
+            try {
+                mediaItems = JSON.parse(await fs.readFile(mediaJsonFile, 'utf8'));
+            } catch {
+                mediaItems = [];
+            }
+            if (Array.isArray(mediaItems) && mediaItems.length > 0) {
+                deviceIds.push(deviceId);
+            }
+        }
+
         res.json(deviceIds);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -1900,7 +1971,11 @@ app.post('/api/routes/:routeId/copy', requireLogin, requireAdmin, async (req, re
             copyOf: sourceRouteId,
             copyTimestamp: new Date().toISOString(),
             status: 'completed', // Copies are never active
-            endTime: sourceRoute.endTime || new Date().toISOString() // Ensure end time is set
+            endTime: sourceRoute.endTime || new Date().toISOString(), // Ensure end time is set
+            favorite: false,
+            deleted: false,
+            deletedAt: null,
+            deletedBy: null
         };
         
         // Remove any live/active flags
@@ -1954,6 +2029,8 @@ app.get('/api/devices/:deviceId/routes', requireLogin, validateToken, async (req
                         deviceId: route.deviceId,
                         name: route.name,
                         color: route.color || null,
+                        favorite: route.favorite === true,
+                        deleted: route.deleted === true,
                         startTime: route.startTime,
                         endTime: route.endTime,
                         totalPoints: route.points.length,
@@ -1966,7 +2043,10 @@ app.get('/api/devices/:deviceId/routes', requireLogin, validateToken, async (req
             })
         );
         
-        let filtered = routes.filter(r => r !== null);
+        let filtered = routes.filter(r => r !== null && r.deleted !== true);
+
+        // Always sort chronologically (newest first)
+        filtered.sort((a, b) => new Date(b.startTime || 0) - new Date(a.startTime || 0));
 
         // Apply data window filter if user has one
         const users = await loadUsers();
@@ -1981,6 +2061,12 @@ app.get('/api/devices/:deviceId/routes', requireLogin, validateToken, async (req
                 if (to && t > to) return false;
                 return true;
             });
+        }
+
+        const user = users[req.session.userId];
+        const historyRouteLimit = user?.historyRouteLimit;
+        if (historyRouteLimit && Number.isFinite(Number(historyRouteLimit))) {
+            filtered = filtered.slice(0, Number(historyRouteLimit));
         }
 
         res.json({ deviceId, routes: filtered });
@@ -2038,6 +2124,19 @@ app.patch('/api/routes/:routeId', requireLogin, requireAdmin, async (req, res) =
         if (color && /^#[0-9a-fA-F]{6}$/.test(color)) route.color = color;
         await saveRoute(route);
         res.json({ success: true, name: route.name, color: route.color || null });
+    } catch (error) {
+        res.status(404).json({ error: 'Route not found' });
+    }
+});
+
+// Toggle route favorite state
+app.patch('/api/routes/:routeId/favorite', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const routeFile = path.join(DATA_DIR, 'routes', `${req.params.routeId}.json`);
+        const route = JSON.parse(await fs.readFile(routeFile, 'utf8'));
+        route.favorite = req.body.favorite === true;
+        await saveRoute(route);
+        res.json({ success: true, favorite: route.favorite });
     } catch (error) {
         res.status(404).json({ error: 'Route not found' });
     }
@@ -2145,7 +2244,7 @@ app.post('/api/devices/:deviceId/routes/:routeId/activate', requireLogin, requir
     }
 });
 
-// Delete a route
+// Soft-delete a route (move to basket)
 app.delete('/api/routes/:routeId', requireLogin, requireAdmin, async (req, res) => {
     try {
         const routeId = req.params.routeId;
@@ -2153,18 +2252,146 @@ app.delete('/api/routes/:routeId', requireLogin, requireAdmin, async (req, res) 
         const route = JSON.parse(await fs.readFile(routeFile, 'utf8'));
         const deviceId = route.deviceId;
 
-        // Remove route file
-        await fs.unlink(routeFile);
+        route.deleted = true;
+        route.deletedAt = new Date().toISOString();
+        route.deletedBy = req.session.username || 'admin';
+        if (route.status === 'active') route.status = 'completed';
+        await saveRoute(route);
 
-        // Remove from device's route list and clear currentRoute if needed
+        // Clear currentRoute if needed
         const deviceData = await getDeviceData(deviceId);
-        deviceData.routes = deviceData.routes.filter(id => id !== routeId);
         if (deviceData.currentRoute === routeId) deviceData.currentRoute = null;
         await saveDeviceData(deviceId, deviceData);
 
         res.json({ success: true });
     } catch (error) {
         res.status(404).json({ error: 'Route not found' });
+    }
+});
+
+// Admin: list routes in basket
+app.get('/api/admin/routes/basket', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const routesDir = path.join(DATA_DIR, 'routes');
+        const files = await fs.readdir(routesDir).catch(() => []);
+        const items = [];
+
+        for (const file of files) {
+            if (!file.endsWith('.json')) continue;
+            try {
+                const route = JSON.parse(await fs.readFile(path.join(routesDir, file), 'utf8'));
+                if (route.deleted === true) {
+                    items.push({
+                        id: route.id,
+                        deviceId: route.deviceId,
+                        name: route.name,
+                        totalPoints: Array.isArray(route.points) ? route.points.length : (route.totalPoints || 0),
+                        totalDistance: route.totalDistance || 0,
+                        startTime: route.startTime,
+                        endTime: route.endTime,
+                        deletedAt: route.deletedAt || null,
+                        deletedBy: route.deletedBy || null
+                    });
+                }
+            } catch {
+                // ignore invalid files
+            }
+        }
+
+        items.sort((a, b) => new Date(b.deletedAt || 0) - new Date(a.deletedAt || 0));
+        res.json({ routes: items });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Admin: restore route from basket
+app.post('/api/admin/routes/:routeId/restore', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const routeFile = path.join(DATA_DIR, 'routes', `${req.params.routeId}.json`);
+        const route = JSON.parse(await fs.readFile(routeFile, 'utf8'));
+        route.deleted = false;
+        route.deletedAt = null;
+        route.deletedBy = null;
+        await saveRoute(route);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(404).json({ error: 'Route not found' });
+    }
+});
+
+// Admin: permanently delete selected basket routes
+app.delete('/api/admin/routes/basket', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const routeIds = Array.isArray(req.body?.routeIds) ? req.body.routeIds : [];
+        if (routeIds.length === 0) return res.status(400).json({ error: 'routeIds required' });
+
+        let deletedCount = 0;
+        for (const routeId of routeIds) {
+            const routeFile = path.join(DATA_DIR, 'routes', `${routeId}.json`);
+            let route;
+            try {
+                route = JSON.parse(await fs.readFile(routeFile, 'utf8'));
+            } catch {
+                continue;
+            }
+            if (route.deleted !== true) continue;
+
+            const deviceData = await getDeviceData(route.deviceId);
+            deviceData.routes = (deviceData.routes || []).filter(id => id !== routeId);
+            if (deviceData.currentRoute === routeId) deviceData.currentRoute = null;
+            await saveDeviceData(route.deviceId, deviceData);
+
+            await fs.unlink(routeFile).catch(() => {});
+            deletedCount++;
+        }
+
+        res.json({ success: true, deletedCount });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Admin: permanently delete all routes in basket
+app.delete('/api/admin/routes/basket/all', requireLogin, requireAdmin, async (req, res) => {
+    try {
+        const routesDir = path.join(DATA_DIR, 'routes');
+        const files = await fs.readdir(routesDir).catch(() => []);
+        const ids = [];
+        for (const file of files) {
+            if (!file.endsWith('.json')) continue;
+            try {
+                const route = JSON.parse(await fs.readFile(path.join(routesDir, file), 'utf8'));
+                if (route.deleted === true) ids.push(route.id);
+            } catch {
+                // ignore invalid files
+            }
+        }
+
+        if (ids.length === 0) return res.json({ success: true, deletedCount: 0 });
+
+        let deletedCount = 0;
+        for (const routeId of ids) {
+            const routeFile = path.join(DATA_DIR, 'routes', `${routeId}.json`);
+            let route;
+            try {
+                route = JSON.parse(await fs.readFile(routeFile, 'utf8'));
+            } catch {
+                continue;
+            }
+
+            const deviceData = await getDeviceData(route.deviceId);
+            deviceData.routes = (deviceData.routes || []).filter(id => id !== routeId);
+            if (deviceData.currentRoute === routeId) deviceData.currentRoute = null;
+            await saveDeviceData(route.deviceId, deviceData);
+
+            await fs.unlink(routeFile).catch(() => {});
+            deletedCount++;
+        }
+
+        res.json({ success: true, deletedCount });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
 
