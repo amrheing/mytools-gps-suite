@@ -179,3 +179,4 @@ config.local.*
 .env.production.local
 # Live compose file with secrets - never commit
 docker-compose.yml
+route-tracker/data/sessions/*

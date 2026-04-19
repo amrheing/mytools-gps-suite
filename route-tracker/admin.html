@@ -12,6 +12,7 @@
             background: #0f1117;
             color: #e0e0e0;
             min-height: 100vh;
+            overflow-x: hidden;
         }
         /* ---- NAV ---- */
         nav {
@@ -153,7 +154,78 @@
         .token-value { font-family: monospace; font-size: 0.75rem; background: #0f1117; border: 1px solid #2a2d3e; border-radius: 6px; padding: 5px 10px; color: #2ecc71; word-break: break-all; flex: 1; }
         .copy-btn { white-space: nowrap; }
         .copy-btn.copied { color: #2ecc71; border-color: rgba(46,204,113,0.3); }
+
+        /* === USER CARD (mobile) === */
+        .user-card {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 12px 0;
+            border-bottom: 1px solid #1f2235;
+        }
+        .user-card:last-child { border-bottom: none; }
+        .user-card-row1 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .user-card-name {
+            flex: 1;
+            font-weight: 600;
+            font-size: 0.9rem;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .user-card-row2 {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            padding-left: 2px;
+        }
+        .users-mobile-cards { display: none; }
+
+        /* === DEVICE CARD (mobile) === */
+        .device-card {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 12px 0;
+            border-bottom: 1px solid #1f2235;
+        }
+        .device-card:last-child { border-bottom: none; }
+        .device-card-row1 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .device-card-name {
+            flex: 1;
+            font-weight: 600;
+            font-size: 0.9rem;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .device-card-row2 {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding-left: 2px;
+            font-size: 0.78rem;
+            color: rgba(255,255,255,0.5);
+        }
+        .devices-mobile-cards { display: none; }
         
+        @media (max-width: 600px) {
+            .table-scroll { display: none; }
+            .users-mobile-cards { display: block; }
+            .devices-list-table { display: none; }
+            .devices-mobile-cards { display: block; }
+        }
+
         /* === LANGUAGE SWITCHER STYLES === */
         .language-switcher .language-option {
             cursor: pointer; 
@@ -181,11 +253,12 @@
                 padding: 16px;
             }
 
-            .table-wrap {
+            .table-scroll {
                 overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
             }
 
-            table {
+            .table-scroll table {
                 min-width: 760px;
             }
         }
@@ -218,6 +291,10 @@
                 padding-bottom: env(safe-area-inset-bottom);
             }
 
+            .container {
+                padding: 16px 10px;
+            }
+
             .btn {
                 min-height: 36px;
                 padding: 8px 12px;
@@ -227,6 +304,14 @@
                 max-width: 100%;
                 margin: 0 10px;
                 padding: 18px;
+            }
+
+            .token-row {
+                flex-wrap: wrap;
+            }
+
+            .token-row > .btn-danger {
+                width: 100%;
             }
         }
     </style>
@@ -267,6 +352,7 @@
                 <i class="fas fa-user-plus"></i> <span data-i18n="admin.add_user">Add User</span>
             </button>
         </div>
+        <div class="table-scroll">
         <table>
             <thead>
                 <tr>
@@ -284,6 +370,8 @@
                 <tr><td colspan="8" class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
             </tbody>
         </table>
+        </div>
+        <div id="users-cards" class="users-mobile-cards"></div>
     </div>
 
     <!-- OwnTracks Setup -->
@@ -298,7 +386,7 @@
                 <code id="owntracks-endpoint" style="color:#2ecc71; font-size:0.9rem;">Loading...</code>
                 <button class="btn btn-secondary btn-sm" style="margin-left:10px;" onclick="copyEndpoint()"><i class="fas fa-copy"></i></button>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; font-size:0.85rem;">
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:12px; font-size:0.85rem;">
                 <div><span style="color:rgba(255,255,255,0.4);">Mode</span><br><strong>HTTP</strong></div>
                 <div><span style="color:rgba(255,255,255,0.4);">Authentication</span><br><strong>ON</strong></div>
                 <div><span style="color:rgba(255,255,255,0.4);">Password</span><br><strong>ON</strong></div>
@@ -322,7 +410,7 @@
                 </label>
                 <span id="log-summary" style="color:rgba(255,255,255,0.4); font-size:0.82rem;"></span>
             </div>
-            <div id="log-viewer-content" style="max-height:520px; overflow-y:auto;">
+            <div id="log-viewer-content" style="max-height:130px; overflow-y:auto;">
                 <p class="empty-state">Click Refresh to load incoming GPS log.</p>
             </div>
         </div>
@@ -344,6 +432,7 @@
             Registered GPS devices. Deleting a device permanently removes all its routes, media and references from users.
         </p>
         <div id="devices-list"><p class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading...</p></div>
+        <div id="devices-cards" class="devices-mobile-cards"></div>
     </div>
 
     <!-- Media Management -->
@@ -534,6 +623,7 @@
 <script>
 let allUsers = [];
 let allDevices = [];
+let adminDevices = [];
 
 // ---- Init ----
 async function init() {
@@ -563,14 +653,17 @@ async function loadUsers() {
 
 function renderUsers() {
     const tbody = document.getElementById('users-table-body');
+    const cards = document.getElementById('users-cards');
     document.getElementById('user-count').textContent = `${allUsers.length} user${allUsers.length !== 1 ? 's' : ''}`;
 
     if (allUsers.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No users yet.</td></tr>';
+        if (cards) cards.innerHTML = '<p class="empty-state">No users yet.</p>';
         return;
     }
 
-    tbody.innerHTML = allUsers.map(u => {
+    // Pre-build shared per-user strings
+    const rows = allUsers.map(u => {
         const linkedDevices = (u.devices || []);
         const linkedBadges = linkedDevices.length === 0
             ? '<span style="color:rgba(255,255,255,0.3);">—</span>'
@@ -591,9 +684,15 @@ function renderUsers() {
         const emailDisplay = u.email
             ? `<a href="mailto:${escHtml(u.email)}" style="color:rgba(255,255,255,0.6);font-size:0.82rem;text-decoration:none;">${escHtml(u.email)}</a>`
             : '<span style="color:rgba(255,255,255,0.2);font-size:0.82rem;">—</span>';
-        return `
+        const uid = escHtml(u.id);
+        const uname = escHtml(u.username);
+        return { u, linkedBadges, dwText, canLogsTag, passkeyTag, noPasswordBadge, emailDisplay, uid, uname };
+    });
+
+    // Desktop table rows
+    tbody.innerHTML = rows.map(({ u, linkedBadges, dwText, canLogsTag, passkeyTag, noPasswordBadge, emailDisplay, uid, uname }) => `
         <tr>
-            <td><i class="fas fa-user" style="color:rgba(255,255,255,0.3); margin-right:8px;"></i>${escHtml(u.username)}${noPasswordBadge}</td>
+            <td><i class="fas fa-user" style="color:rgba(255,255,255,0.3); margin-right:8px;"></i>${uname}${noPasswordBadge}</td>
             <td>${emailDisplay}</td>
             <td><span class="badge badge-${u.role}">${u.role}</span>${canLogsTag}${passkeyTag}</td>
             <td><div class="devices-list">${linkedBadges}</div></td>
@@ -607,18 +706,29 @@ function renderUsers() {
             <td>${dwText}</td>
             <td style="color:rgba(255,255,255,0.4); font-size:0.82rem;">${u.lastLogin ? new Date(u.lastLogin).toLocaleString() : 'Never'}</td>
             <td>
-                <button class="btn btn-success btn-sm" onclick="openEditModal('${escHtml(u.id)}')">
+                <button class="btn btn-success btn-sm" onclick="openEditModal('${uid}')">
                     <i class="fas fa-edit"></i> Edit
                 </button>
                 &nbsp;
-                ${u.email ? `<button class="btn btn-sm" style="background:#1a2a3a;border:1px solid #9b59b6;color:#9b59b6;" title="Send invitation email to ${escHtml(u.email)}" onclick="inviteUser('${escHtml(u.id)}', '${escHtml(u.username)}')"><i class="fas fa-envelope"></i> Invite</button>&nbsp;` : ''}
-                ${u.passkeyCount > 0 ? `<button class="btn btn-sm" style="background:#1a2a3a;border:1px solid #3498db;color:#3498db;" title="Remove all passkeys for ${escHtml(u.username)}" onclick="clearPasskeys('${escHtml(u.id)}', '${escHtml(u.username)}')"><i class="fas fa-fingerprint"></i><i class="fas fa-times" style="font-size:0.7em;margin-left:2px;"></i></button>&nbsp;` : ''}
-                <button class="btn btn-danger btn-sm" onclick="deleteUser('${escHtml(u.id)}', '${escHtml(u.username)}')">
+                ${u.email ? `<button class="btn btn-sm" style="background:#1a2a3a;border:1px solid #9b59b6;color:#9b59b6;" title="Send invitation email to ${escHtml(u.email)}" onclick="inviteUser('${uid}', '${uname}')"><i class="fas fa-envelope"></i> Invite</button>&nbsp;` : ''}
+                ${u.passkeyCount > 0 ? `<button class="btn btn-sm" style="background:#1a2a3a;border:1px solid #3498db;color:#3498db;" title="Remove all passkeys for ${uname}" onclick="clearPasskeys('${uid}', '${uname}')"><i class="fas fa-fingerprint"></i><i class="fas fa-times" style="font-size:0.7em;margin-left:2px;"></i></button>&nbsp;` : ''}
+                <button class="btn btn-danger btn-sm" onclick="deleteUser('${uid}', '${uname}')">
                     <i class="fas fa-trash"></i>
                 </button>
             </td>
-        </tr>`;
-    }).join('');
+        </tr>`).join('');
+
+    // Mobile card rows (portrait ≤600px)
+    if (cards) cards.innerHTML = rows.map(({ u, linkedBadges, noPasswordBadge, passkeyTag, canLogsTag, uid, uname }) => `
+        <div class="user-card">
+            <div class="user-card-row1">
+                <span class="user-card-name"><i class="fas fa-user" style="color:rgba(255,255,255,0.3);margin-right:6px;"></i>${uname}${noPasswordBadge}${passkeyTag}${canLogsTag}</span>
+                <span class="badge badge-${u.role}">${u.role}</span>
+                <button class="btn btn-success btn-sm" onclick="openEditModal('${uid}')"><i class="fas fa-edit"></i> Edit</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteUser('${uid}', '${uname}')"><i class="fas fa-trash"></i></button>
+            </div>
+            <div class="user-card-row2">${linkedBadges}</div>
+        </div>`).join('');
 }
 
 // ---- Devices ----
@@ -796,12 +906,17 @@ async function loadAdminDevices() {
 
 function renderAdminDevices(devices) {
     const container = document.getElementById('devices-list');
+    const cards = document.getElementById('devices-cards');
     if (!devices || devices.length === 0) {
         container.innerHTML = '<p class="empty-state">No devices registered yet. Devices are auto-created when the first GPS point is received.</p>';
+        if (cards) cards.innerHTML = '';
         return;
     }
+
+    // Desktop table
     container.innerHTML = `
-        <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+        <div class="devices-list-table" style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+        <table style="width:100%; border-collapse:collapse; font-size:0.9rem; min-width:580px;">
             <thead>
                 <tr style="color:rgba(255,255,255,0.4); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em;">
                     <th style="text-align:left; padding:8px 10px;">Device ID</th>
@@ -815,8 +930,8 @@ function renderAdminDevices(devices) {
             </thead>
             <tbody>
                 ${devices.map(d => {
-                    const autoRoute = d.settings?.autoStartRoute ? 
-                        `<span style="color:#2ecc71; font-size:0.75rem;"><i class="fas fa-robot"></i> ${d.settings.autoRouteTime || '00:00'}</span>` : 
+                    const autoRoute = d.settings?.autoStartRoute ?
+                        `<span style="color:#2ecc71; font-size:0.75rem;"><i class="fas fa-robot"></i> ${d.settings.autoRouteTime || '00:00'}</span>` :
                         `<span style="color:rgba(255,255,255,0.4); font-size:0.75rem;"><i class="fas fa-times"></i> Disabled</span>`;
                     return `
                 <tr style="border-top:1px solid rgba(255,255,255,0.07);">
@@ -845,7 +960,34 @@ function renderAdminDevices(devices) {
                 </tr>`;
                 }).join('')}
             </tbody>
-        </table>`;
+        </table>
+        </div>`;
+
+    // Mobile cards
+    if (cards) cards.innerHTML = devices.map(d => {
+        const did = escHtml(d.id);
+        const dname = escHtml(d.name);
+        const activeTag = d.currentRoute ? '<span style="font-size:0.68rem;color:#2ecc71;margin-left:6px;"><i class="fas fa-circle fa-xs"></i> active</span>' : '';
+        const autoRouteInfo = d.settings?.autoStartRoute
+            ? `<span style="color:#2ecc71;"><i class="fas fa-robot"></i> ${d.settings.autoRouteTime || '00:00'}</span>`
+            : `<span style="color:rgba(255,255,255,0.3);"><i class="fas fa-robot"></i> off</span>`;
+        const lastUpdate = d.lastUpdate ? new Date(d.lastUpdate).toLocaleDateString() : '—';
+        return `
+        <div class="device-card">
+            <div class="device-card-row1">
+                <span class="device-card-name"><i class="fas fa-mobile-alt" style="color:rgba(255,255,255,0.3);margin-right:6px;"></i>${dname}${activeTag}</span>
+                <button class="btn btn-sm" style="background:#2a2d3e;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.7);" onclick="openAutoRouteModal('${did}', '${dname}')" title="Auto-Route"><i class="fas fa-robot"></i></button>
+                <button class="btn btn-sm" style="background:#1e2a3a;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.7);" onclick="openDeviceRenameModal('${did}', '${dname}')"><i class="fas fa-pencil-alt"></i></button>
+                <button class="btn btn-danger btn-sm" onclick="deleteDevice('${did}', '${dname}', ${d.routeCount})"><i class="fas fa-trash"></i></button>
+            </div>
+            <div class="device-card-row2">
+                <span><i class="fas fa-route" style="margin-right:3px;"></i>${d.routeCount} routes</span>
+                <span><i class="fas fa-map-marker-alt" style="margin-right:3px;"></i>${d.totalPoints.toLocaleString()} pts</span>
+                ${autoRouteInfo}
+                <span><i class="fas fa-clock" style="margin-right:3px;"></i>${lastUpdate}</span>
+            </div>
+        </div>`;
+    }).join('');
 }
 
 function openDeviceRenameModal(deviceId, currentName) {
@@ -1107,7 +1249,7 @@ async function renderMediaForDevice(deviceId, panel) {
     const entries = await res.json();
     if (!entries.length) { panel.innerHTML = '<p class="empty-state">No media yet.</p>'; return; }
 
-    panel.innerHTML = `<table style="width:100%;border-collapse:collapse;">
+    panel.innerHTML = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table style="width:100%;border-collapse:collapse;min-width:400px;">
         <thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
             <th style="padding:8px;text-align:left;font-weight:500;color:rgba(255,255,255,0.5);width:50px;"></th>
             <th style="padding:8px;text-align:left;font-weight:500;color:rgba(255,255,255,0.5);">Description</th>
@@ -1116,7 +1258,7 @@ async function renderMediaForDevice(deviceId, panel) {
             <th style="padding:8px;text-align:right;font-weight:500;color:rgba(255,255,255,0.5);">Actions</th>
         </tr></thead>
         <tbody>${entries.map(e => mediaRow(e, deviceId)).join('')}</tbody>
-    </table>`;
+    </table></div>`;
 }
 
 function mediaRow(e, deviceId) {
@@ -1191,7 +1333,8 @@ async function loadRouteBasket() {
     }
 
     container.innerHTML = `
-        <table style="width:100%;border-collapse:collapse;font-size:0.86rem;">
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.86rem;min-width:480px;">
             <thead>
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.12);">
                     <th style="padding:8px;text-align:left;"><input type="checkbox" onchange="toggleBasketAll(this.checked)"></th>
@@ -1215,6 +1358,7 @@ async function loadRouteBasket() {
                 `).join('')}
             </tbody>
         </table>
+        </div>
     `;
 }
 
@@ -1287,7 +1431,7 @@ function renderLogs(logs) {
         container.innerHTML = '<p class="empty-state">No log entries.</p>';
         return;
     }
-    container.innerHTML = logs.map(log => {
+    container.innerHTML = logs.map((log, i, arr) => {
         const ts = new Date(log.timestamp).toLocaleString();
         const isGPS = log.path === '/api/gps' && log.method === 'POST';
         const body = log.body && Object.keys(log.body).length > 0 ? JSON.stringify(log.body, null, 2) : null;
@@ -1304,6 +1448,7 @@ function renderLogs(logs) {
             ${body ? `<pre style="margin:0; font-size:0.7rem; color:rgba(255,255,255,0.45); white-space:pre-wrap; word-break:break-all; max-height:160px; overflow-y:auto;">${escHtml(body)}</pre>` : ''}
         </div>`;
     }).join('');
+    container.scrollTop = container.scrollHeight;
 }
 
 </script>
