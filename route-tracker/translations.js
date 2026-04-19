@@ -5,6 +5,7 @@ window.translations = {
     en: {
         // === APP CORE ===
         'app.title': 'Route Tracker',
+        'app.page_title': 'Route Tracker - Real-time Route and Location Tracking',
         'app.subtitle': 'Real-time Route and Location Tracking',
         'app.admin': 'Admin',
         
@@ -103,7 +104,7 @@ window.translations = {
         'history.no_routes': 'No routes received yet. Configure your Overlander app to send GPS data to this server.',
         
         // === LOGIN FORM ===
-        'login.title': 'Login',
+        'login.title': 'Route Tracker – Login',
         'login.subtitle': 'GPS Route Monitoring',
         'login.email': 'Email',
         'login.username': 'Username',
@@ -214,7 +215,8 @@ window.translations = {
     
     de: {
         // === APP CORE ===
-        'app.title': 'Routen-Tracker',
+        'app.title': 'Route Tracker',
+        'app.page_title': 'Route Tracker - Echtzeit-Routen- und Standortverfolgung',
         'app.subtitle': 'Echtzeit-Routen- und Standortverfolgung',
         'app.admin': 'Admin',
         
@@ -274,8 +276,8 @@ window.translations = {
         'stats.title': 'Routen-Statistiken',
         'stats.distance': 'Entfernung (km)',
         'stats.duration': 'Dauer',
-        'stats.avg_speed': 'Ø Geschwindigkeit (km/h)',
-        'stats.current_speed': 'Aktuelle Geschwindigkeit (km/h)',
+        'stats.avg_speed': 'Ø (km/h)',
+        'stats.current_speed': 'Aktuell (km/h)',
         'stats.elevation': 'Höhe (m)',
         'stats.waypoints': 'Wegpunkte',
         
@@ -313,7 +315,7 @@ window.translations = {
         'history.no_routes': 'Noch keine Routen empfangen. Konfigurieren Sie Ihre Overlander-App, um GPS-Daten an diesen Server zu senden.',
         
         // === LOGIN FORM ===
-        'login.title': 'Anmelden',
+        'login.title': 'Route Tracker – Anmelden',
         'login.subtitle': 'GPS-Routen-Überwachung',
         'login.email': 'E-Mail',
         'login.username': 'Benutzername',

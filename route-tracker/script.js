@@ -102,7 +102,7 @@ class RouteTracker {
 
             // Set OwnTracks endpoint URL in config section (admin only)
             const epEl = document.getElementById('endpoint-url');
-            if (epEl) epEl.textContent = window.location.origin + '/route-tracker/api/gps';
+            if (epEl) epEl.textContent = 'https://tracker.route-tracker.de';
             
             await this.loadAndPopulateDevices();
             this.setupDeviceSelector();
@@ -181,6 +181,8 @@ class RouteTracker {
         if (s1) s1.value = value;
         if (s2) s2.value = value;
         this.showNotification(window.t ? window.t('notify.device_switched', 'Switched to device') + `: ${value}` : `Switched to device: ${value}`, 'info');
+        // Reset initial load flag so switching device re-runs the startup logic
+        this._initialLoadDone = false;
         this.loadDevicesAndRoutes();
     }
 
@@ -203,22 +205,30 @@ class RouteTracker {
                 const deviceData = await deviceResponse.json();
                 this.devices.set(this.selectedDeviceId, deviceData);
                 this.updateDeviceInfo(deviceData);
-                
-                // Load current active route if available
-                if (deviceData.currentRoute) {
-                    await this.loadRoute(deviceData.currentRoute);
-                } else {
-                    // If no active route, clear the map
-                    if (this.currentRoute) {
-                        this.map.removeLayer(this.currentRoute);
-                        this.currentRoute = null;
+
+                // Decide which route to show (only on first load, not on auto-refresh)
+                if (!this._initialLoadDone) {
+                    this._initialLoadDone = true;
+                    const savedRouteId  = localStorage.getItem('lastRouteId');
+                    const savedDeviceId = localStorage.getItem('lastRouteDeviceId');
+
+                    if (savedRouteId && savedDeviceId === this.selectedDeviceId) {
+                        // Restore the last viewed route
+                        await this.loadRoute(savedRouteId);
+                    } else if (deviceData.currentRoute) {
+                        // Fall back to current active route
+                        await this.loadRoute(deviceData.currentRoute);
+                    } else {
+                        // No active route — load the most recent completed route
+                        await this.centerOnRecentActivity();
                     }
-                    this.updateRouteStats(null); // Clear stats
-                    
-                    // Try to center on recent GPS data if no current route
-                    await this.centerOnRecentActivity();
+                } else {
+                    // Auto-refresh: only reload if currently showing the active route
+                    if (deviceData.currentRoute && this.currentRouteId === deviceData.currentRoute) {
+                        await this.loadRoute(deviceData.currentRoute);
+                    }
                 }
-                
+
                 // Load recent routes list
                 await this.loadRoutesList();
             }
@@ -286,6 +296,9 @@ class RouteTracker {
                 this.updateRouteStats(routeData);
                 const activeRouteName = document.getElementById('active-route-name');
                 if (activeRouteName) activeRouteName.textContent = routeData.name || routeId;
+                // Persist so reload restores the same route
+                localStorage.setItem('lastRouteId', routeId);
+                localStorage.setItem('lastRouteDeviceId', this.selectedDeviceId);
                 return routeData;
             }
         } catch (error) {
@@ -2775,9 +2788,12 @@ routeList.innerHTML = routes.map(route => {
 
     initMap() {
         // Initialize Leaflet map — scroll wheel zoom disabled; use Alt+scroll or the +/- controls
-        // Start with a default view, will be updated after loading current session data
-        this.map = L.map('map', { scrollWheelZoom: false }).setView([49.4875, 8.466], 13);
-        this.mapCentered = false; // Track if we've centered on actual data yet
+        // Restore last map position from localStorage, fall back to Mannheim default
+        const savedLat  = parseFloat(localStorage.getItem('mapLat'))  || 49.4875;
+        const savedLng  = parseFloat(localStorage.getItem('mapLng'))  || 8.466;
+        const savedZoom = parseInt(localStorage.getItem('mapZoom'), 10) || 13;
+        this.map = L.map('map', { scrollWheelZoom: false }).setView([savedLat, savedLng], savedZoom);
+        this.mapCentered = !!(localStorage.getItem('mapLat')); // already positioned if we had saved data
 
         // Enable zoom only while Alt/Option is held
         this.map.getContainer().addEventListener('wheel', (e) => {
@@ -2800,6 +2816,14 @@ routeList.innerHTML = routes.map(route => {
         // Track whether user has manually moved/zoomed the map
         this.userHasMovedMap = false;
         this.map.on('dragstart zoomstart', () => { this.userHasMovedMap = true; });
+
+        // Persist map position so it survives page reload
+        this.map.on('moveend zoomend', () => {
+            const c = this.map.getCenter();
+            localStorage.setItem('mapLat',  c.lat);
+            localStorage.setItem('mapLng',  c.lng);
+            localStorage.setItem('mapZoom', this.map.getZoom());
+        });
 
         // Initialize live tracking properties
         this.liveMarker = null;

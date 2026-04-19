@@ -2643,7 +2643,7 @@ const startServer = async () => {
     // multer: store uploads in a temp dir, we process with sharp then move
     const upload = multer({
         storage: multer.memoryStorage(),
-        limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
+        limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
         fileFilter: (req, file, cb) => {
             if (file.mimetype.startsWith('image/')) cb(null, true);
             else cb(new Error('Only image files are allowed'));
