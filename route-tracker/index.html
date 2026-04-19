@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <meta name="description" content="Professional route tracking application for real-time GPS monitoring, route history, and data export.">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="apple-touch-icon" href="favicon-192.png">
 </head>
 <body>
     <div class="route-tracker-container">
@@ -30,12 +32,21 @@
                                     <a href="#" class="dropdown-toggle" style="color: var(--secondary-color); text-decoration: none;" onclick="toggleDropdown('docs-dropdown'); return false;">
                                         <i class="fas fa-book"></i> <span data-i18n="nav.docs">Documentation</span> <i class="fas fa-chevron-down" style="font-size: 0.8rem; margin-left: 4px;"></i>
                                     </a>
-                                    <div id="docs-dropdown" class="dropdown-menu" style="display: none; position: absolute; top: 100%; right: 0; background: white; border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 200px; z-index: 1000; margin-top: 5px;">
-                                        <a href="docs/user-guide.de.md" target="_blank" style="display: block; padding: 8px 15px; color: #333; text-decoration: none; border-bottom: 1px solid #eee;">
-                                            <i class="fas fa-file-alt"></i> User Guide (DE)
+                                    <div id="docs-dropdown" class="dropdown-menu" style="display: none; position: absolute; top: 100%; right: 0; background: white; border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 210px; z-index: 1000; margin-top: 5px;">
+                                        <a href="docs/#quickstart" target="_blank" onclick="openDocs('quickstart')" style="display: block; padding: 8px 15px; color: #333; text-decoration: none; border-bottom: 1px solid #eee;">
+                                            <i class="fas fa-rocket"></i> <span data-i18n="nav.docs.quickstart">Quick Start</span>
                                         </a>
-                                        <a href="docs/user-guide.md" target="_blank" style="display: block; padding: 8px 15px; color: #333; text-decoration: none;">
-                                            <i class="fas fa-file-alt"></i> User Guide (EN)
+                                        <a href="docs/#user" target="_blank" onclick="openDocs('user')" style="display: block; padding: 8px 15px; color: #333; text-decoration: none; border-bottom: 1px solid #eee;">
+                                            <i class="fas fa-user"></i> <span data-i18n="nav.docs.user_guide">User Guide</span>
+                                        </a>
+                                        <a href="docs/#admin" target="_blank" onclick="openDocs('admin')" style="display: block; padding: 8px 15px; color: #333; text-decoration: none; border-bottom: 1px solid #eee;">
+                                            <i class="fas fa-shield-halved"></i> <span data-i18n="nav.docs.admin_guide">Admin Guide</span>
+                                        </a>
+                                        <a href="docs/#owntracks" target="_blank" onclick="openDocs('owntracks')" style="display: block; padding: 8px 15px; color: #333; text-decoration: none; border-bottom: 1px solid #eee;">
+                                            <i class="fas fa-mobile-screen"></i> <span data-i18n="nav.docs.owntracks">OwnTracks Setup</span>
+                                        </a>
+                                        <a href="docs/#changelog" target="_blank" onclick="openDocs('changelog')" style="display: block; padding: 8px 15px; color: #333; text-decoration: none;">
+                                            <i class="fas fa-clipboard-list"></i> <span data-i18n="nav.docs.changelog">Changelog</span>
                                         </a>
                                     </div>
                                 </div>
@@ -57,7 +68,7 @@
                                 </a>
                             </div>
                         </div>
-                        <h1><i class="fas fa-route"></i> <span data-i18n="app.title">Route Tracker</span></h1>
+                        <h1><img src="data/media/vectorstock_52254571/vectorstock_52254571_transparent.png" alt="Route Tracker" style="height:32px;width:auto;vertical-align:middle;margin-right:8px;"><span data-i18n="app.title">Route Tracker</span></h1>
                         <p class="subtitle" data-i18n="app.subtitle">Real-time Route and Location Tracking</p>
                     </div>
                 </header>
@@ -416,6 +427,13 @@
             if (!isVisible) {
                 dropdown.style.display = 'block';
             }
+        }
+
+        // Open docs site in the current app language
+        function openDocs(page) {
+            const lang = localStorage.getItem('preferred-language') || 'en';
+            window.open('docs/#' + page + '?lang=' + lang, '_blank');
+            return false;
         }
         
         // Close dropdowns when clicking outside

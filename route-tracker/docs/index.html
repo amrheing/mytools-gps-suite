@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en" data-lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Route Tracker — Documentation</title>
+    <link rel="icon" type="image/x-icon" href="../favicon.ico">
+    <link rel="apple-touch-icon" href="../favicon-192.png">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script>
+        // Apply saved language before paint — prevents flash
+        (function() {
+            var urlLang = new URLSearchParams(window.location.search).get('lang');
+            var l = urlLang || localStorage.getItem('preferred-language') || 'en';
+            if (l !== 'en' && l !== 'de') l = 'en';
+            document.documentElement.setAttribute('data-lang', l);
+            document.documentElement.lang = l;
+        })();
+    </script>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────── -->
+<header class="doc-header">
+    <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Menu">
+        <i class="fas fa-bars"></i>
+    </button>
+    <a class="logo" href="#" onclick="showPage('home')">
+        <div class="logo-icon"><img src="../data/media/vectorstock_52254571/vectorstock_52254571_transparent.png" alt="Route Tracker" style="height:28px;width:auto;"></div>
+        Route Tracker
+    </a>
+    <nav class="header-links">
+        <a href="#" onclick="showPage('home')"       id="nav-home">
+            <span class="lang-en">Overview</span><span class="lang-de">Übersicht</span></a>
+        <a href="#" onclick="showPage('quickstart')" id="nav-quickstart">
+            <span class="lang-en">Quick Start</span><span class="lang-de">Schnellstart</span></a>
+        <a href="#" onclick="showPage('user')"       id="nav-user">
+            <span class="lang-en">User Guide</span><span class="lang-de">Benutzerhandbuch</span></a>
+        <a href="#" onclick="showPage('admin')"      id="nav-admin">
+            <span class="lang-en">Admin Guide</span><span class="lang-de">Admin-Handbuch</span></a>
+        <a href="#" onclick="showPage('changelog')"  id="nav-changelog">Changelog</a>
+        <div class="lang-toggle">
+            <button class="lang-btn" data-lang="en" onclick="setLang('en')">
+                <img src="../data/media/flags/english.svg" alt="EN"> EN
+            </button>
+            <button class="lang-btn" data-lang="de" onclick="setLang('de')">
+                <img src="../data/media/flags/german.svg" alt="DE"> DE
+            </button>
+        </div>
+        <a href="https://route-tracker.de" class="btn-app" target="_blank">
+            <i class="fas fa-arrow-up-right-from-square"></i>
+            <span class="lang-en">Open App</span><span class="lang-de">App öffnen</span>
+        </a>
+    </nav>
+</header>
+
+<!-- ── Layout ─────────────────────────────────────────────── -->
+<div class="doc-layout">
+
+    <!-- Sidebar -->
+    <aside class="doc-sidebar" id="sidebar">
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">
+                <span class="lang-en">Getting Started</span><span class="lang-de">Erste Schritte</span>
+            </div>
+            <ul class="sidebar-nav">
+                <li><a href="#" onclick="showPage('home')">
+                    <span class="nav-icon">🏠</span>
+                    <span class="lang-en">Overview</span><span class="lang-de">Übersicht</span>
+                </a></li>
+                <li><a href="#" onclick="showPage('quickstart')">
+                    <span class="nav-icon">🚀</span>
+                    <span class="lang-en">Quick Start</span><span class="lang-de">Schnellstart</span>
+                </a></li>
+            </ul>
+        </div>
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">
+                <span class="lang-en">Guides</span><span class="lang-de">Anleitungen</span>
+            </div>
+            <ul class="sidebar-nav">
+                <li><a href="#" onclick="showPage('user')">
+                    <span class="nav-icon">👤</span>
+                    <span class="lang-en">User Guide</span><span class="lang-de">Benutzerhandbuch</span>
+                </a></li>
+                <li><a href="#" onclick="showPage('admin')">
+                    <span class="nav-icon">🔐</span>
+                    <span class="lang-en">Admin Guide</span><span class="lang-de">Admin-Handbuch</span>
+                </a></li>
+            </ul>
+        </div>
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">OwnTracks</div>
+            <ul class="sidebar-nav">
+                <li><a href="#" onclick="showPage('owntracks')">
+                    <span class="nav-icon">📱</span>
+                    <span class="lang-en">Setup</span><span class="lang-de">Einrichtung</span>
+                </a></li>
+            </ul>
+        </div>
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">
+                <span class="lang-en">Reference</span><span class="lang-de">Referenz</span>
+            </div>
+            <ul class="sidebar-nav">
+                <li><a href="#" onclick="showPage('export')">
+                    <span class="nav-icon">📤</span>
+                    <span class="lang-en">Export Formats</span><span class="lang-de">Exportformate</span>
+                </a></li>
+                <li><a href="#" onclick="showPage('changelog')">
+                    <span class="nav-icon">📋</span>Changelog
+                </a></li>
+            </ul>
+        </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="doc-main">
+
+        <!-- ══ HOME ══════════════════════════════════════════ -->
+        <section class="doc-page active" id="page-home">
+
+            <div class="lang-en">
+                <h1>Route Tracker</h1>
+                <p class="page-lead">Real-time GPS route tracking, history management, and media annotation — self-hosted and privacy-first.</p>
+                <div class="card-grid">
+                    <div class="card"><div class="card-icon">🗺️</div><h4>Live Map</h4><p>Watch positions update in real time on an interactive Leaflet map.</p></div>
+                    <div class="card"><div class="card-icon">📍</div><h4>OwnTracks</h4><p>Receive GPS pushes from the OwnTracks app over HTTPS with Basic Auth.</p></div>
+                    <div class="card"><div class="card-icon">📸</div><h4>Media</h4><p>Attach photos and YouTube videos to exact map positions.</p></div>
+                    <div class="card"><div class="card-icon">📤</div><h4>Export</h4><p>Download routes as GPX, KML, JSON or CSV for any GPS app.</p></div>
+                    <div class="card"><div class="card-icon">👥</div><h4>Multi-user</h4><p>Admin and viewer roles. Share routes via time-limited public links.</p></div>
+                    <div class="card"><div class="card-icon">🤖</div><h4>Auto Routes</h4><p>Automatically start a fresh route at a scheduled time each day.</p></div>
+                </div>
+                <h2>Architecture</h2>
+                <p>Route Tracker is a single Node.js/Express application running in Docker behind the mailcow nginx reverse proxy.</p>
+                <div class="table-wrap"><table>
+                    <tr><th>Layer</th><th>Technology</th></tr>
+                    <tr><td>Frontend</td><td>Vanilla JS, Leaflet.js, Font Awesome</td></tr>
+                    <tr><td>Backend</td><td>Node.js 20, Express</td></tr>
+                    <tr><td>Storage</td><td>JSON files on disk (<code>/app/data/</code>)</td></tr>
+                    <tr><td>Container</td><td>Docker — port 6050 → 3000</td></tr>
+                    <tr><td>Proxy</td><td>mailcow nginx (port 443), cert via Let's Encrypt</td></tr>
+                    <tr><td>Resource limits</td><td>8 CPUs · 16 GB RAM</td></tr>
+                </table></div>
+                <h2>URLs</h2>
+                <div class="table-wrap"><table>
+                    <tr><th>Domain</th><th>Purpose</th></tr>
+                    <tr><td><code>https://route-tracker.de</code></td><td>Main app</td></tr>
+                    <tr><td><code>https://www.route-tracker.de</code></td><td>Main app (www redirect)</td></tr>
+                    <tr><td><code>https://tracker.route-tracker.de</code></td><td>OwnTracks GPS endpoint (<code>/api/gps</code>)</td></tr>
+                    <tr><td><code>https://gps.route-tracker.de</code></td><td>OwnTracks GPS endpoint (alias)</td></tr>
+                    <tr><td><code>https://api.route-tracker.de</code></td><td>Full REST API (<code>/api/*</code>)</td></tr>
+                </table></div>
+            </div>
+
+            <div class="lang-de">
+                <h1>Route Tracker</h1>
+                <p class="page-lead">Echtzeit-GPS-Routenverfolgung, Routenverwaltung und Medienannotation – selbst gehostet und datenschutzfreundlich.</p>
+                <div class="card-grid">
+                    <div class="card"><div class="card-icon">🗺️</div><h4>Live-Karte</h4><p>Positionen in Echtzeit auf einer interaktiven Leaflet-Karte verfolgen.</p></div>
+                    <div class="card"><div class="card-icon">📍</div><h4>OwnTracks</h4><p>GPS-Übertragungen der OwnTracks-App über HTTPS mit Basic Auth empfangen.</p></div>
+                    <div class="card"><div class="card-icon">📸</div><h4>Medien</h4><p>Fotos und YouTube-Videos an exakte Kartenpositionen heften.</p></div>
+                    <div class="card"><div class="card-icon">📤</div><h4>Export</h4><p>Routen als GPX, KML, JSON oder CSV für beliebige GPS-Apps herunterladen.</p></div>
+                    <div class="card"><div class="card-icon">👥</div><h4>Mehrbenutzer</h4><p>Admin- und Betrachter-Rollen. Routen über zeitbegrenzte öffentliche Links teilen.</p></div>
+                    <div class="card"><div class="card-icon">🤖</div><h4>Auto-Routen</h4><p>Täglich automatisch eine neue Route zu einer festgelegten Uhrzeit starten.</p></div>
+                </div>
+                <h2>Architektur</h2>
+                <p>Route Tracker ist eine Node.js-/Express-Anwendung, die in einem Docker-Container hinter dem mailcow-nginx-Reverse-Proxy betrieben wird.</p>
+                <div class="table-wrap"><table>
+                    <tr><th>Schicht</th><th>Technologie</th></tr>
+                    <tr><td>Oberfläche</td><td>Vanilla JS, Leaflet.js, Font Awesome</td></tr>
+                    <tr><td>Backend</td><td>Node.js 20, Express</td></tr>
+                    <tr><td>Datenspeicher</td><td>JSON-Dateien auf Disk (<code>/app/data/</code>)</td></tr>
+                    <tr><td>Container</td><td>Docker – Port 6050 → 3000</td></tr>
+                    <tr><td>Proxy</td><td>mailcow nginx (Port 443), Zertifikat via Let's Encrypt</td></tr>
+                    <tr><td>Ressourcenlimits</td><td>8 CPUs · 16 GB RAM</td></tr>
+                </table></div>
+                <h2>URLs</h2>
+                <div class="table-wrap"><table>
+                    <tr><th>Domain</th><th>Verwendung</th></tr>
+                    <tr><td><code>https://route-tracker.de</code></td><td>Haupt-App</td></tr>
+                    <tr><td><code>https://www.route-tracker.de</code></td><td>Haupt-App (www-Weiterleitung)</td></tr>
+                    <tr><td><code>https://tracker.route-tracker.de</code></td><td>OwnTracks GPS-Endpunkt (<code>/api/gps</code>)</td></tr>
+                    <tr><td><code>https://gps.route-tracker.de</code></td><td>OwnTracks GPS-Endpunkt (Alias)</td></tr>
+                    <tr><td><code>https://api.route-tracker.de</code></td><td>Vollständige REST-API (<code>/api/*</code>)</td></tr>
+                </table></div>
+            </div>
+
+        </section>
+
+        <!-- ══ QUICK START ════════════════════════════════════ -->
+        <section class="doc-page" id="page-quickstart">
+
+            <div class="lang-en">
+                <h1>Quick Start</h1>
+                <p class="page-lead">Get tracking in under 5 minutes.</p>
+                <h2>1 · Open the app</h2>
+                <p>Navigate to <a href="https://route-tracker.de" target="_blank">https://route-tracker.de</a> and log in with your credentials.</p>
+                <h2>2 · Install OwnTracks</h2>
+                <ol class="steps">
+                    <li>Download <strong>OwnTracks</strong> from the App Store or Google Play.</li>
+                    <li>Open Settings → Connection and set <strong>Mode</strong> to <code>HTTP</code>.</li>
+                    <li>Set the <strong>URL</strong> to <code>https://tracker.route-tracker.de</code>.</li>
+                    <li>Enter your Route Tracker <strong>username</strong> and <strong>password</strong>.</li>
+                    <li>Set a <strong>Device ID</strong> (e.g. <code>iphone</code> or <code>pixel</code>) — it auto-registers on first push.</li>
+                    <li>Save and return to the map view — OwnTracks will start sending positions.</li>
+                </ol>
+                <div class="callout tip">
+                    <span class="callout-icon"><i class="fas fa-lightbulb"></i></span>
+                    <p>The Device ID becomes the device name visible on the map. Pick something meaningful like <code>gerald-iphone</code>.</p>
+                </div>
+                <h2>3 · View your position</h2>
+                <p>Open the app, select your device from the dropdown in the control panel, and watch the map update as positions arrive.</p>
+                <h2>4 · Explore the app</h2>
+                <p>Read the <a href="#" onclick="showPage('user')">User Guide</a> for a full feature reference, or the <a href="#" onclick="showPage('admin')">Admin Guide</a> if you manage users and devices.</p>
+            </div>
+
+            <div class="lang-de">
+                <h1>Schnellstart</h1>
+                <p class="page-lead">In unter 5 Minuten loslegen.</p>
+                <h2>1 · App öffnen</h2>
+                <p>Navigiere zu <a href="https://route-tracker.de" target="_blank">https://route-tracker.de</a> und melde dich mit deinen Zugangsdaten an.</p>
+                <h2>2 · OwnTracks installieren</h2>
+                <ol class="steps">
+                    <li>Lade <strong>OwnTracks</strong> aus dem App Store oder Google Play.</li>
+                    <li>Öffne Einstellungen → Verbindung und setze den <strong>Modus</strong> auf <code>HTTP</code>.</li>
+                    <li>Trage als <strong>URL</strong> <code>https://tracker.route-tracker.de</code> ein.</li>
+                    <li>Gib deinen Route-Tracker-<strong>Benutzernamen</strong> und dein <strong>Passwort</strong> ein.</li>
+                    <li>Lege eine <strong>Geräte-ID</strong> fest (z. B. <code>iphone</code> oder <code>pixel</code>) – sie wird beim ersten Push automatisch registriert.</li>
+                    <li>Speichern und zur Kartenansicht zurückkehren – OwnTracks sendet nun Positionen.</li>
+                </ol>
+                <div class="callout tip">
+                    <span class="callout-icon"><i class="fas fa-lightbulb"></i></span>
+                    <p>Die Geräte-ID wird zum Gerätenamen auf der Karte. Wähle etwas Aussagekräftiges wie <code>gerald-iphone</code>.</p>
+                </div>
+                <h2>3 · Position anzeigen</h2>
+                <p>Öffne die App, wähle dein Gerät im Dropdown der Steuerungsleiste und beobachte die Kartenaktualisierungen.</p>
+                <h2>4 · App erkunden</h2>
+                <p>Lies das <a href="#" onclick="showPage('user')">Benutzerhandbuch</a> für eine vollständige Funktionsreferenz oder das <a href="#" onclick="showPage('admin')">Admin-Handbuch</a> für Benutzer- und Geräteverwaltung.</p>
+            </div>
+
+        </section>
+
+        <!-- ══ USER GUIDE ═════════════════════════════════════ -->
+        <section class="doc-page" id="page-user">
+
+            <div class="lang-en">
+                <h1>User Guide</h1>
+                <p class="page-lead">Everything a regular user needs to track, view, and export routes.</p>
+                <h2>Logging In</h2>
+                <p>Open <a href="https://route-tracker.de" target="_blank">https://route-tracker.de</a>. If no session is active you are redirected to the login page. Enter username and password, then click <strong>Login</strong>.</p>
+                <h2>Control Panel</h2>
+                <p>The compact control bar at the top has two lines:</p>
+                <div class="table-wrap"><table>
+                    <tr><th>Element</th><th>Description</th></tr>
+                    <tr><td>Status dot</td><td>Green = active route, grey = no active route</td></tr>
+                    <tr><td>Device name</td><td>Name of the currently selected device</td></tr>
+                    <tr><td>Last activity</td><td>Timestamp of the most recent GPS push (desktop: after route name · mobile: replaces route name)</td></tr>
+                    <tr><td>Device selector</td><td>Switch between registered GPS devices</td></tr>
+                    <tr><td>Active route</td><td>Name of the currently loaded route</td></tr>
+                </table></div>
+                <h2>Map</h2>
+                <ul>
+                    <li>Pan and zoom freely — the map does not reset after interaction.</li>
+                    <li><strong>Zoom to Fit</strong> — fits the map to the current route extent.</li>
+                    <li><strong>Reset View</strong> — returns to the saved default map position.</li>
+                    <li><strong>Show Points</strong> — toggles small dots at each GPS point. Click a dot for coordinates, speed, altitude, and timestamp.</li>
+                    <li>The map position and last-viewed route are persisted across page reloads.</li>
+                </ul>
+                <div class="callout info">
+                    <span class="callout-icon"><i class="fas fa-info-circle"></i></span>
+                    <p>Photo thumbnails and YouTube icons appear as circular markers on the map. Click any to open the viewer.</p>
+                </div>
+                <h2>Statistics Dashboard</h2>
+                <div class="table-wrap"><table>
+                    <tr><th>Stat</th><th>Description</th></tr>
+                    <tr><td>Distance</td><td>Total route length in km</td></tr>
+                    <tr><td>Duration</td><td>Elapsed time from start to last point (or end)</td></tr>
+                    <tr><td>Avg Speed</td><td>Average km/h</td></tr>
+                    <tr><td>Max Speed</td><td>Peak recorded km/h</td></tr>
+                    <tr><td>Elevation</td><td>Current altitude in metres</td></tr>
+                    <tr><td>GPS Points</td><td>Total recorded point count</td></tr>
+                </table></div>
+                <h2>Route History</h2>
+                <p>The right column lists saved routes. Click any entry to load it on the map.</p>
+                <ul>
+                    <li>Use the <strong>date filter</strong> or <strong>favorites filter</strong> to narrow results.</li>
+                    <li>Shows the last <strong>20 routes</strong> plus favorites by default; full list with date filter active.</li>
+                    <li>Routes named <em>Auto Route MM/DD/YYYY</em> are created automatically by the scheduler.</li>
+                </ul>
+                <h2>Export</h2>
+                <div class="card-grid">
+                    <div class="card"><div class="card-icon">📍</div><h4>GPX</h4><p>Best for GPS devices, Strava, Garmin. Full track with timestamps and elevation.</p></div>
+                    <div class="card"><div class="card-icon">🌍</div><h4>KML</h4><p>Best for Google Earth and Maps. Includes coloured lines and markers.</p></div>
+                    <div class="card"><div class="card-icon">{ }</div><h4>JSON</h4><p>Complete route metadata. Best for backup or custom analysis.</p></div>
+                    <div class="card"><div class="card-icon">📊</div><h4>CSV</h4><p>Spreadsheet-friendly. Each row is one GPS point with all fields.</p></div>
+                </div>
+                <h2>Calendar Export</h2>
+                <p>Pick a date range in the calendar section and export all routes in that period as a single GPX file.</p>
+            </div>
+
+            <div class="lang-de">
+                <h1>Benutzerhandbuch</h1>
+                <p class="page-lead">Alles, was ein normaler Benutzer zum Verfolgen, Anzeigen und Exportieren von Routen benötigt.</p>
+                <h2>Anmelden</h2>
+                <p>Öffne <a href="https://route-tracker.de" target="_blank">https://route-tracker.de</a>. Ohne aktive Sitzung wirst du zur Anmeldeseite weitergeleitet. Benutzernamen und Passwort eingeben, dann auf <strong>Login</strong> klicken.</p>
+                <h2>Steuerungsleiste</h2>
+                <p>Die kompakte Steuerungsleiste oben hat zwei Zeilen:</p>
+                <div class="table-wrap"><table>
+                    <tr><th>Element</th><th>Beschreibung</th></tr>
+                    <tr><td>Status-Punkt</td><td>Grün = aktive Route, grau = keine aktive Route</td></tr>
+                    <tr><td>Gerätename</td><td>Name des aktuell ausgewählten Geräts</td></tr>
+                    <tr><td>Letzte Aktivität</td><td>Zeitstempel des letzten GPS-Pushes (Desktop: nach Routenname · Mobil: ersetzt Routenname)</td></tr>
+                    <tr><td>Geräte-Auswahl</td><td>Zwischen registrierten GPS-Geräten wechseln</td></tr>
+                    <tr><td>Aktive Route</td><td>Name der aktuell geladenen Route</td></tr>
+                </table></div>
+                <h2>Karte</h2>
+                <ul>
+                    <li>Verschieben und Zoomen jederzeit möglich – die Karte setzt die Ansicht nicht automatisch zurück.</li>
+                    <li><strong>An Route anpassen</strong> – passt die Kartenansicht an den gesamten Routenbereich an.</li>
+                    <li><strong>Ansicht zurücksetzen</strong> – kehrt zur gespeicherten Standardposition zurück.</li>
+                    <li><strong>Punkte anzeigen</strong> – blendet kleine Punkte an jedem GPS-Punkt ein. Klick auf einen Punkt zeigt Koordinaten, Geschwindigkeit, Höhe und Zeitstempel.</li>
+                    <li>Kartenposition und zuletzt geladene Route werden seitenübergreifend gespeichert.</li>
+                </ul>
+                <div class="callout info">
+                    <span class="callout-icon"><i class="fas fa-info-circle"></i></span>
+                    <p>Foto-Thumbnails und YouTube-Symbole erscheinen als runde Marker auf der Karte. Klick öffnet den Viewer.</p>
+                </div>
+                <h2>Statistik-Dashboard</h2>
+                <div class="table-wrap"><table>
+                    <tr><th>Statistik</th><th>Beschreibung</th></tr>
+                    <tr><td>Distanz</td><td>Gesamtstreckenlänge in km</td></tr>
+                    <tr><td>Dauer</td><td>Verstrichene Zeit vom Start bis zum letzten Punkt</td></tr>
+                    <tr><td>Ø Geschwindigkeit</td><td>Durchschnittsgeschwindigkeit in km/h</td></tr>
+                    <tr><td>Max. Geschwindigkeit</td><td>Höchstgeschwindigkeit in km/h</td></tr>
+                    <tr><td>Höhe</td><td>Aktuelle Höhe in Metern</td></tr>
+                    <tr><td>GPS-Punkte</td><td>Gesamtanzahl aufgezeichneter Punkte</td></tr>
+                </table></div>
+                <h2>Routenverlauf</h2>
+                <p>Die rechte Spalte listet alle gespeicherten Routen. Klick auf einen Eintrag lädt die Route auf der Karte.</p>
+                <ul>
+                    <li>Mit dem <strong>Datumsfilter</strong> oder dem <strong>Favoritenfilter</strong> Ergebnisse eingrenzen.</li>
+                    <li>Standardmäßig werden die letzten <strong>20 Routen</strong> plus Favoriten angezeigt. Mit aktivem Datumsfilter wird die vollständige Liste verwendet.</li>
+                    <li>Routen mit dem Namen <em>Auto Route TT.MM.JJJJ</em> werden automatisch vom Planer erstellt.</li>
+                </ul>
+                <h2>Export</h2>
+                <div class="card-grid">
+                    <div class="card"><div class="card-icon">📍</div><h4>GPX</h4><p>Ideal für GPS-Geräte, Strava, Garmin. Vollständiger Track mit Zeitstempeln und Höhendaten.</p></div>
+                    <div class="card"><div class="card-icon">🌍</div><h4>KML</h4><p>Ideal für Google Earth und Maps. Enthält farbige Linien und Marker.</p></div>
+                    <div class="card"><div class="card-icon">{ }</div><h4>JSON</h4><p>Vollständige Routendaten. Ideal für Sicherungen oder eigene Analysen.</p></div>
+                    <div class="card"><div class="card-icon">📊</div><h4>CSV</h4><p>Tabellenfreundlich. Jede Zeile ist ein GPS-Punkt mit allen Feldern.</p></div>
+                </div>
+                <h2>Kalender-Export</h2>
+                <p>Im Kalenderbereich einen Datumsbereich auswählen und alle Routen dieses Zeitraums als einzelne GPX-Datei exportieren.</p>
+            </div>
+
+        </section>
+
+        <!-- ══ ADMIN GUIDE ════════════════════════════════════ -->
+        <section class="doc-page" id="page-admin">
+
+            <div class="lang-en">
+                <h1>Admin Guide</h1>
+                <p class="page-lead">User management, device configuration, GPS logs, shared links, and media management.</p>
+                <div class="callout info">
+                    <span class="callout-icon"><i class="fas fa-shield-halved"></i></span>
+                    <p>Admin features are only visible after logging in with an account that has the <span class="badge badge-admin">admin</span> role.</p>
+                </div>
+                <h2>Admin Panel <code>/admin</code></h2>
+                <p>Click the <strong>Admin</strong> button in the top-right header to open the admin panel.</p>
+                <h3>User Management</h3>
+                <div class="table-wrap"><table>
+                    <tr><th>Action</th><th>How</th></tr>
+                    <tr><td>Add user</td><td>Click <strong>Add User</strong>, enter username, password, and role</td></tr>
+                    <tr><td>Edit user</td><td>Click the pencil icon next to a user</td></tr>
+                    <tr><td>Delete user</td><td>Click the trash icon</td></tr>
+                    <tr><td>Change password</td><td>Edit the user and enter a new password</td></tr>
+                </table></div>
+                <h4>Roles</h4>
+                <div class="table-wrap"><table>
+                    <tr><th>Role</th><th>Access</th></tr>
+                    <tr><td><span class="badge badge-admin">admin</span></td><td>Full access — all features, admin panel, media upload, debug tools</td></tr>
+                    <tr><td><span class="badge badge-viewer">viewer</span></td><td>Read-only — map and routes. No upload, no config</td></tr>
+                </table></div>
+                <h3>Device Management</h3>
+                <p>Each device shows: Device ID, Name, Route Count, GPS Points, Auto-Route status, Last Update.</p>
+                <div class="table-wrap"><table>
+                    <tr><th>Action</th><th>How</th></tr>
+                    <tr><td>Rename device</td><td>Click the pencil icon</td></tr>
+                    <tr><td>Configure auto-route</td><td>Click the 🤖 icon</td></tr>
+                    <tr><td>Delete device</td><td>Click the trash icon — permanently removes all routes and media</td></tr>
+                </table></div>
+                <h3>Auto-Route</h3>
+                <p>Automatically completes the current route and starts a new one at a scheduled time each day.</p>
+                <ol class="steps">
+                    <li>Click 🤖 next to any device.</li>
+                    <li>Enable <strong>auto-route creation</strong> and set the daily creation time.</li>
+                    <li>Click <strong>Test Now</strong> to create a route immediately.</li>
+                    <li>Click <strong>Save Settings</strong>.</li>
+                </ol>
+                <div class="callout warn">
+                    <span class="callout-icon"><i class="fas fa-triangle-exclamation"></i></span>
+                    <p>Auto-route only triggers if the device received GPS data in the last 24 hours — inactive devices are skipped.</p>
+                </div>
+                <h3>GPS Incoming Log</h3>
+                <p>Shows a real-time record of every request received at <code>/api/gps</code>. Only visible to admins with <strong>Log Viewer Access</strong> enabled.</p>
+                <p>Each entry shows: timestamp, method + path, HTTP status, user/device, payload summary (lat, lng, speed, altitude, accuracy), and response time.</p>
+                <h3>Shared Links</h3>
+                <p>Create time-limited public links to share a route view with people who have no account.</p>
+                <div class="table-wrap"><table>
+                    <tr><th>Field</th><th>Description</th></tr>
+                    <tr><td>Device</td><td>Which device's route to share</td></tr>
+                    <tr><td>Expires</td><td>How long the link is valid (hours)</td></tr>
+                    <tr><td>Password</td><td>Optional password protection</td></tr>
+                </table></div>
+                <h3>Media Management</h3>
+                <ul>
+                    <li>Each device is a collapsible accordion — click to expand.</li>
+                    <li><strong>Pencil</strong> — edit the description.</li>
+                    <li><strong>Trash</strong> — permanently removes the entry and its files.</li>
+                </ul>
+                <h2>Map — Admin Features</h2>
+                <h3>Media Upload</h3>
+                <p>Click <strong>Add Media</strong> in the map header.</p>
+                <ul>
+                    <li><strong>Photo</strong> — EXIF GPS data is extracted automatically. If absent, click the map to set the position.</li>
+                    <li><strong>YouTube</strong> — paste any YouTube URL, add a description, then click the map to set position.</li>
+                    <li><strong>Reposition</strong> — drag any media marker to a new map position; saved automatically.</li>
+                </ul>
+                <p>Maximum upload size: <strong>10 MB</strong> per photo.</p>
+                <h3>Route Point Editing</h3>
+                <p>Click <strong>Edit Points</strong> in the map header to enter editing mode.</p>
+                <div class="table-wrap"><table>
+                    <tr><th>Action</th><th>How</th></tr>
+                    <tr><td>Move a point</td><td>Click and drag the dot</td></tr>
+                    <tr><td>Add a point</td><td>Right-click a dot → <em>Add point after</em>, then drag to position</td></tr>
+                    <tr><td>Delete a point</td><td>Right-click a dot → <em>Delete point</em> (minimum 2 points)</td></tr>
+                    <tr><td>Save</td><td>Click <strong>Save</strong> — recalculates distance and timestamps</td></tr>
+                    <tr><td>Discard</td><td>Click <strong>Discard</strong> — reloads original from server</td></tr>
+                </table></div>
+                <div class="callout warn">
+                    <span class="callout-icon"><i class="fas fa-triangle-exclamation"></i></span>
+                    <p>Edits are not auto-saved. You must click <strong>Save</strong> explicitly.</p>
+                </div>
+                <h3>Testing Tools</h3>
+                <div class="table-wrap"><table>
+                    <tr><th>Button</th><th>Description</th></tr>
+                    <tr><td>Start/Stop GPS Sender</td><td>Continuously sends simulated GPS points</td></tr>
+                    <tr><td>Send Single GPS</td><td>Sends one point at the current map center</td></tr>
+                    <tr><td>Send Random Nearby</td><td>Sends a random point near the last known position</td></tr>
+                </table></div>
+                <h2>OwnTracks Setup Box</h2>
+                <p>The <strong>OwnTracks Setup</strong> section in the control panel (admin-only) shows the endpoint URL and configuration instructions. See the <a href="#" onclick="showPage('owntracks')">OwnTracks Setup page</a> for details.</p>
+            </div>
+
+            <div class="lang-de">
+                <h1>Admin-Handbuch</h1>
+                <p class="page-lead">Benutzerverwaltung, Gerätekonfiguration, GPS-Protokoll, freigegebene Links und Medienverwaltung.</p>
+                <div class="callout info">
+                    <span class="callout-icon"><i class="fas fa-shield-halved"></i></span>
+                    <p>Admin-Funktionen sind nur nach dem Anmelden mit einem Konto der Rolle <span class="badge badge-admin">admin</span> sichtbar.</p>
+                </div>
+                <h2>Admin-Panel <code>/admin</code></h2>
+                <p>Klicke auf die Schaltfläche <strong>Admin</strong> oben rechts im Header, um das Admin-Panel zu öffnen.</p>
+                <h3>Benutzerverwaltung</h3>
+                <div class="table-wrap"><table>
+                    <tr><th>Aktion</th><th>Vorgehensweise</th></tr>
+                    <tr><td>Benutzer hinzufügen</td><td>Klicke auf <strong>Benutzer hinzufügen</strong>, Benutzername, Passwort und Rolle eingeben</td></tr>
+                    <tr><td>Benutzer bearbeiten</td><td>Klicke auf das Stift-Symbol neben einem Benutzer</td></tr>
+                    <tr><td>Benutzer löschen</td><td>Klicke auf das Papierkorb-Symbol</td></tr>
+                    <tr><td>Passwort ändern</td><td>Benutzer bearbeiten und neues Passwort eingeben</td></tr>
+                </table></div>
+                <h4>Rollen</h4>
+                <div class="table-wrap"><table>
+                    <tr><th>Rolle</th><th>Zugriff</th></tr>
+                    <tr><td><span class="badge badge-admin">admin</span></td><td>Vollzugriff – alle Funktionen, Admin-Panel, Medien-Upload, Debug-Werkzeuge</td></tr>
+                    <tr><td><span class="badge badge-viewer">viewer</span></td><td>Nur lesend – Karte und Routen. Kein Upload, keine Konfiguration</td></tr>
+                </table></div>
+                <h3>Geräteverwaltung</h3>
+                <p>Jedes Gerät zeigt: Geräte-ID, Name, Routenanzahl, GPS-Punkte, Auto-Route-Status, letzte Aktualisierung.</p>
+                <div class="table-wrap"><table>
+                    <tr><th>Aktion</th><th>Vorgehensweise</th></tr>
+                    <tr><td>Gerät umbenennen</td><td>Stift-Symbol anklicken</td></tr>
+                    <tr><td>Auto-Route konfigurieren</td><td>🤖-Symbol anklicken</td></tr>
+                    <tr><td>Gerät löschen</td><td>Papierkorb-Symbol – löscht dauerhaft alle Routen und Medien</td></tr>
+                </table></div>
+                <h3>Auto-Route</h3>
+                <p>Schließt automatisch die aktuelle Route ab und startet täglich zur festgelegten Uhrzeit eine neue.</p>
+                <ol class="steps">
+                    <li>🤖 neben einem Gerät anklicken.</li>
+                    <li><strong>Auto-Route-Erstellung</strong> aktivieren und Tageszeit festlegen.</li>
+                    <li>Klicke auf <strong>Jetzt testen</strong>, um sofort eine Route zu erstellen.</li>
+                    <li>Klicke auf <strong>Einstellungen speichern</strong>.</li>
+                </ol>
+                <div class="callout warn">
+                    <span class="callout-icon"><i class="fas fa-triangle-exclamation"></i></span>
+                    <p>Auto-Route wird nur ausgelöst, wenn das Gerät in den letzten 24 Stunden GPS-Daten empfangen hat – inaktive Geräte werden übersprungen.</p>
+                </div>
+                <h3>GPS-Eingangsprotokoll</h3>
+                <p>Zeigt alle an <code>/api/gps</code> eingegangenen Anfragen in Echtzeit. Nur für Admins mit aktivierter Berechtigung <strong>Log Viewer Access</strong> sichtbar.</p>
+                <p>Jeder Eintrag zeigt: Zeitstempel, Methode + Pfad, HTTP-Status, Benutzer/Gerät, Payload (Lat, Lng, Geschwindigkeit, Höhe, Genauigkeit) und Antwortzeit.</p>
+                <h3>Freigegebene Links</h3>
+                <p>Erstelle zeitlich begrenzte öffentliche Links, um Routenansichten mit Personen ohne Konto zu teilen.</p>
+                <div class="table-wrap"><table>
+                    <tr><th>Feld</th><th>Beschreibung</th></tr>
+                    <tr><td>Gerät</td><td>Welche Route des Geräts geteilt werden soll</td></tr>
+                    <tr><td>Ablauf</td><td>Wie lange der Link gültig ist (in Stunden)</td></tr>
+                    <tr><td>Passwort</td><td>Optionaler Passwortschutz</td></tr>
+                </table></div>
+                <h3>Medienverwaltung</h3>
+                <ul>
+                    <li>Jedes Gerät ist als aufklappbare Sektion aufgelistet – klicken zum Öffnen.</li>
+                    <li><strong>Stift</strong> – Beschreibung bearbeiten.</li>
+                    <li><strong>Papierkorb</strong> – entfernt den Eintrag und seine Dateien dauerhaft.</li>
+                </ul>
+                <h2>Hauptansicht – Admin-Funktionen</h2>
+                <h3>Medien-Upload</h3>
+                <p>Klicke auf <strong>Medien hinzufügen</strong> im Karten-Header.</p>
+                <ul>
+                    <li><strong>Foto</strong> – EXIF-GPS-Daten werden automatisch erkannt. Fehlen sie, per Klick auf die Karte den Ort setzen.</li>
+                    <li><strong>YouTube</strong> – YouTube-URL einfügen, Beschreibung eingeben, dann Ort auf der Karte anklicken.</li>
+                    <li><strong>Neu positionieren</strong> – Medien-Marker auf der Karte an neue Position ziehen; wird automatisch gespeichert.</li>
+                </ul>
+                <p>Maximale Upload-Größe: <strong>10 MB</strong> pro Foto.</p>
+                <h3>Routenpunkte bearbeiten</h3>
+                <p>Klicke auf <strong>Punkte bearbeiten</strong> im Karten-Header, um den Bearbeitungsmodus zu aktivieren.</p>
+                <div class="table-wrap"><table>
+                    <tr><th>Aktion</th><th>Vorgehensweise</th></tr>
+                    <tr><td>Punkt verschieben</td><td>Punkt anklicken und an neue Position ziehen</td></tr>
+                    <tr><td>Punkt hinzufügen</td><td>Rechtsklick → <em>Punkt danach einfügen</em>, dann an Position ziehen</td></tr>
+                    <tr><td>Punkt löschen</td><td>Rechtsklick → <em>Punkt löschen</em> (mind. 2 Punkte)</td></tr>
+                    <tr><td>Speichern</td><td>Klicke <strong>Speichern</strong> – berechnet Distanz und Zeitstempel neu</td></tr>
+                    <tr><td>Verwerfen</td><td>Klicke <strong>Verwerfen</strong> – lädt Originalroute vom Server</td></tr>
+                </table></div>
+                <div class="callout warn">
+                    <span class="callout-icon"><i class="fas fa-triangle-exclamation"></i></span>
+                    <p>Änderungen werden nicht automatisch gespeichert. Das Speichern muss explizit bestätigt werden.</p>
+                </div>
+                <h3>Test-Werkzeuge</h3>
+                <div class="table-wrap"><table>
+                    <tr><th>Schaltfläche</th><th>Beschreibung</th></tr>
+                    <tr><td>GPS Sender starten/stoppen</td><td>Sendet fortlaufend simulierte GPS-Punkte</td></tr>
+                    <tr><td>Einzelnen GPS senden</td><td>Sendet einen Punkt am aktuellen Kartenmittelpunkt</td></tr>
+                    <tr><td>Zufälligen Punkt senden</td><td>Sendet einen zufälligen Punkt nahe der letzten Position</td></tr>
+                </table></div>
+                <h2>OwnTracks-Einrichtung</h2>
+                <p>Der Bereich <strong>OwnTracks Setup</strong> in der Steuerungsleiste (nur Admin) zeigt die genaue Endpunkt-URL und Konfigurationsanweisungen. Weitere Details auf der <a href="#" onclick="showPage('owntracks')">OwnTracks-Einrichtungsseite</a>.</p>
+            </div>
+
+        </section>
+
+        <!-- ══ OWNTRACKS ══════════════════════════════════════ -->
+        <section class="doc-page" id="page-owntracks">
+
+            <div class="lang-en">
+                <h1>OwnTracks Setup</h1>
+                <p class="page-lead">Configure the OwnTracks app to push GPS positions to Route Tracker over HTTPS.</p>
+                <h2>Connection Settings</h2>
+                <div class="table-wrap"><table>
+                    <tr><th>Setting</th><th>Value</th></tr>
+                    <tr><td>Mode</td><td><code>HTTP</code></td></tr>
+                    <tr><td>URL</td><td><code>https://tracker.route-tracker.de</code></td></tr>
+                    <tr><td>UserID</td><td>Your Route Tracker username</td></tr>
+                    <tr><td>Password</td><td>Your Route Tracker password</td></tr>
+                    <tr><td>Device ID</td><td>Any name, e.g. <code>iphone</code> or <code>pixel9</code></td></tr>
+                    <tr><td>Tracker ID</td><td>Optional 2-character short label shown on map</td></tr>
+                </table></div>
+                <div class="callout tip">
+                    <span class="callout-icon"><i class="fas fa-lightbulb"></i></span>
+                    <p>The Device ID is auto-registered on first push and becomes the device name in the map dropdown.</p>
+                </div>
+                <h2>Alternative GPS Endpoint</h2>
+                <p>Both URLs point to the same <code>/api/gps</code> handler:</p>
+                <ul>
+                    <li><code>https://tracker.route-tracker.de</code></li>
+                    <li><code>https://gps.route-tracker.de</code></li>
+                </ul>
+                <h2>How it works</h2>
+                <ol class="steps">
+                    <li>OwnTracks sends a <code>POST</code> request with JSON body each time your position changes or at the configured interval.</li>
+                    <li>The server authenticates via HTTP Basic Auth (username + password).</li>
+                    <li>The device ID is extracted from the OwnTracks topic (<code>owntracks/&lt;user&gt;/&lt;device&gt;</code>). Fallback: <code>tid</code>, then <code>default-device</code>.</li>
+                    <li>If no active route exists (or the last point is older than 2 hours), a new route is created automatically.</li>
+                    <li>The point is appended to the route and the map updates on the next poll.</li>
+                </ol>
+                <h2>Message Types</h2>
+                <div class="table-wrap"><table>
+                    <tr><th>Type</th><th>Handled</th></tr>
+                    <tr><td><code>location</code></td><td>Stored as GPS point</td></tr>
+                    <tr><td><code>transition</code></td><td>Acknowledged (200 empty array), not stored</td></tr>
+                    <tr><td><code>waypoint</code>, others</td><td>Acknowledged (200 empty array), not stored</td></tr>
+                </table></div>
+                <h2>Battery Tips</h2>
+                <ul>
+                    <li>Use 10–30 s intervals for everyday tracking — good balance of accuracy and battery.</li>
+                    <li>Use 5 s intervals only when actively navigating.</li>
+                    <li>On iOS: enable <em>Significant Location Changes</em> as a background fallback.</li>
+                </ul>
+            </div>
+
+            <div class="lang-de">
+                <h1>OwnTracks Einrichtung</h1>
+                <p class="page-lead">OwnTracks so konfigurieren, dass GPS-Positionen über HTTPS an Route Tracker übertragen werden.</p>
+                <h2>Verbindungseinstellungen</h2>
+                <div class="table-wrap"><table>
+                    <tr><th>Einstellung</th><th>Wert</th></tr>
+                    <tr><td>Modus</td><td><code>HTTP</code></td></tr>
+                    <tr><td>URL</td><td><code>https://tracker.route-tracker.de</code></td></tr>
+                    <tr><td>Benutzer-ID</td><td>Dein Route-Tracker-Benutzername</td></tr>
+                    <tr><td>Passwort</td><td>Dein Route-Tracker-Passwort</td></tr>
+                    <tr><td>Geräte-ID</td><td>Beliebiger Name, z. B. <code>iphone</code> oder <code>pixel9</code></td></tr>
+                    <tr><td>Tracker-ID</td><td>Optionales zweistelliges Kürzel auf der Karte</td></tr>
+                </table></div>
+                <div class="callout tip">
+                    <span class="callout-icon"><i class="fas fa-lightbulb"></i></span>
+                    <p>Die Geräte-ID wird beim ersten Push automatisch registriert und wird zum Gerätenamen im Karten-Dropdown.</p>
+                </div>
+                <h2>Alternativer GPS-Endpunkt</h2>
+                <p>Beide URLs führen zum selben <code>/api/gps</code>-Handler:</p>
+                <ul>
+                    <li><code>https://tracker.route-tracker.de</code></li>
+                    <li><code>https://gps.route-tracker.de</code></li>
+                </ul>
+                <h2>Funktionsweise</h2>
+                <ol class="steps">
+                    <li>OwnTracks sendet bei Positionsänderungen oder im festgelegten Intervall eine <code>POST</code>-Anfrage mit JSON-Body.</li>
+                    <li>Der Server authentifiziert über HTTP Basic Auth (Benutzername + Passwort).</li>
+                    <li>Die Geräte-ID wird aus dem OwnTracks-Topic (<code>owntracks/&lt;user&gt;/&lt;device&gt;</code>) extrahiert. Fallback: <code>tid</code>, dann <code>default-device</code>.</li>
+                    <li>Existiert keine aktive Route (oder der letzte Punkt ist älter als 2 Stunden), wird automatisch eine neue Route erstellt.</li>
+                    <li>Der Punkt wird der Route hinzugefügt und die Karte beim nächsten Abruf aktualisiert.</li>
+                </ol>
+                <h2>Nachrichtentypen</h2>
+                <div class="table-wrap"><table>
+                    <tr><th>Typ</th><th>Verarbeitung</th></tr>
+                    <tr><td><code>location</code></td><td>Wird als GPS-Punkt gespeichert</td></tr>
+                    <tr><td><code>transition</code></td><td>Bestätigt (200 leeres Array), nicht gespeichert</td></tr>
+                    <tr><td><code>waypoint</code>, andere</td><td>Bestätigt (200 leeres Array), nicht gespeichert</td></tr>
+                </table></div>
+                <h2>Akkutipps</h2>
+                <ul>
+                    <li>10–30 s Intervall für den Alltag – gutes Gleichgewicht zwischen Genauigkeit und Akkuverbrauch.</li>
+                    <li>5 s Intervall nur bei aktiver Navigation.</li>
+                    <li>Auf iOS: <em>Significant Location Changes</em> als Hintergrund-Fallback aktivieren.</li>
+                </ul>
+            </div>
+
+        </section>
+
+        <!-- ══ EXPORT ═════════════════════════════════════════ -->
+        <section class="doc-page" id="page-export">
+
+            <div class="lang-en">
+                <h1>Export Formats</h1>
+                <p class="page-lead">Routes can be downloaded in four formats from the Export panel in the left column.</p>
+                <h2>GPX — GPS Exchange Format</h2>
+                <p><strong>Best for:</strong> GPS devices, Strava, Garmin Connect, Komoot, OsmAnd</p>
+                <ul>
+                    <li>Industry standard for GPS track exchange.</li>
+                    <li>Contains track points with timestamps, latitude, longitude, elevation, speed.</li>
+                    <li>Compatible with virtually all navigation and fitness apps.</li>
+                </ul>
+                <h2>KML — Keyhole Markup Language</h2>
+                <p><strong>Best for:</strong> Google Earth, Google My Maps</p>
+                <ul>
+                    <li>Includes visual styling (coloured line, start/end markers).</li>
+                    <li>Contains route description and metadata.</li>
+                    <li>Can be opened in Google Earth for 3D visualisation.</li>
+                </ul>
+                <h2>JSON</h2>
+                <p><strong>Best for:</strong> Backup, custom analysis, re-import</p>
+                <ul>
+                    <li>Complete route object with all metadata, timestamps, and statistics.</li>
+                    <li>Useful for scripting and integration with other tools.</li>
+                </ul>
+                <h2>CSV</h2>
+                <p><strong>Best for:</strong> Spreadsheet analysis (Excel, LibreOffice Calc, Python)</p>
+                <ul>
+                    <li>One row per GPS point.</li>
+                    <li>Columns: timestamp, latitude, longitude, altitude, speed, accuracy, heading.</li>
+                </ul>
+                <h2>Calendar Export</h2>
+                <p>Export <strong>all routes in a date range</strong> as a single GPX file.</p>
+                <ol class="steps">
+                    <li>Open the calendar section in the left column.</li>
+                    <li>Click a date or drag to select a range.</li>
+                    <li>Click <strong>Export Range as GPX</strong>.</li>
+                </ol>
+            </div>
+
+            <div class="lang-de">
+                <h1>Exportformate</h1>
+                <p class="page-lead">Routen können in vier Formaten aus dem Export-Panel in der linken Spalte heruntergeladen werden.</p>
+                <h2>GPX — GPS Exchange Format</h2>
+                <p><strong>Geeignet für:</strong> GPS-Geräte, Strava, Garmin Connect, Komoot, OsmAnd</p>
+                <ul>
+                    <li>Industriestandard für den GPS-Track-Austausch.</li>
+                    <li>Enthält Trackpunkte mit Zeitstempeln, Breitengrad, Längengrad, Höhe und Geschwindigkeit.</li>
+                    <li>Kompatibel mit nahezu allen Navigations- und Fitness-Apps.</li>
+                </ul>
+                <h2>KML — Keyhole Markup Language</h2>
+                <p><strong>Geeignet für:</strong> Google Earth, Google My Maps</p>
+                <ul>
+                    <li>Enthält visuelle Gestaltung (farbige Linie, Start-/Endmarker).</li>
+                    <li>Beinhaltet Routenbeschreibung und Metadaten.</li>
+                    <li>Kann direkt in Google Earth für 3D-Visualisierung geöffnet werden.</li>
+                </ul>
+                <h2>JSON</h2>
+                <p><strong>Geeignet für:</strong> Sicherungen, eigene Analysen, Wiederimport</p>
+                <ul>
+                    <li>Vollständiges Routenobjekt mit allen Metadaten, Zeitstempeln und Statistiken.</li>
+                    <li>Nützlich für Skripte und die Integration mit anderen Werkzeugen.</li>
+                </ul>
+                <h2>CSV</h2>
+                <p><strong>Geeignet für:</strong> Tabellenkalkulationen (Excel, LibreOffice Calc, Python)</p>
+                <ul>
+                    <li>Eine Zeile pro GPS-Punkt.</li>
+                    <li>Spalten: Zeitstempel, Breitengrad, Längengrad, Höhe, Geschwindigkeit, Genauigkeit, Richtung.</li>
+                </ul>
+                <h2>Kalender-Export</h2>
+                <p><strong>Alle Routen eines Datumsbereichs</strong> als einzelne GPX-Datei exportieren.</p>
+                <ol class="steps">
+                    <li>Kalenderbereich in der linken Spalte öffnen.</li>
+                    <li>Datum anklicken oder Bereich auswählen.</li>
+                    <li>Klicke auf <strong>Bereich als GPX exportieren</strong>.</li>
+                </ol>
+            </div>
+
+        </section>
+
+        <!-- ══ CHANGELOG ══════════════════════════════════════ -->
+        <section class="doc-page" id="page-changelog">
+
+            <div class="lang-en">
+                <h1>Changelog</h1>
+                <p class="page-lead">Notable changes by version.</p>
+                <div class="changelog-entry">
+                    <div class="changelog-header" onclick="toggleChangelog(this)">
+                        <span class="changelog-version">v2.2 — April 2026</span>
+                        <span class="changelog-date">Current</span>
+                        <span class="badge badge-new" style="margin-left:auto;">Latest</span>
+                    </div>
+                    <div class="changelog-body">
+                        <ul>
+                            <li>Dedicated domain <code>route-tracker.de</code> with Let's Encrypt cert via mailcow</li>
+                            <li>Subdomains: <code>tracker.</code> and <code>gps.</code> for OwnTracks, <code>api.</code> for REST</li>
+                            <li>Docker resource limits: 8 CPUs, 16 GB RAM</li>
+                            <li>OwnTracks setup box shows correct <code>https://tracker.route-tracker.de</code> URL</li>
+                            <li>Photo upload limit reduced to 10 MB</li>
+                            <li>Control bar: device name expands to fill available space</li>
+                            <li>Control bar: last activity timestamp shown after route name (desktop) / instead of route name (mobile)</li>
+                            <li>Two-column layout: stats + calendar + export left, route history right</li>
+                            <li>Map position and last-viewed route persisted in localStorage</li>
+                            <li>HTML documentation site with EN/DE language switching</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="changelog-entry">
+                    <div class="changelog-header" onclick="toggleChangelog(this)">
+                        <span class="changelog-version">v2.1 — April 2026</span>
+                        <span class="changelog-date">2026-04-12</span>
+                    </div>
+                    <div class="changelog-body">
+                        <ul>
+                            <li>Auto-Route System: daily scheduled route creation per device</li>
+                            <li>Device Management interface in admin panel</li>
+                            <li>🤖 robot icon for per-device auto-route configuration modal</li>
+                            <li>Test Now button for immediate manual route creation</li>
+                            <li>Server-side minute scheduler for reliable timing</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="changelog-entry">
+                    <div class="changelog-header" onclick="toggleChangelog(this)">
+                        <span class="changelog-version">v2.0 — April 2026</span>
+                        <span class="changelog-date">2026-04-11</span>
+                    </div>
+                    <div class="changelog-body">
+                        <ul>
+                            <li>Route point editing with drag-and-drop</li>
+                            <li>Add / delete individual GPS points via context menu</li>
+                            <li>Road / off-road / pause auto-classification with colour-coded line</li>
+                            <li>Smart route analysis statistics</li>
+                            <li>Performance-optimised rendering for large routes</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="changelog-entry">
+                    <div class="changelog-header" onclick="toggleChangelog(this)">
+                        <span class="changelog-version">v1.x — Earlier Versions</span>
+                        <span class="changelog-date">2026-03 – 2026-04</span>
+                    </div>
+                    <div class="changelog-body">
+                        <ul>
+                            <li>Initial release with live GPS tracking, route history, export</li>
+                            <li>OwnTracks HTTP mode integration</li>
+                            <li>Multi-user with admin / viewer roles</li>
+                            <li>Media upload: photos with EXIF positioning, YouTube links</li>
+                            <li>Shared public route links with expiry and optional password</li>
+                            <li>Calendar view and date-range export</li>
+                            <li>GPS incoming log for admins</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lang-de">
+                <h1>Änderungsprotokoll</h1>
+                <p class="page-lead">Wesentliche Änderungen nach Version.</p>
+                <div class="changelog-entry">
+                    <div class="changelog-header" onclick="toggleChangelog(this)">
+                        <span class="changelog-version">v2.2 — April 2026</span>
+                        <span class="changelog-date">Aktuell</span>
+                        <span class="badge badge-new" style="margin-left:auto;">Neueste</span>
+                    </div>
+                    <div class="changelog-body">
+                        <ul>
+                            <li>Eigene Domain <code>route-tracker.de</code> mit Let's-Encrypt-Zertifikat via mailcow</li>
+                            <li>Subdomains: <code>tracker.</code> und <code>gps.</code> für OwnTracks, <code>api.</code> für REST</li>
+                            <li>Docker-Ressourcenlimits: 8 CPUs, 16 GB RAM</li>
+                            <li>OwnTracks-Einrichtungsbox zeigt korrekte URL <code>https://tracker.route-tracker.de</code></li>
+                            <li>Foto-Upload-Limit auf 10 MB reduziert</li>
+                            <li>Steuerungsleiste: Gerätename füllt verfügbaren Platz</li>
+                            <li>Steuerungsleiste: Zeitstempel der letzten Aktivität nach Routenname (Desktop) / statt Routenname (Mobil)</li>
+                            <li>Zweispalten-Layout: Statistiken + Kalender + Export links, Routenverlauf rechts</li>
+                            <li>Kartenposition und zuletzt geladene Route werden in localStorage gespeichert</li>
+                            <li>HTML-Dokumentationsseite mit DE/EN-Sprachumschaltung</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="changelog-entry">
+                    <div class="changelog-header" onclick="toggleChangelog(this)">
+                        <span class="changelog-version">v2.1 — April 2026</span>
+                        <span class="changelog-date">2026-04-12</span>
+                    </div>
+                    <div class="changelog-body">
+                        <ul>
+                            <li>Auto-Route-System: tägliche geplante Routenerstellung pro Gerät</li>
+                            <li>Geräteverwaltungs-Oberfläche im Admin-Panel</li>
+                            <li>🤖-Symbol für geräteindividuelle Auto-Route-Konfiguration</li>
+                            <li>Schaltfläche „Jetzt testen" für sofortige manuelle Routenerstellung</li>
+                            <li>Serverseitiger Minuten-Scheduler für zuverlässiges Timing</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="changelog-entry">
+                    <div class="changelog-header" onclick="toggleChangelog(this)">
+                        <span class="changelog-version">v2.0 — April 2026</span>
+                        <span class="changelog-date">2026-04-11</span>
+                    </div>
+                    <div class="changelog-body">
+                        <ul>
+                            <li>Routenpunkte per Drag-and-Drop bearbeiten</li>
+                            <li>Einzelne GPS-Punkte per Kontextmenü hinzufügen / löschen</li>
+                            <li>Automatische Klassifizierung Straße / Offroad / Pause mit farbcodierter Linie</li>
+                            <li>Erweiterte Routenanalyse-Statistiken</li>
+                            <li>Leistungsoptimiertes Rendering für große Routen</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="changelog-entry">
+                    <div class="changelog-header" onclick="toggleChangelog(this)">
+                        <span class="changelog-version">v1.x — Frühere Versionen</span>
+                        <span class="changelog-date">2026-03 – 2026-04</span>
+                    </div>
+                    <div class="changelog-body">
+                        <ul>
+                            <li>Erstveröffentlichung mit Live-GPS-Tracking, Routenverlauf, Export</li>
+                            <li>OwnTracks HTTP-Modus-Integration</li>
+                            <li>Mehrbenutzer mit Admin- / Betrachter-Rollen</li>
+                            <li>Medien-Upload: Fotos mit EXIF-Positionierung, YouTube-Links</li>
+                            <li>Öffentliche Routen-Links mit Ablaufzeit und optionalem Passwort</li>
+                            <li>Kalenderansicht und Datumsbereich-Export</li>
+                            <li>GPS-Eingangsprotokoll für Admins</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+</div>
+
+<script>
+// ── Language switching ────────────────────────────────────
+function setLang(lang) {
+    document.documentElement.setAttribute('data-lang', lang);
+    document.documentElement.lang = lang;
+    localStorage.setItem('preferred-language', lang);
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.lang === lang);
+    });
+    document.title = lang === 'de'
+        ? 'Route Tracker \u2014 Dokumentation'
+        : 'Route Tracker \u2014 Documentation';
+}
+
+// ── Page routing ──────────────────────────────────────────
+function showPage(id) {
+    document.querySelectorAll('.doc-page').forEach(p => p.classList.remove('active'));
+    const page = document.getElementById('page-' + id);
+    if (page) page.classList.add('active');
+    document.querySelectorAll('.doc-header .header-links a[id^="nav-"]').forEach(a => a.classList.remove('active'));
+    const navLink = document.getElementById('nav-' + id);
+    if (navLink) navLink.classList.add('active');
+    history.replaceState(null, '', id === 'home' ? '#' : '#' + id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    closeSidebar();
+}
+
+function toggleChangelog(header) {
+    const body = header.nextElementSibling;
+    body.style.display = body.style.display === 'none' ? '' : 'none';
+}
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
+function closeSidebar()  { document.getElementById('sidebar').classList.remove('open'); }
+
+// ── Hash routing ──────────────────────────────────────────
+function routeFromHash() {
+    const map = {
+        '': 'home', 'home': 'home',
+        'quickstart': 'quickstart',
+        'user': 'user', 'user-guide': 'user',
+        'admin': 'admin', 'admin-guide': 'admin',
+        'owntracks': 'owntracks',
+        'export': 'export',
+        'changelog': 'changelog'
+    };
+    const hash = location.hash.replace('#', '').toLowerCase();
+    showPage(map[hash] || 'home');
+}
+window.addEventListener('hashchange', routeFromHash);
+
+// ── Init ──────────────────────────────────────────────────
+var urlLang = new URLSearchParams(window.location.search).get('lang');
+setLang(urlLang || localStorage.getItem('preferred-language') || 'en');
+routeFromHash();
+</script>
+</body>
+</html>

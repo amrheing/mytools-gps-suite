@@ -16,6 +16,11 @@ window.translations = {
         'nav.login': 'Login',
         'nav.register': 'Register',
         'nav.docs': 'Documentation',
+        'nav.docs.quickstart': 'Quick Start',
+        'nav.docs.user_guide': 'User Guide',
+        'nav.docs.admin_guide': 'Admin Guide',
+        'nav.docs.owntracks': 'OwnTracks Setup',
+        'nav.docs.changelog': 'Changelog',
         'nav.language': 'Language',
         
         // === GPS CONTROL ===
@@ -227,6 +232,11 @@ window.translations = {
         'nav.login': 'Anmelden',
         'nav.register': 'Registrieren',
         'nav.docs': 'Dokumentation',
+        'nav.docs.quickstart': 'Schnellstart',
+        'nav.docs.user_guide': 'Benutzerhandbuch',
+        'nav.docs.admin_guide': 'Admin-Handbuch',
+        'nav.docs.owntracks': 'OwnTracks Einrichtung',
+        'nav.docs.changelog': 'Änderungsprotokoll',
         'nav.language': 'Sprache',
         
         // === GPS CONTROL ===
