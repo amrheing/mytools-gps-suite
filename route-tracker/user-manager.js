@@ -187,9 +187,7 @@ class UserManager {
         }
 
         // Apply map center if available
-        if (prefs.mapCenter && window.routeTracker && window.routeTracker.map) {
-            window.routeTracker.map.setView(prefs.mapCenter, 13);
-        }
+        // (Map position is persisted via mapLat/mapLng/mapZoom keys — no override needed here)
 
         console.log('Applied user preferences:', prefs);
     }
@@ -260,9 +258,7 @@ class UserManager {
         }
 
         // Reset map to default position
-        if (window.routeTracker && window.routeTracker.map) {
-            window.routeTracker.map.setView([49.4875, 8.466], 13);
-        }
+        // (Map position is persisted via mapLat/mapLng/mapZoom — preserve it across logout)
     }
 
     getStoredUsers() {

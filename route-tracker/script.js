@@ -586,7 +586,7 @@ class RouteTracker {
                 }
             }, 500);
         }
-        // Also auto-zoom to fit for historical routes (non-live routes)
+        // Also auto-zoom to fit for historical routes (non-live routes).
         else if (routeData && !routeData.isLive && routeData.points && routeData.points.length > 0) {
             setTimeout(() => {
                 if (typeof zoomToFit === 'function') zoomToFit();
@@ -2794,12 +2794,23 @@ routeList.innerHTML = routes.map(route => {
 
     initMap() {
         // Initialize Leaflet map — scroll wheel zoom disabled; use Alt+scroll or the +/- controls
-        // Restore last map position from localStorage, fall back to Mannheim default
-        const savedLat  = parseFloat(localStorage.getItem('mapLat'))  || 49.4875;
-        const savedLng  = parseFloat(localStorage.getItem('mapLng'))  || 8.466;
-        const savedZoom = parseInt(localStorage.getItem('mapZoom'), 10) || 13;
+        // Restore last map position from localStorage.
+        // Discard the stale Mannheim default that old code used to save on logout.
+        const rawLat = parseFloat(localStorage.getItem('mapLat'));
+        const rawLng = parseFloat(localStorage.getItem('mapLng'));
+        const isMannheimDefault = Math.abs(rawLat - 49.4875) < 0.001 && Math.abs(rawLng - 8.466) < 0.001;
+        const hasSaved = localStorage.getItem('mapLat') && !isMannheimDefault;
+        const savedLat  = hasSaved ? rawLat  : 49.4875;
+        const savedLng  = hasSaved ? rawLng  : 8.466;
+        const savedZoom = hasSaved ? (parseInt(localStorage.getItem('mapZoom'), 10) || 13) : 13;
+        if (isMannheimDefault) {
+            // Clear stale default so route auto-zoom can position the map correctly
+            localStorage.removeItem('mapLat');
+            localStorage.removeItem('mapLng');
+            localStorage.removeItem('mapZoom');
+        }
         this.map = L.map('map', { scrollWheelZoom: false }).setView([savedLat, savedLng], savedZoom);
-        this.mapCentered = !!(localStorage.getItem('mapLat')); // already positioned if we had saved data
+        this.mapCentered = hasSaved; // only treat as already positioned if we had real saved data
 
         // Enable zoom only while Alt/Option is held
         this.map.getContainer().addEventListener('wheel', (e) => {
