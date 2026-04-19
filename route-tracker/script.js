@@ -2342,6 +2342,12 @@ class RouteTracker {
         if (lastUpdate && deviceData.lastUpdate) {
             lastUpdate.textContent = new Date(deviceData.lastUpdate).toLocaleString();
         }
+        const lastActivity = document.getElementById('last-activity');
+        if (lastActivity && deviceData.lastUpdate) {
+            const d = new Date(deviceData.lastUpdate);
+            lastActivity.textContent = d.toLocaleString();
+            lastActivity.style.display = '';
+        }
     }
 
     updateRouteStats(routeData) {

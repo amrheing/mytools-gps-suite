@@ -228,8 +228,8 @@ html, body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 150px;
-    flex-shrink: 1;
+    flex: 1;
+    min-width: 0;
 }
 
 /* All action buttons – pushed to the far right */
@@ -349,12 +349,23 @@ html, body {
     flex-shrink: 1;
 }
 
+.gps-last-activity {
+    color: var(--text-light);
+    font-size: 0.9em;
+    opacity: 0.8;
+}
+.gps-last-activity::before {
+    content: '·';
+    margin-right: 4px;
+}
+
 /* ── Mobile: hide refresh-rate selector, allow wrapping ─── */
 @media (max-width: 600px) {
     .gps-rate-select { display: none !important; }
-    .gps-bar-name    { max-width: 110px; }
     .gps-device-wrap { max-width: 180px; }
-    .gps-route-indicator { max-width: 140px; }
+    .gps-route-indicator { max-width: 160px; }
+    #active-route-name { display: none; }
+    .gps-last-activity::before { display: none; }
 }
 
 .stats-dashboard {
