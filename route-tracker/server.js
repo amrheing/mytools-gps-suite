@@ -2065,11 +2065,11 @@ app.get('/api/devices/:deviceId/routes', requireLogin, validateToken, async (req
 
         const user = users[req.session.userId];
         const historyRouteLimit = user?.historyRouteLimit;
-        if (historyRouteLimit && Number.isFinite(Number(historyRouteLimit))) {
-            filtered = filtered.slice(0, Number(historyRouteLimit));
-        }
+        const limitValue = (historyRouteLimit && Number.isFinite(Number(historyRouteLimit)))
+            ? Number(historyRouteLimit)
+            : null;
 
-        res.json({ deviceId, routes: filtered });
+        res.json({ deviceId, routes: filtered, historyRouteLimit: limitValue });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

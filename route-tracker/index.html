@@ -157,78 +157,90 @@
                     </p>
                 </section>
 
-                <!-- === 3. STATISTICS DASHBOARD === -->
-                <section class="stats-dashboard">
-                    <div class="section-header">
-                        <h3 class="section-title">
-                            <i class="fas fa-chart-line"></i> <span data-i18n="stats.title">Route Statistics</span>
-                        </h3>
-                    </div>
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <span class="stat-value" id="total-distance">0.0</span>
-                            <div class="stat-label" data-i18n="stats.distance">Distance (km)</div>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="total-time">00:00:00</span>
-                            <div class="stat-label" data-i18n="stats.duration">Duration</div>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="avg-speed">0.0</span>
-                            <div class="stat-label" data-i18n="stats.avg_speed">Avg Speed (km/h)</div>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="current-speed">0.0</span>
-                            <div class="stat-label" data-i18n="stats.current_speed">Current Speed (km/h)</div>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="elevation">0</span>
-                            <div class="stat-label" data-i18n="stats.elevation">Elevation (m)</div>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="waypoints">0</span>
-                            <div class="stat-label" data-i18n="stats.waypoints">Waypoints</div>
-                        </div>
-                    </div>
-                </section>
+                <!-- === 3+4. TWO-COLUMN LAYOUT: left col (stats/calendar/export) + right col (history) === -->
+                <div class="two-col-layout">
 
-                <!-- === 4. ROUTE MANAGEMENT === -->
-                <section class="route-management">
-                    <div class="export-panel">
-                        <div class="section-header">
-                            <h3 class="section-title">
-                                <i class="fas fa-download"></i> <span data-i18n="export.title">Export Route</span>
-                            </h3>
-                        </div>
-                        <div class="export-buttons-grid">
-                            <button class="btn btn-primary" onclick="exportCurrentRoute()">
-                                <i class="fas fa-file-code"></i> <span data-i18n="export.gpx">Export GPX</span>
-                            </button>
-                            <button class="btn btn-primary" onclick="exportRoute('kml')">
-                                <i class="fas fa-file-export"></i> <span data-i18n="export.kml">Export KML</span>
-                            </button>
-                            <button class="btn btn-primary" onclick="exportRoute('json')">
-                                <i class="fas fa-file-alt"></i> <span data-i18n="export.json">Export JSON</span>
-                            </button>
-                            <button class="btn btn-secondary admin-only" onclick="shareRoute()">
-                                <i class="fas fa-share-alt"></i> <span data-i18n="export.share">Share Route</span>
-                            </button>
-                        </div>
-                        <div class="archive-calendar" id="archive-calendar">
-                            <div class="archive-calendar-header">
-                                <div class="archive-calendar-title"><i class="fas fa-calendar-alt"></i> <span data-i18n="history.archive_calendar">Archive Calendar</span></div>
-                                <div class="archive-calendar-nav">
-                                    <button class="btn btn-sm btn-secondary" id="archive-cal-prev" type="button"><i class="fas fa-chevron-left"></i></button>
-                                    <button class="btn btn-sm btn-secondary" id="archive-cal-next" type="button"><i class="fas fa-chevron-right"></i></button>
+                    <!-- LEFT COLUMN -->
+                    <div class="left-col">
+
+                        <!-- Statistics (compact) -->
+                        <div class="stats-dashboard">
+                            <div class="section-header section-header--compact">
+                                <h3 class="section-title section-title--sm">
+                                    <i class="fas fa-chart-line"></i> <span data-i18n="stats.title">Statistics</span>
+                                </h3>
+                            </div>
+                            <div class="stats-grid stats-grid--compact">
+                                <div class="stat-card stat-card--compact">
+                                    <span class="stat-value stat-value--sm" id="total-distance">0.0</span>
+                                    <div class="stat-label" data-i18n="stats.distance">Distance (km)</div>
+                                </div>
+                                <div class="stat-card stat-card--compact">
+                                    <span class="stat-value stat-value--sm" id="total-time">00:00:00</span>
+                                    <div class="stat-label" data-i18n="stats.duration">Duration</div>
+                                </div>
+                                <div class="stat-card stat-card--compact">
+                                    <span class="stat-value stat-value--sm" id="avg-speed">0.0</span>
+                                    <div class="stat-label" data-i18n="stats.avg_speed">Avg Speed (km/h)</div>
+                                </div>
+                                <div class="stat-card stat-card--compact">
+                                    <span class="stat-value stat-value--sm" id="current-speed">0.0</span>
+                                    <div class="stat-label" data-i18n="stats.current_speed">Current Speed</div>
+                                </div>
+                                <div class="stat-card stat-card--compact">
+                                    <span class="stat-value stat-value--sm" id="elevation">0</span>
+                                    <div class="stat-label" data-i18n="stats.elevation">Elevation (m)</div>
+                                </div>
+                                <div class="stat-card stat-card--compact">
+                                    <span class="stat-value stat-value--sm" id="waypoints">0</span>
+                                    <div class="stat-label" data-i18n="stats.waypoints">Waypoints</div>
                                 </div>
                             </div>
-                            <div class="archive-calendar-month" id="archive-cal-month">-</div>
-                            <div class="archive-calendar-grid" id="archive-cal-weekdays"></div>
-                            <div class="archive-calendar-grid" id="archive-cal-days"></div>
-                            <div class="archive-calendar-hint" data-i18n="history.archive_calendar_hint">Days in green contain archived routes. Click a day to filter route history.</div>
                         </div>
-                    </div>
 
+                        <!-- Calendar -->
+                        <div class="export-panel">
+                            <div class="archive-calendar" id="archive-calendar">
+                                <div class="archive-calendar-header">
+                                    <div class="archive-calendar-title"><i class="fas fa-calendar-alt"></i> <span data-i18n="history.archive_calendar">Archive Calendar</span></div>
+                                    <div class="archive-calendar-nav">
+                                        <button class="btn btn-sm btn-secondary" id="archive-cal-prev" type="button"><i class="fas fa-chevron-left"></i></button>
+                                        <button class="btn btn-sm btn-secondary" id="archive-cal-next" type="button"><i class="fas fa-chevron-right"></i></button>
+                                    </div>
+                                </div>
+                                <div class="archive-calendar-month" id="archive-cal-month">-</div>
+                                <div class="archive-calendar-grid" id="archive-cal-weekdays"></div>
+                                <div class="archive-calendar-grid" id="archive-cal-days"></div>
+                                <div class="archive-calendar-hint" data-i18n="history.archive_calendar_hint">Days in green contain archived routes. Click a day to filter route history.</div>
+                            </div>
+                        </div>
+
+                        <!-- Export buttons -->
+                        <div class="export-panel">
+                            <div class="section-header section-header--compact">
+                                <h3 class="section-title section-title--sm">
+                                    <i class="fas fa-download"></i> <span data-i18n="export.title">Export Route</span>
+                                </h3>
+                            </div>
+                            <div class="export-buttons-grid">
+                                <button class="btn btn-primary" onclick="exportCurrentRoute()">
+                                    <i class="fas fa-file-code"></i> <span data-i18n="export.gpx">Export GPX</span>
+                                </button>
+                                <button class="btn btn-primary" onclick="exportRoute('kml')">
+                                    <i class="fas fa-file-export"></i> <span data-i18n="export.kml">Export KML</span>
+                                </button>
+                                <button class="btn btn-primary" onclick="exportRoute('json')">
+                                    <i class="fas fa-file-alt"></i> <span data-i18n="export.json">Export JSON</span>
+                                </button>
+                                <button class="btn btn-secondary admin-only" onclick="shareRoute()">
+                                    <i class="fas fa-share-alt"></i> <span data-i18n="export.share">Share Route</span>
+                                </button>
+                            </div>
+                        </div>
+
+                    </div><!-- /left-col -->
+
+                    <!-- RIGHT COLUMN: Route History -->
                     <div class="route-history">
                         <div class="section-header">
                             <h3 class="section-title">
@@ -289,8 +301,9 @@
                                 <i class="fas fa-eraser"></i> <span data-i18n="history.clear_filters">Clear Filters</span>
                             </button>
                         </div>
-                    </div>
-                </section>
+                    </div><!-- /route-history -->
+
+                </div><!-- /two-col-layout -->
 
                 <!-- === 5. CONFIGURATION SECTION === -->
                 <section class="config-section admin-only">

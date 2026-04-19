@@ -11,6 +11,7 @@ class RouteTracker {
         this.autoRefresh = true;
         this.refreshRate = 5000; // 5 seconds default
         this._allRoutes = [];
+        this._historyRouteLimit = null;
         this.historyFilters = {
             dateFrom: '',
             dateTo: '',
@@ -299,6 +300,9 @@ class RouteTracker {
             if (response.ok) {
                 const data = await response.json();
                 this._allRoutes = Array.isArray(data.routes) ? data.routes : [];
+                this._historyRouteLimit = (data.historyRouteLimit && Number.isFinite(Number(data.historyRouteLimit)))
+                    ? Number(data.historyRouteLimit)
+                    : null;
                 this.refreshRouteHistoryView();
             }
         } catch (error) {
@@ -498,8 +502,9 @@ class RouteTracker {
         if (!Array.isArray(routes)) return [];
 
         const sorted = [...routes].sort((a, b) => new Date(b.startTime || 0) - new Date(a.startTime || 0));
+        const hasDateFilter = !!(this.historyFilters.dateFrom || this.historyFilters.dateTo);
 
-        return sorted.filter(route => {
+        const filtered = sorted.filter(route => {
             if (this.historyFilters.favoritesOnly && !route.favorite) return false;
 
             const routeDate = this._getRouteFilterDate(route);
@@ -516,6 +521,15 @@ class RouteTracker {
             }
             return true;
         });
+
+        // Apply limit only when no date filter is active (calendar click bypasses the limit)
+        // Favorites are always shown regardless of limit
+        if (!hasDateFilter && this._historyRouteLimit) {
+            const limit = this._historyRouteLimit;
+            return filtered.filter((route, index) => route.favorite || index < limit);
+        }
+
+        return filtered;
     }
 
     refreshRouteHistoryView() {
