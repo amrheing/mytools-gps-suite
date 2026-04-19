@@ -188,6 +188,175 @@ html, body {
     border-bottom: 1px solid var(--border-color);
 }
 
+/* ── Compact GPS 2-line bar ───────────────────────────────── */
+.gps-compact-panel {
+    padding: 6px 10px;
+}
+
+.gps-bar-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    flex-wrap: nowrap;
+}
+
+.gps-bar-line + .gps-bar-line {
+    border-top: 1px solid var(--border-color);
+    margin-top: 5px;
+    padding-top: 5px;
+}
+
+/* Traffic-light dot */
+.gps-ampel {
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 1.5px solid rgba(0,0,0,0.15);
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.08);
+    transition: background 0.3s;
+}
+.gps-ampel.status-active   { background: var(--success-color, #2ecc71); box-shadow: 0 0 6px rgba(46,204,113,0.6); }
+.gps-ampel.status-inactive { background: #6e6e6e; }
+
+.gps-bar-name {
+    font-weight: 600;
+    font-size: 0.9em;
+    color: var(--text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+    flex-shrink: 1;
+}
+
+/* All action buttons – pushed to the far right */
+.gps-bar-actions-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.btn-icon-gps {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card-inner);
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    transition: filter 0.15s;
+    padding: 0;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+/* Solid-color variants – hover just dims, no size/border change */
+.btn-icon-gps.btn-icon-active  { background: var(--success-color, #2ecc71); color: #fff; border-color: var(--success-color, #2ecc71); }
+.btn-icon-gps.btn-icon-stopped { background: #e74c3c;                       color: #fff; border-color: #e74c3c; }
+.btn-icon-gps.btn-icon-pause   { background: #f39c12;                       color: #fff; border-color: #f39c12; }
+.btn-icon-gps.btn-icon-play    { background: var(--success-color, #2ecc71); color: #fff; border-color: var(--success-color, #2ecc71); }
+.btn-icon-gps.btn-icon-primary { background: #3498db; color: #fff; border-color: #3498db; }
+.btn-icon-gps.btn-icon-exit    { background: #e74c3c;                       color: #fff; border-color: #e74c3c; }
+/* Hover: dim only – no dimension change */
+.btn-icon-gps:hover { filter: brightness(1.18); }
+.btn-icon-gps:not([class*="btn-icon-active"]):not([class*="btn-icon-stopped"]):not([class*="btn-icon-pause"]):not([class*="btn-icon-play"]):not([class*="btn-icon-primary"]):not([class*="btn-icon-exit"]):hover {
+    filter: none;
+    background: var(--primary-color);
+    color: #fff;
+    border-color: var(--primary-color);
+}
+
+.gps-rate-select {
+    height: 26px;
+    line-height: 26px;
+    padding: 0 6px;
+    font-size: 0.82em;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-card-inner);
+    color: var(--text-color);
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+/* ── Modern pill-shaped device selector ──────────────────── */
+.gps-device-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-card-inner);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 3px 28px 3px 10px;
+    min-width: 100px;
+    max-width: 240px;
+    flex: 1;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.gps-device-wrap:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(52,152,219,0.25);
+}
+.gps-device-wrap::after {
+    content: '▾';
+    position: absolute;
+    right: 10px;
+    font-size: 0.9em;
+    color: var(--text-light);
+    pointer-events: none;
+    line-height: 1;
+}
+.gps-device-icon {
+    color: var(--primary-color);
+    font-size: 0.82em;
+    flex-shrink: 0;
+}
+.gps-device-select {
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--text-color);
+    font-size: 0.85em;
+    font-weight: 500;
+    cursor: pointer;
+    flex: 1;
+    min-width: 0;
+    outline: none;
+    padding: 0;
+}
+
+.gps-route-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.82em;
+    color: var(--text-light);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+    flex-shrink: 1;
+}
+
+/* ── Mobile: hide refresh-rate selector, allow wrapping ─── */
+@media (max-width: 600px) {
+    .gps-rate-select { display: none !important; }
+    .gps-bar-name    { max-width: 110px; }
+    .gps-device-wrap { max-width: 180px; }
+    .gps-route-indicator { max-width: 140px; }
+}
+
 .stats-dashboard {
     background: var(--bg-card);
     padding: 12px 14px;
@@ -1007,10 +1176,7 @@ select.form-control option {
         justify-content: center;
     }
 
-    #gps-status-btn {
-        width: 100%;
-        justify-content: center;
-    }
+    /* #gps-status-btn is now an icon-only button in the compact bar — no full-width override */
 
     .breadcrumb {
         flex-direction: column;

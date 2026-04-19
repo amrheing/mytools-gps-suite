@@ -283,6 +283,8 @@ class RouteTracker {
                 this.currentRouteId = routeId;
                 this.displayRoute(routeData);
                 this.updateRouteStats(routeData);
+                const activeRouteName = document.getElementById('active-route-name');
+                if (activeRouteName) activeRouteName.textContent = routeData.name || routeId;
                 return routeData;
             }
         } catch (error) {
@@ -2307,8 +2309,8 @@ class RouteTracker {
         
         if (deviceName) deviceName.textContent = deviceData.name;
         if (deviceStatus) {
-            deviceStatus.textContent = deviceData.currentRoute ? 'Active Route' : 'No Active Route';
-            deviceStatus.className = deviceData.currentRoute ? 'status-active' : 'status-inactive';
+            deviceStatus.className = `gps-ampel ${deviceData.currentRoute ? 'status-active' : 'status-inactive'}`;
+            deviceStatus.title = deviceData.currentRoute ? 'Active Route' : 'No Active Route';
         }
         if (lastUpdate && deviceData.lastUpdate) {
             lastUpdate.textContent = new Date(deviceData.lastUpdate).toLocaleString();
@@ -2919,6 +2921,8 @@ routeList.innerHTML = routes.map(route => {
     }
 
     clearLiveRoute() {
+        const activeRouteName = document.getElementById('active-route-name');
+        if (activeRouteName) activeRouteName.textContent = '—';
         // Clear trail data
         this.liveTrail = [];
         
@@ -3055,11 +3059,11 @@ routeList.innerHTML = routes.map(route => {
         const button = document.getElementById('gps-status-btn');
         if (button) {
             if (isActive) {
-                button.className = 'btn btn-success';
-                button.innerHTML = '<i class="fas fa-satellite"></i> GPS Active';
+                button.className = 'btn-icon-gps btn-icon-active';
+                button.title = 'GPS Active — click to stop';
             } else {
-                button.className = 'btn btn-danger';
-                button.innerHTML = '<i class="fas fa-satellite"></i> GPS Stopped';
+                button.className = 'btn-icon-gps btn-icon-stopped';
+                button.title = 'GPS Stopped — click to start';
             }
         }
     }
@@ -3150,14 +3154,14 @@ function toggleAutoRefresh() {
     const btn = document.getElementById('auto-refresh-btn');
     
     if (window.routeTracker.autoRefresh) {
-        btn.innerHTML = '<i class="fas fa-pause"></i> Pause Auto-Refresh';
-        btn.classList.remove('btn-success');
-        btn.classList.add('btn-warning');
+        btn.className = 'btn-icon-gps btn-icon-pause admin-only';
+        btn.title = 'Pause auto-refresh';
+        btn.innerHTML = '<i class="fas fa-pause"></i>';
         window.routeTracker.startAutoRefresh();
     } else {
-        btn.innerHTML = '<i class="fas fa-play"></i> Start Auto-Refresh';
-        btn.classList.remove('btn-warning');
-        btn.classList.add('btn-success');
+        btn.className = 'btn-icon-gps btn-icon-play admin-only';
+        btn.title = 'Resume auto-refresh';
+        btn.innerHTML = '<i class="fas fa-play"></i>';
         if (window.routeTracker.refreshInterval) {
             clearInterval(window.routeTracker.refreshInterval);
         }

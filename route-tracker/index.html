@@ -62,69 +62,46 @@
                     </div>
                 </header>
                 <!-- === 1. CONTROL PANEL === -->
-                <section class="control-panel">
-                    <div class="section-header">
-                        <h3 class="section-title">
-                            <i class="fas fa-satellite-dish"></i> <span data-i18n="gps.title">GPS Control Center</span>
-                        </h3>
-                        <button id="gps-status-btn" class="btn btn-success" onclick="toggleGPSMonitoring()">
-                            <i class="fas fa-satellite"></i> <span data-i18n="gps.active">GPS Active</span>
-                        </button>
-                    </div>
-
-                    <!-- Token Setup (Initially visible) -->
-                    <!-- Main GPS Controls -->
-                    <div id="main-app" style="display: none;">
-                        <div class="control-grid">
-                            <div class="status-panel">
-                                <h4><i class="fas fa-info-circle"></i> <span data-i18n="gps.status">Status</span></h4>
-                                <div class="status-details-grid">
-                                    <div class="admin-only" style="margin-bottom:4px;">
-                                        <small data-i18n="gps.device">Device:</small><br>
-                                        <span id="device-name" class="status-text" data-i18n="gps.unknown">Unknown</span>
-                                    </div>
-                                    <div>
-                                        <small data-i18n="gps.status">Status:</small><br>
-                                        <span id="device-status" class="status-inactive" data-i18n="gps.no_data">No Data</span>
-                                    </div>
-                                    <div>
-                                        <small data-i18n="gps.last_update">Last Update:</small><br>
-                                        <span id="last-update" class="status-text" data-i18n="gps.never">Never</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="status-panel admin-only">
-                                <h4><i class="fas fa-cogs"></i> <span data-i18n="controls.title">Controls</span></h4>
-                                <div class="control-settings-grid">
-                                    <button id="auto-refresh-btn" class="btn btn-warning" onclick="toggleAutoRefresh()">
-                                        <i class="fas fa-pause"></i> <span data-i18n="controls.pause_refresh">Pause Refresh</span>
-                                    </button>
-                                    <button class="btn btn-primary" onclick="refreshData()">
-                                        <i class="fas fa-sync"></i> <span data-i18n="controls.refresh">Refresh</span>
-                                    </button>
-                                    <select id="refresh-rate" class="form-control" onchange="changeRefreshRate()">
-                                        <option value="2000" data-i18n="controls.2_seconds">2 seconds</option>
-                                        <option value="5000" selected data-i18n="controls.5_seconds">5 seconds</option>
-                                        <option value="10000" data-i18n="controls.10_seconds">10 seconds</option>
-                                        <option value="30000" data-i18n="controls.30_seconds">30 seconds</option>
-                                    </select>
-                                    <button class="btn btn-secondary" onclick="clearApiToken()">
-                                        <i class="fas fa-sign-out-alt"></i> <span data-i18n="controls.disconnect">Disconnect</span>
-                                    </button>
-                                    <select id="device-selector" class="form-control" style="grid-column: span 2;">
-                                        <option value="default-device">default-device</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="status-panel viewer-only">
-                                <h4><i class="fas fa-mobile-alt"></i> Device</h4>
-                                <div style="margin-top: 10px;">
-                                    <select id="device-selector-viewer" class="form-control" onchange="window.routeTracker && window.routeTracker.onDeviceSelectorChange(this.value)">
-                                        <option value="default-device">default-device</option>
-                                    </select>
-                                </div>
-                            </div>
+                <section class="control-panel gps-compact-panel">
+                    <!-- Line 1: Ampel + device name + primary buttons + secondary right buttons -->
+                    <div class="gps-bar-line">
+                        <span id="device-status" class="gps-ampel status-inactive" title="GPS Status"></span>
+                        <span id="device-name" class="gps-bar-name">Unknown</span>
+                        <!-- All action buttons pushed to the right -->
+                        <div class="gps-bar-actions-right">
+                            <button id="gps-status-btn" class="btn-icon-gps btn-icon-active" onclick="toggleGPSMonitoring()" title="Toggle GPS Monitoring">
+                                <i class="fas fa-satellite"></i>
+                            </button>
+                            <button id="auto-refresh-btn" class="btn-icon-gps btn-icon-pause admin-only" onclick="toggleAutoRefresh()" title="Pause/Resume auto-refresh">
+                                <i class="fas fa-pause"></i>
+                            </button>
+                            <button class="btn-icon-gps btn-icon-primary admin-only" onclick="refreshData()" title="Refresh now">
+                                <i class="fas fa-sync"></i>
+                            </button>
+                            <button class="btn-icon-gps btn-icon-exit admin-only" onclick="clearApiToken()" title="Disconnect">
+                                <i class="fas fa-sign-out-alt"></i>
+                            </button>
                         </div>
+                    </div>
+                    <!-- Line 2: Device switcher + active route indicator -->
+                    <div id="main-app" style="display: none;" class="gps-bar-line">
+                        <div class="gps-device-wrap admin-only">
+                            <i class="fas fa-mobile-alt gps-device-icon"></i>
+                            <select id="device-selector" class="gps-device-select" onchange="window.routeTracker && window.routeTracker.onDeviceSelectorChange(this.value)">
+                                <option value="default-device">default-device</option>
+                            </select>
+                        </div>
+                        <div class="gps-device-wrap viewer-only">
+                            <i class="fas fa-mobile-alt gps-device-icon"></i>
+                            <select id="device-selector-viewer" class="gps-device-select" onchange="window.routeTracker && window.routeTracker.onDeviceSelectorChange(this.value)">
+                                <option value="default-device">default-device</option>
+                            </select>
+                        </div>
+                        <span class="gps-route-indicator">
+                            <i class="fas fa-route"></i>
+                            <span id="active-route-name">—</span>
+                        </span>
+                        <span id="last-update" style="display:none;"></span>
                     </div>
                 </section>
 
@@ -321,6 +298,15 @@
                         <h3 class="section-title">
                             <i class="fas fa-mobile-alt"></i> <span data-i18n="setup.title">OwnTracks Setup</span>
                         </h3>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <label style="font-size:0.85em;color:var(--text-light);white-space:nowrap;"><i class="fas fa-clock"></i> Auto-refresh</label>
+                            <select id="refresh-rate" class="gps-rate-select" style="width:70px;" onchange="changeRefreshRate()">
+                                <option value="2000">2s</option>
+                                <option value="5000" selected>5s</option>
+                                <option value="10000">10s</option>
+                                <option value="30000">30s</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="status-panel">
                         <p><strong>Configure OwnTracks (HTTP mode):</strong></p>
