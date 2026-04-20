@@ -100,7 +100,7 @@ const noCacheHeaders = (req, res, next) => {
     next();
 };
 app.use(noCacheHeaders);
-app.use(express.static('/app'));
+app.use(express.static('/app/public'));
 app.use('/shared', express.static('/app/shared'));
 
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
@@ -1300,7 +1300,7 @@ app.post('/api/admin/users/:id/invite', requireLogin, requireAdmin, async (req, 
 
 // Public: serve invite set-password page
 app.get('/invite/:token', (req, res) => {
-    res.sendFile(path.join('/app', 'invite.html'));
+    res.sendFile(path.join('/app', 'public', 'invite.html'));
 });
 
 // Public: set password via invite token
