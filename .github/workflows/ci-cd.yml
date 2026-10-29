@@ -83,9 +83,7 @@ jobs:
 
     - name: Test JavaScript components
       run: |
-        cd google-gpx-converter
-        npm install --global @web/test-runner
-        # Add JS tests when available
+        node --test google-gpx-converter/tests/
 
   build:
     runs-on: ubuntu-latest
