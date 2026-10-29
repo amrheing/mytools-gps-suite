@@ -34,7 +34,7 @@ Available at: [https://tools.amrhein.info/extract-gpx-parts/](https://tools.amrh
 - Docker + Docker Compose
 - Reverse proxy (nginx / Traefik) routing traffic to the container
 
-Python dependencies (inside container): `flask`, `werkzeug`
+Python dependencies (inside container): `flask`, `werkzeug`, `defusedxml`, `gunicorn`
 
 ## Deployment
 
@@ -47,8 +47,13 @@ services:
       context: ./extract-gpx-parts
     container_name: extract-gpx-parts
     restart: unless-stopped
+    ports:
+      - "6020:8080"          # container listens on unprivileged port 8080
+    mem_limit: 1g
     environment:
-      - MAX_CONTENT_LENGTH_MB=1024
+      - MAX_CONTENT_LENGTH_MB=100
+      - DELETE_TOKEN=${GPX_EXTRACTOR_DELETE_TOKEN}   # keep in .env, never commit
+      - SECRET_KEY=${GPX_EXTRACTOR_SECRET_KEY}
     volumes:
       - ./extract-gpx-parts/data/uploads:/app/web/uploads
       - ./extract-gpx-parts/data/processed:/app/web/processed
@@ -134,9 +139,22 @@ extract-gpx-parts/
         └── processing.html   # Background job progress page
 ```
 
+Without `DELETE_TOKEN` deleting from the archive is disabled.
+
 ## Permissions
 
-Files are created with group-write permissions (`664`/`775`) so members of the `docker` group on the host can manage them without `sudo`.
+The container runs as an unprivileged user (UID 1000 / GID 1001 by default, override with the build args `APP_UID`/`APP_GID` to match the owner of the data volumes). Files are created with group-write permissions (`664`/`775`) so members of that group on the host can manage them without `sudo`.
+
+## Archive housekeeping
+
+Archived uploads, their metadata and their output directories are kept. Only abandoned `temp_*` uploads (older than 1 hour) and output directories that no archive entry refers to (older than 1 day) are removed.
+
+## Tests
+
+```bash
+pip install -r web/requirements.txt pytest
+pytest
+```
 
 ## Tested With
 
@@ -147,6 +165,15 @@ Files are created with group-write permissions (`664`/`775`) so members of the `
 - TET (Trans Euro Trail) GPX format
 
 ## Changelog
+
+### v1.2
+- Security: downloads, ZIP export and file-info API are confined to the processed folder (path traversal fix)
+- Security: delete token and Flask secret key come from the environment; token compared in constant time
+- Security: archive IDs validated, XML parsed with `defusedxml`, container runs as non-root behind gunicorn
+- Archive is no longer wiped hourly; only temp uploads and orphaned output folders are cleaned up
+- ZIP downloads built in memory (no leftover temp files)
+- Track/route names escaped in output XML; duplicate names get `_2`, `_3`, ...; elevation (`ele`) kept
+- Summary shown again for already-processed files; `/health` endpoint; real tests
 
 ### v1.1
 - Persistent file archive — files no longer auto-deleted after processing

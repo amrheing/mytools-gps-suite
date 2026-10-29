@@ -22,6 +22,17 @@ import argparse
 import re
 import hashlib
 from xml.etree import ElementTree as ET
+from xml.sax.saxutils import escape
+try:
+    # Hardened parser against entity-expansion attacks on untrusted uploads
+    from defusedxml.ElementTree import parse as parse_xml
+except ImportError:
+    parse_xml = ET.parse
+
+
+def _attr(value):
+    """Escape a value for use inside a double-quoted XML attribute"""
+    return escape(value, {'"': '&quot;'})
 from pathlib import Path
 from datetime import datetime
 from collections import Counter
@@ -336,11 +347,23 @@ class GPXExtractor:
         self.namespace = {}
         self.metadata = {}
         self.metadata_extractor = GPXMetadataExtractor()
+        self._used_names = set()
+
+    def _unique_output_file(self, name, fallback):
+        """Build a safe, unique output path from a track/route name (duplicates get _2, _3, ...)"""
+        safe_name = "".join(c for c in (name or '') if c.isalnum() or c in (' ', '-', '_')).strip()
+        safe_name = safe_name.replace(' ', '_') or fallback
+        candidate, n = safe_name, 2
+        while candidate.lower() in self._used_names:
+            candidate = f"{safe_name}_{n}"
+            n += 1
+        self._used_names.add(candidate.lower())
+        return self.output_dir / f"{candidate}.gpx"
         
     def load_gpx(self):
         """Load and parse the GPX file with metadata analysis"""
         try:
-            self.tree = ET.parse(self.gpx_file_path)
+            self.tree = parse_xml(self.gpx_file_path)
             self.root = self.tree.getroot()
             
             # Extract namespace information
@@ -491,9 +514,9 @@ class GPXExtractor:
                 
                 wpt_name = name_elem.text if name_elem is not None and name_elem.text else ""
                 
-                gpx_content += f'\t<wpt lat="{lat}" lon="{lon}">\n'
+                gpx_content += f'\t<wpt lat="{_attr(lat)}" lon="{_attr(lon)}">\n'
                 if wpt_name:
-                    gpx_content += f'\t\t<name>{wpt_name}</name>\n'
+                    gpx_content += f'\t\t<name>{escape(wpt_name)}</name>\n'
                 gpx_content += '\t</wpt>\n'
         
         gpx_content += '</gpx>'
@@ -530,13 +553,10 @@ class GPXExtractor:
             else:
                 name_elem = trk.find('.//name')
             
-            track_name = name_elem.text if name_elem is not None else f"track_{i:02d}"
+            track_name = name_elem.text if name_elem is not None and name_elem.text else f"track_{i:02d}"
             
-            # Sanitize filename - use track name directly as output filename
-            safe_name = "".join(c for c in track_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            safe_name = safe_name.replace(' ', '_')
-            
-            output_file = self.output_dir / f"{safe_name}.gpx"
+            # Use track name as output filename (sanitized, duplicates numbered)
+            output_file = self._unique_output_file(track_name, f"track_{i:02d}")
             
             # Extract all track points from all segments
             track_points = []
@@ -545,27 +565,33 @@ class GPXExtractor:
             else:
                 trkpts = trk.findall('.//trkpt')
             
+            ele_tag = '{%s}ele' % self.namespace['default'] if self.namespace.get('default') else 'ele'
             for trkpt in trkpts:
                 lat = trkpt.get('lat')
                 lon = trkpt.get('lon')
                 if lat and lon:
-                    track_points.append((lat, lon))
+                    ele_elem = trkpt.find(ele_tag)
+                    ele = ele_elem.text.strip() if ele_elem is not None and ele_elem.text else None
+                    track_points.append((lat, lon, ele))
             
             if track_points:
                 # Create clean, simple GPX content
                 gpx_content = f'''<?xml version="1.0" encoding="UTF-8"?>
 <gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="GPX Extractor">
 \t<metadata>
-\t\t<name>{track_name}</name>
+\t\t<name>{escape(track_name)}</name>
 \t</metadata>
 \t<trk>
-\t\t<name>{track_name}</name>
+\t\t<name>{escape(track_name)}</name>
 \t\t<trkseg>
 '''
                 
                 # Add track points
-                for lat, lon in track_points:
-                    gpx_content += f'\t\t\t<trkpt lat="{lat}" lon="{lon}"></trkpt>\n'
+                for lat, lon, ele in track_points:
+                    if ele:
+                        gpx_content += f'\t\t\t<trkpt lat="{_attr(lat)}" lon="{_attr(lon)}"><ele>{escape(ele)}</ele></trkpt>\n'
+                    else:
+                        gpx_content += f'\t\t\t<trkpt lat="{_attr(lat)}" lon="{_attr(lon)}"></trkpt>\n'
                 
                 # Close the GPX structure
                 gpx_content += '''\t\t</trkseg>
@@ -606,13 +632,10 @@ class GPXExtractor:
             else:
                 name_elem = rte.find('.//name')
             
-            route_name = name_elem.text if name_elem is not None else f"route_{i:02d}"
+            route_name = name_elem.text if name_elem is not None and name_elem.text else f"route_{i:02d}"
             
-            # Sanitize filename - use route name directly as output filename
-            safe_name = "".join(c for c in route_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            safe_name = safe_name.replace(' ', '_')
-            
-            output_file = self.output_dir / f"{safe_name}.gpx"
+            # Use route name as output filename (sanitized, duplicates numbered)
+            output_file = self._unique_output_file(route_name, f"route_{i:02d}")
             
             # Count route points
             if self.namespace.get('default'):
@@ -637,7 +660,7 @@ class GPXExtractor:
         
         with open(summary_file, 'w') as f:
             f.write(f"GPX Extraction Summary\n")
-            f.write(f"{"="*50}\n")
+            f.write(f"{'='*50}\n")
             f.write(f"Source file: {self.gpx_file_path}\n")
             f.write(f"Extraction date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             
