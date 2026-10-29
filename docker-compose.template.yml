@@ -114,6 +114,20 @@ services:
     networks:
       - mytools-network
 
+  isp-check:
+    build:
+      context: ./isp-check
+    container_name: isp-check
+    ports:
+      # Only on the mailcow bridge address the reverse proxy uses - not reachable from outside
+      # even though Docker-published ports bypass the host firewall.
+      - "172.22.1.1:6060:80"
+    restart: unless-stopped
+    volumes:
+      - ./shared:/usr/share/nginx/html/shared:ro
+    networks:
+      - mytools-network
+
 # Network for inter-service communication
 networks:
   mytools-network:

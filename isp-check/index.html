@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ISP Connection Check</title>
     <link rel="stylesheet" href="shared/shared-styles.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <meta name="description" content="Desktop connection monitor with GUI: outage detection, multi-WAN failover detection and periodic speed tests.">
     <style>
         pre.cmd { background: #1e2530; color: #d8e0ea; border-radius: var(--border-radius); padding: 0.75rem 1rem; overflow-x: auto; font-size: 0.85rem; margin: 0.5rem 0 1rem; }
@@ -37,6 +37,8 @@
                     <a href="download/isp-connection-check.pyz" class="btn-primary" download><i class="fas fa-download"></i> Download app (isp-connection-check.pyz)</a>
                 </div>
                 <p class="muted-note mt-3">One file containing the GUI and the monitor. Nothing to unpack or install besides Python.</p>
+                <p class="muted-note" id="checksum-note">SHA-256: <a href="download/isp-connection-check.pyz.sha256"><code id="checksum">isp-connection-check.pyz.sha256</code></a><br>
+                    Check after downloading: <code>shasum -a 256 isp-connection-check.pyz</code> (macOS) or <code>sha256sum isp-connection-check.pyz</code> (Linux)</p>
             </div>
 
             <div class="grid-2 mb-4">
@@ -123,5 +125,12 @@ python3 isp-connection-check.pyz</pre>
             </div>
         </main>
     </div>
+    <script>
+        // Show the checksum of the file actually being served (written at image build time).
+        fetch('download/isp-connection-check.pyz.sha256')
+            .then((response) => response.ok ? response.text() : Promise.reject())
+            .then((text) => { document.getElementById('checksum').textContent = text.trim().split(/\s+/)[0]; })
+            .catch(() => {});
+    </script>
 </body>
 </html>

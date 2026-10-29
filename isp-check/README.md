@@ -7,7 +7,10 @@ The monitor has to run locally so it keeps working (and logging) while the inter
 ## Container contents
 
 - `index.html` - download page with installation instructions
-- `download/isp-connection-check.zip` - built by the Dockerfile from `isp-connection-check/` (`pingmon.py`, `pingmon_gui.py`, `README.md`, `LICENSE`)
-- `download/pingmon.py`, `download/pingmon_gui.py` - single files
+- `download/isp-connection-check.pyz` - built by the Dockerfile from `__main__.py`, `pingmon.py` and `pingmon_gui.py` (Python zipapp)
+- `download/isp-connection-check.pyz.sha256` - its checksum, shown on the download page
+
+The container is only reachable on `172.22.1.1:6060` (mailcow bridge); the public route is
+`https://www.amrhein.info/isp-check/` via the mailcow nginx, embedded in `https://www.amrhein.info/tools/isp-connection-check/`.
 
 Rebuild after changing the app: `docker compose up -d --build isp-check`
