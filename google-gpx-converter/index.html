@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Google Maps to GPX Converter</title>
     <link rel="stylesheet" href="shared/shared-styles.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer">
 </head>
 <body>
     <div class="container">
@@ -30,7 +30,7 @@
                         <textarea 
                             id="urlInput" 
                             class="form-textarea"
-                            placeholder="Paste one or more Google Maps URLs here (one per line)&#10;&#10;💡 For best results, use URLs with coordinates:&#10;https://www.google.com/maps/@40.7128,-74.0060,15z&#10;&#10;⚠️ Place name URLs may need coordinates:&#10;❌ https://maps.google.com/maps?q=New+York&#10;✅ Right-click location → 'What's here?' → Copy coordinates URL"
+                            placeholder="Paste one or more Google Maps links here (one per line)&#10;&#10;✅ Shared links: https://maps.app.goo.gl/…&#10;✅ Places and routes: https://www.google.com/maps/place/… or /maps/dir/…&#10;✅ Coordinates: 50.3836, 8.0503"
                             rows="8"
                         ></textarea>
                     </div>
@@ -46,7 +46,14 @@
                         </div>
                         <div class="option-group">
                             <label>
-                                <input type="checkbox" id="includeTime" checked>
+                                <input type="checkbox" id="includeTrack">
+                                <i class="fas fa-route"></i>
+                                <span>Also add a track (straight lines between the points)</span>
+                            </label>
+                        </div>
+                        <div class="option-group">
+                            <label>
+                                <input type="checkbox" id="includeTime">
                                 <i class="fas fa-clock"></i>
                                 <span>Include timestamps</span>
                             </label>
@@ -108,17 +115,24 @@
                 <div class="help-header">
                     <h3><i class="fas fa-question-circle"></i> Supported URL Formats</h3>
                     <p>We support various Google Maps URL formats</p>
+                    <p>The GPX file contains each stop as a waypoint and all stops as a route, so your navigation device calculates the way itself.</p>
                 </div>
                 <ul class="info-list">
                     <li><i class="fas fa-link"></i> <strong>Short URLs:</strong> https://maps.app.goo.gl/xyz123</li>
-                    <li><i class="fas fa-crosshairs"></i> <strong>Coordinates:</strong> https://www.google.com/maps/@40.7128,-74.0060,15z</li>
-                    <li><i class="fas fa-map-pin"></i> <strong>Place queries:</strong> https://maps.google.com/maps?q=New+York</li>
+                    <li><i class="fas fa-map-pin"></i> <strong>Places:</strong> https://www.google.com/maps/place/Name/@50.38,8.05,13z/…</li>
+                    <li><i class="fas fa-crosshairs"></i> <strong>Coordinates:</strong> https://www.google.com/maps/@40.7128,-74.0060,15z or 50.3836, 8.0503</li>
+                    <li><i class="fas fa-search-location"></i> <strong>Place queries:</strong> https://maps.google.com/maps?q=50.3836,8.0503</li>
                     <li><i class="fas fa-route"></i> <strong>Directions:</strong> https://www.google.com/maps/dir/Start/End</li>
                 </ul>
                 
                 <div class="help-section">
                     <h4><i class="fas fa-external-link-alt"></i> Short URL Help</h4>
-                    <p>If you have a short URL like <code>maps.app.goo.gl/xyz123</code>:</p>
+                    <p>Short links like <code>maps.app.goo.gl/xyz123</code> are expanded automatically when you convert. Only the link ID is sent to Google, from this server.</p>
+                    <button id="expandUrlBtn" class="btn btn-warning">
+                        <i class="fas fa-expand-arrows-alt"></i>
+                        Try Auto-Expand URLs
+                    </button>
+                    <p>If that fails:</p>
                     <div class="help-steps">
                         <div class="help-step">
                             <div class="step-number">1</div>
@@ -126,24 +140,16 @@
                         </div>
                         <div class="help-step">
                             <div class="step-number">2</div>
-                            <div class="step-content">Wait for it to redirect to the full Google Maps page</div>
-                        </div>
-                        <div class="help-step">
-                            <div class="step-number">3</div>
                             <div class="step-content">Copy the full URL from your browser's address bar</div>
                         </div>
                         <div class="help-step">
-                            <div class="step-number">4</div>
+                            <div class="step-number">3</div>
                             <div class="step-content">Paste that expanded URL here instead</div>
                         </div>
                     </div>
-                    <button id="expandUrlBtn" class="btn btn-warning">
-                        <i class="fas fa-expand-arrows-alt"></i>
-                        Try Auto-Expand URLs
-                    </button>
-                    
+
                     <h4><i class="fas fa-crosshairs"></i> Getting Coordinate URLs</h4>
-                    <p>For place names, get coordinate URLs by:</p>
+                    <p>Some shared places contain only a name and no coordinates. Then:</p>
                     <div class="help-steps">
                         <div class="help-step">
                             <div class="step-number">1</div>
@@ -155,11 +161,11 @@
                         </div>
                         <div class="help-step">
                             <div class="step-number">3</div>
-                            <div class="step-content">Select "What's here?" from the menu</div>
+                            <div class="step-content">Click the coordinates at the top of the menu to copy them</div>
                         </div>
                         <div class="help-step">
                             <div class="step-number">4</div>
-                            <div class="step-content">Copy the URL - it will contain @lat,lng coordinates</div>
+                            <div class="step-content">Paste them here as a line of their own, e.g. 50.3836, 8.0503</div>
                         </div>
                     </div>
                 </div>
@@ -178,6 +184,7 @@
         </footer>
     </div>
 
+    <script src="parser.js"></script>
     <script src="url-expander.js"></script>
     <script src="script.js"></script>
 </body>
