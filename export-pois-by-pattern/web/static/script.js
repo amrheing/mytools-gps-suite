@@ -135,16 +135,3 @@ function useExample(pattern, type = 'wildcard') {
         });
     }
 }
-
-// Utility functions for result pages
-function downloadFile(jobId) {
-    window.location.href = `/download/${jobId}`;
-}
-
-function goHome() {
-    window.location.href = '/';
-}
-
-function refreshStatus() {
-    window.location.reload();
-}

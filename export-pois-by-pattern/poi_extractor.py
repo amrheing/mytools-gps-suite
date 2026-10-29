@@ -6,12 +6,25 @@ Core functionality for extracting and filtering POIs (waypoints) from GPX files
 based on pattern matching (wildcards, regex).
 """
 
+import copy
 import re
 import fnmatch
+import threading
+import time
 from pathlib import Path
 from xml.etree import ElementTree as ET
 from datetime import datetime
 from typing import List, Dict, Optional
+
+import regex
+
+# Upper bound for running a user-supplied regex over all names. Python's re has
+# no timeout, so a pattern like (a+)+$ could block a worker for minutes.
+REGEX_TIMEOUT_SECONDS = 5.0
+
+# ElementTree keeps namespace prefixes in a process-wide map; registering and
+# writing must not interleave between concurrent jobs.
+_write_lock = threading.Lock()
 
 
 class POIExtractor:
@@ -23,6 +36,7 @@ class POIExtractor:
         self.tree = None
         self.root = None
         self.namespace = {}
+        self.ns_declarations = []  # (prefix, uri) pairs as declared in the source file
         
         # Load and parse the GPX file
         self._parse_gpx()
@@ -30,8 +44,12 @@ class POIExtractor:
     def _parse_gpx(self):
         """Parse the GPX file and set up namespace handling."""
         try:
-            self.tree = ET.parse(self.gpx_file_path)
-            self.root = self.tree.getroot()
+            events = ET.iterparse(self.gpx_file_path, events=('start-ns',))
+            for _, declaration in events:
+                if declaration not in self.ns_declarations:
+                    self.ns_declarations.append(declaration)
+            self.root = events.root
+            self.tree = ET.ElementTree(self.root)
             
             # Extract namespace from the root element
             if self.root.tag.startswith('{'):
@@ -153,7 +171,8 @@ class POIExtractor:
             print(f"Warning: Error processing waypoint: {e}")
             return None
     
-    def filter_by_wildcard_pattern(self, waypoints: List[Dict], pattern: str) -> List[Dict]:
+    @staticmethod
+    def filter_by_wildcard_pattern(waypoints: List[Dict], pattern: str) -> List[Dict]:
         """Filter waypoints using wildcard pattern matching.
         
         Supports:
@@ -180,7 +199,9 @@ class POIExtractor:
         
         return filtered
     
-    def filter_by_regex_pattern(self, waypoints: List[Dict], regex_pattern: str) -> List[Dict]:
+    @staticmethod
+    def filter_by_regex_pattern(waypoints: List[Dict], regex_pattern: str,
+                                timeout: float = REGEX_TIMEOUT_SECONDS) -> List[Dict]:
         """Filter waypoints using regular expression pattern.
         
         Examples:
@@ -193,14 +214,21 @@ class POIExtractor:
         
         try:
             # Compile regex pattern (case-insensitive by default)
-            compiled_pattern = re.compile(regex_pattern, re.IGNORECASE)
-        except re.error as e:
+            compiled_pattern = regex.compile(regex_pattern, regex.IGNORECASE)
+        except regex.error as e:
             raise ValueError(f"Invalid regex pattern: {e}")
         
+        deadline = time.monotonic() + timeout
         filtered = []
-        for waypoint in waypoints:
-            if compiled_pattern.search(waypoint['name']):
-                filtered.append(waypoint)
+        try:
+            for waypoint in waypoints:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError
+                if compiled_pattern.search(waypoint['name'], timeout=remaining):
+                    filtered.append(waypoint)
+        except TimeoutError:
+            raise ValueError("Regex pattern is too complex (took too long). Please simplify it.")
         
         return filtered
     
@@ -211,23 +239,10 @@ class POIExtractor:
             self._create_empty_gpx(output_file)
             return
         
-        # Create new GPX root element with same attributes as original
-        if self.namespace:
-            # Preserve original namespace
-            new_root = ET.Element(self.root.tag, self.root.attrib)
-            
-            # Copy namespace declarations
-            for prefix, uri in self.namespace.items():
-                if prefix == 'gpx':
-                    new_root.set('xmlns', uri)
-            
-            # Copy other namespace attributes from original root
-            for key, value in self.root.attrib.items():
-                if key.startswith('xmlns'):
-                    new_root.set(key, value)
-                    
-        else:
-            new_root = ET.Element('gpx', self.root.attrib)
+        # Create new GPX root element with same tag and attributes as original.
+        # Namespace declarations are not attributes in ElementTree; they are
+        # restored by _write() so the output keeps the source's prefixes.
+        new_root = ET.Element(self.root.tag, self.root.attrib)
         
         # Copy metadata if present
         if self.namespace:
@@ -236,38 +251,29 @@ class POIExtractor:
             metadata = self.root.find('metadata')
         
         if metadata is not None:
-            new_root.append(metadata)
+            new_root.append(copy.deepcopy(metadata))
         
         # Add filtered waypoints
         for waypoint in filtered_waypoints:
             # Clone the original element to preserve all formatting and extensions
-            wpt_copy = self._deep_copy_element(waypoint['element'])
-            new_root.append(wpt_copy)
+            new_root.append(copy.deepcopy(waypoint['element']))
         
-        # Create tree and write to file
-        new_tree = ET.ElementTree(new_root)
-        ET.indent(new_tree, space="  ")  # Pretty formatting
-        
-        new_tree.write(
-            output_file,
-            encoding='utf-8',
-            xml_declaration=True
-        )
+        self._write(ET.ElementTree(new_root), output_file)
     
-    def _deep_copy_element(self, element):
-        """Create a deep copy of an XML element."""
-        # Create new element with same tag and attributes
-        new_element = ET.Element(element.tag, element.attrib)
-        
-        # Copy text content
-        new_element.text = element.text
-        new_element.tail = element.tail
-        
-        # Recursively copy all children
-        for child in element:
-            new_element.append(self._deep_copy_element(child))
-        
-        return new_element
+    def _write(self, tree, output_file):
+        """Write a tree using the namespace prefixes of the source file.
+
+        Without this ElementTree invents ns0:, ns1: ... prefixes, which some
+        GPS devices and apps do not accept.
+        """
+        ET.indent(tree, space="  ")  # Pretty formatting
+        with _write_lock:
+            for prefix, uri in self.ns_declarations:
+                try:
+                    ET.register_namespace(prefix, uri)
+                except ValueError:
+                    pass  # reserved prefix like ns0 – let ElementTree pick one
+            tree.write(output_file, encoding='utf-8', xml_declaration=True)
     
     def _create_empty_gpx(self, output_file: str):
         """Create an empty GPX file when no waypoints match."""
@@ -289,14 +295,7 @@ class POIExtractor:
         ET.SubElement(metadata, 'desc').text = 'No waypoints matched the specified pattern'
         ET.SubElement(metadata, 'time').text = datetime.now().isoformat() + 'Z'
         
-        tree = ET.ElementTree(root)
-        ET.indent(tree, space="  ")
-        
-        tree.write(
-            output_file,
-            encoding='utf-8',
-            xml_declaration=True
-        )
+        self._write(ET.ElementTree(root), output_file)
 
 
 def analyze_waypoint_patterns(gpx_file: str) -> Dict:

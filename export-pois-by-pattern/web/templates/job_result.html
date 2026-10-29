@@ -96,12 +96,12 @@
 
         <div class="results-actions">
             {% if metadata.matching_waypoints > 0 %}
-            <a href="/download/{{ job_id }}" class="btn-primary download-btn">
+            <a href="{{ url_for('download_file', job_id=job_id) }}" class="btn-primary download-btn">
                 <i class="fas fa-download"></i> Download Filtered GPX
                 <small>{{ metadata.output_filename }}</small>
             </a>
             {% endif %}
-            <a href="/" class="btn-secondary">
+            <a href="{{ url_for('index') }}" class="btn-secondary">
                 <i class="fas fa-plus"></i> Filter Another File
             </a>
         </div>
