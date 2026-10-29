@@ -61,6 +61,34 @@
         margin: 0;
         cursor: pointer;
     }
+    /* Process and upload-again buttons side by side, half width each */
+    .form-actions.preview-actions {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        align-items: stretch;
+        margin-top: 2rem;
+    }
+    .preview-actions form {
+        display: flex;
+        margin: 0;
+    }
+    .preview-actions .btn {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0.75rem 1rem;
+        box-sizing: border-box;
+        text-align: center;
+    }
+    @media (max-width: 420px) {
+        .form-actions.preview-actions {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -153,7 +181,7 @@ Total POIs: {{ preview.total_pois }}
             </div>
             
             <!-- Action Buttons -->
-            <div class="form-actions" style="margin-top: 2rem;">
+            <div class="form-actions preview-actions">
                 <form method="POST" action="{{ url_for('process_filtered') }}" onsubmit="return validateForm()">
                     <input type="hidden" name="job_id" value="{{ preview.job_id }}">
                     <input type="hidden" name="pattern_type" id="final-pattern-type" value="wildcard">
@@ -162,7 +190,7 @@ Total POIs: {{ preview.total_pois }}
                         <i class="fas fa-cogs"></i> Process with Filter
                     </button>
                 </form>
-                <a href="{{ url_for('index') }}" class="btn btn-secondary" style="margin-top: 1rem;">
+                <a href="{{ url_for('index') }}" class="btn btn-secondary">
                     <i class="fas fa-upload"></i> Upload Different File
                 </a>
             </div>
