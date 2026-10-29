@@ -76,10 +76,10 @@ PROCESSED_FOLDER = Path('processed')                   # Output directory
 
 ## Security Notes
 
-- Files are automatically deleted after 1 hour
-- Only GPX files are accepted
-- File size is limited to 100MB
-- No data is permanently stored
+- Uploaded files are kept in the archive until deleted with the delete token
+- Only GPX files are accepted; XML is parsed with `defusedxml`
+- File size is limited by `MAX_CONTENT_LENGTH_MB` (default 100MB)
+- Downloads are confined to the processed folder
 
 ## API Endpoints
 

@@ -1,0 +1,15 @@
+# Don't bake runtime data, samples or local tooling into the image
+web/uploads/
+web/processed/
+web/metadata/
+data/
+web/venv/
+venv/
+**/__pycache__/
+*.pyc
+*.gpx
+S_extracted/
+web/div.html
+test_*.py
+start_web.sh
+.copilot-instructions.md
