@@ -2,6 +2,79 @@
 
 {% block title %}POI Pattern Extractor{% endblock %}
 
+{% block head %}
+<style>
+    /* Drop zone like the GPX to KML converter: visible target with spacing around its content */
+    .upload-form {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1.25rem;
+        margin-bottom: 1.5rem;
+    }
+    .file-drop-zone {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        min-height: 200px;
+        padding: 2rem 1.5rem;
+        border: 2px dashed #94a3b8;
+        border-radius: 12px;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.15s, background-color 0.15s;
+    }
+    .file-drop-zone p {
+        margin: 0;
+    }
+    .file-drop-zone > i {
+        font-size: 2.75rem;
+        color: var(--accent, #2563eb);
+        margin-bottom: 0.25rem;
+    }
+    .file-drop-zone .drop-hint {
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+    .file-drop-zone .or-text {
+        opacity: 0.7;
+        font-size: 0.9rem;
+    }
+    .file-drop-zone .btn {
+        margin-top: 0.5rem;
+    }
+    .file-drop-zone .drop-formats {
+        margin-top: 0.25rem;
+        font-size: 0.85rem;
+        opacity: 0.7;
+    }
+    /* ID + class so these win over the site theme's #dropZone rule (loaded later) */
+    #dropZone.file-drop-zone {
+        border-color: var(--muted, #94a3b8) !important;
+    }
+    #dropZone.file-drop-zone:hover,
+    #dropZone.file-drop-zone.drag-over {
+        border-color: var(--accent, #2563eb) !important;
+    }
+    #dropZone.file-drop-zone.drag-over {
+        border-style: solid !important;
+        background: var(--accent-soft, #e8f0fe) !important;
+    }
+    .upload-form .file-info {
+        justify-content: center;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .upload-form .upload-button {
+        align-self: center;
+        margin: 0.5rem auto;
+        padding: 0.75rem 1.75rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="main-grid">
     <!-- Left Column: Upload -->
@@ -13,17 +86,20 @@
             </div>
 
             <form action="{{ url_for('preview_pois') }}" method="post" enctype="multipart/form-data" class="upload-form">
-                <div class="file-input-container">
-                    <input type="file" id="file" name="file" accept=".gpx" required>
-                    <label for="file" class="file-input-label">
-                        <i class="fas fa-plus-circle"></i>
-                        <span class="file-input-text">Choose GPX File</span>
-                    </label>
-                    <div class="file-info" style="display: none;">
-                        <i class="fas fa-file"></i>
-                        <span class="file-name"></span>
-                        <span class="file-size"></span>
-                    </div>
+                <div class="file-drop-zone" id="dropZone">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p class="drop-hint">Drag & drop your GPX file here</p>
+                    <p class="or-text">or</p>
+                    <button type="button" class="btn btn-secondary" id="selectFileBtn">
+                        <i class="fas fa-folder-open"></i> Select File
+                    </button>
+                    <p class="drop-formats">.gpx</p>
+                    <input type="file" id="file" name="file" accept=".gpx" style="display: none;">
+                </div>
+                <div class="file-info" style="display: none;">
+                    <i class="fas fa-file"></i>
+                    <span class="file-name"></span>
+                    <span class="file-size"></span>
                 </div>
 
                 <div class="upload-progress" style="display: none;">
@@ -117,11 +193,13 @@
 </div>
 
 <script>
+const fileInput = document.getElementById('file');
+const dropZone = document.getElementById('dropZone');
+
 // File input handling
-document.getElementById('file').addEventListener('change', function(e) {
+fileInput.addEventListener('change', function(e) {
     const file = e.target.files[0];
     const fileInfo = document.querySelector('.file-info');
-    const fileInputText = document.querySelector('.file-input-text');
     const fileName = document.querySelector('.file-name');
     const fileSize = document.querySelector('.file-size');
     
@@ -129,16 +207,54 @@ document.getElementById('file').addEventListener('change', function(e) {
         const sizeMB = (file.size / 1024 / 1024).toFixed(2);
         fileName.textContent = file.name;
         fileSize.textContent = `${sizeMB} MB`;
-        fileInputText.textContent = 'File Selected';
         fileInfo.style.display = 'flex';
     } else {
-        fileInputText.textContent = 'Choose GPX File';
         fileInfo.style.display = 'none';
     }
 });
 
+// The whole drop zone opens the file dialog, not only the button
+dropZone.addEventListener('click', () => fileInput.click());
+document.getElementById('selectFileBtn').addEventListener('click', function(e) {
+    e.stopPropagation();
+    fileInput.click();
+});
+
+// Drag and drop
+['dragenter', 'dragover'].forEach(type => dropZone.addEventListener(type, function(e) {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+}));
+dropZone.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    // dragleave also fires when moving onto a child element; keep the highlight then
+    if (e.relatedTarget && dropZone.contains(e.relatedTarget)) return;
+    dropZone.classList.remove('drag-over');
+});
+dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.gpx')) {
+        alert('Please select a GPX file');
+        return;
+    }
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    fileInput.files = dt.files;
+    fileInput.dispatchEvent(new Event('change'));
+});
+
 // Form submission with progress
-document.querySelector('.upload-form').addEventListener('submit', function() {
+document.querySelector('.upload-form').addEventListener('submit', function(e) {
+    // The file input is hidden, so the browser's "required" check can't point at it
+    if (!fileInput.files.length) {
+        e.preventDefault();
+        alert('Please select a GPX file first');
+        return;
+    }
     const progress = document.querySelector('.upload-progress');
     const button = document.querySelector('.upload-button');
     
