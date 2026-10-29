@@ -92,7 +92,7 @@ Total POIs: {{ preview.total_pois }}
             
             <!-- Action Buttons -->
             <div class="form-actions" style="margin-top: 2rem;">
-                <form method="POST" action="/export-pois-by-pattern/process-filtered" onsubmit="return validateForm()">
+                <form method="POST" action="{{ url_for('process_filtered') }}" onsubmit="return validateForm()">
                     <input type="hidden" name="job_id" value="{{ preview.job_id }}">
                     <input type="hidden" name="pattern_type" id="final-pattern-type" value="wildcard">
                     <input type="hidden" name="pattern" id="final-pattern" value="">
@@ -100,7 +100,7 @@ Total POIs: {{ preview.total_pois }}
                         <i class="fas fa-cogs"></i> Process with Filter
                     </button>
                 </form>
-                <a href="../export-pois-by-pattern/" class="btn btn-secondary" style="margin-top: 1rem;">
+                <a href="{{ url_for('index') }}" class="btn btn-secondary" style="margin-top: 1rem;">
                     <i class="fas fa-upload"></i> Upload Different File
                 </a>
             </div>
@@ -116,7 +116,10 @@ Total POIs: {{ preview.total_pois }}
 const poiDataElement = document.getElementById('poi-data');
 let allPois = JSON.parse(poiDataElement.textContent);
 
-// Pattern filtering in real-time
+// Pattern filtering in real-time (debounced, so typing doesn't fire a request per key)
+let filterTimer = null;
+let filterRequest = 0;
+
 document.getElementById('pattern-input').addEventListener('input', function() {
     const pattern = this.value.trim();
     const patternType = document.querySelector('input[name="pattern_type_preview"]:checked').value;
@@ -134,22 +137,32 @@ document.getElementById('pattern-input').addEventListener('input', function() {
     // Enable process button
     document.getElementById('process-btn').disabled = false;
     
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(() => runFilterPreview(pattern, patternType), 300);
+});
+
+function runFilterPreview(pattern, patternType) {
+    const requestId = ++filterRequest;
+    
     // Get server-side accurate filtering via API
-    fetch('/export-pois-by-pattern/api/filter-preview', {
+    fetch({{ url_for('filter_preview') | tojson }}, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            job_id: '{{ preview.job_id }}',
+            job_id: {{ preview.job_id | tojson }},
             pattern: pattern,
             pattern_type: patternType
         })
     })
     .then(response => response.json())
     .then(data => {
+        if (requestId !== filterRequest) {
+            return;  // a newer pattern is already on its way
+        }
         if (data.error) {
             showFilterResults(`Error: ${data.error}`, 0, 0);
         } else {
-            const percentage = ((data.filtered_count / data.total_pois) * 100).toFixed(1);
+            const percentage = data.total_pois ? ((data.filtered_count / data.total_pois) * 100).toFixed(1) : '0.0';
             showFilterResults('Success', data.filtered_count, percentage);
             updateConsoleView(pattern, patternType, data.filtered_count, data.sample_matches);
         }
@@ -157,7 +170,7 @@ document.getElementById('pattern-input').addEventListener('input', function() {
     .catch(error => {
         showFilterResults(`Error: ${error}`, 0, 0);
     });
-});
+}
 
 // Pattern type change
 document.querySelectorAll('input[name="pattern_type_preview"]').forEach(radio => {
@@ -191,7 +204,7 @@ function showFilterResults(status, count, percentage) {
 
 function updateConsoleView(pattern, patternType, matchCount, sampleMatches) {
     const console = document.getElementById('poi-console');
-    const filename = '{{ preview.filename }}';
+    const filename = {{ preview.filename | tojson }};
     
     let consoleContent = `$ cat ${filename} | grep -o '<name>.*</name>' | sed 's/<[^>]*>//g'\n`;
     
@@ -199,11 +212,12 @@ function updateConsoleView(pattern, patternType, matchCount, sampleMatches) {
     allPois.forEach(poi => {
         let matches = false;
         if (patternType === 'wildcard') {
-            const regexPattern = pattern
-                .replace(/[.*+?^${}()|[\\]\\]/g, '\\\\$&')
-                .replace(/\\\\\\*/g, '.*')
-                .replace(/\\\\\\?/g, '.');
-            matches = new RegExp(regexPattern, 'i').test(poi.name);
+            // Same semantics as fnmatch on the server: whole name, * and ?
+            const regexPattern = '^' + pattern
+                .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+                .replace(/\*/g, '.*')
+                .replace(/\?/g, '.') + '$';
+            matches = new RegExp(regexPattern, 'is').test(poi.name);
         } else {
             try {
                 matches = new RegExp(pattern, 'i').test(poi.name);
@@ -213,9 +227,9 @@ function updateConsoleView(pattern, patternType, matchCount, sampleMatches) {
         }
         
         if (matches) {
-            consoleContent += `\u001b[32m${poi.name}\u001b[0m\n`;  // Green for matches
+            consoleContent += `\u2713 ${poi.name}\n`;  // Mark matches
         } else {
-            consoleContent += `\u001b[90m${poi.name}\u001b[0m\n`;  // Gray for non-matches
+            consoleContent += `  ${poi.name}\n`;
         }
     });
     
@@ -231,7 +245,7 @@ function updateConsoleView(pattern, patternType, matchCount, sampleMatches) {
 
 function resetConsoleView() {
     const console = document.getElementById('poi-console');
-    const filename = '{{ preview.filename }}';
+    const filename = {{ preview.filename | tojson }};
     
     let consoleContent = `$ cat ${filename} | grep -o '<name>.*</name>' | sed 's/<[^>]*>//g'\n`;
     allPois.forEach(poi => {
