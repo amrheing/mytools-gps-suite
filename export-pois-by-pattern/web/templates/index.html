@@ -72,90 +72,104 @@
         margin: 0.5rem auto;
         padding: 0.75rem 1.75rem;
     }
+    /* Start page: one column, examples before the hints */
+    .poi-start {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+    .start-section h3,
+    .start-section h4 {
+        margin: 0 0 0.75rem;
+    }
+    .example-columns {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1rem 2rem;
+    }
+    .example-columns h4 {
+        margin: 0 0 0.5rem;
+        font-size: 0.95rem;
+        opacity: 0.85;
+    }
+    .example-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+    .example-group .example {
+        display: grid;
+        grid-template-columns: minmax(7.5rem, max-content) 1fr;
+        align-items: baseline;
+        gap: 0.75rem;
+    }
+    .example-group .example code {
+        white-space: nowrap;
+    }
+    .requirements-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 0.4rem 1.5rem;
+    }
+    .requirements-list li {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+    }
+    .requirements-list li i {
+        color: var(--accent, #2563eb);
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="main-grid">
-    <!-- Left Column: Upload -->
-    <div class="upload-section">
-        <div class="upload-card">
-            <div class="upload-header">
-                <h2><i class="fas fa-map-pin"></i> Upload GPX File</h2>
-                <p>Select your GPX file to filter Points of Interest by pattern</p>
-            </div>
-
-            <form action="{{ url_for('preview_pois') }}" method="post" enctype="multipart/form-data" class="upload-form">
-                <div class="file-drop-zone" id="dropZone">
-                    <i class="fas fa-cloud-upload-alt"></i>
-                    <p class="drop-hint">Drag & drop your GPX file here</p>
-                    <p class="or-text">or</p>
-                    <button type="button" class="btn btn-secondary" id="selectFileBtn">
-                        <i class="fas fa-folder-open"></i> Select File
-                    </button>
-                    <p class="drop-formats">.gpx</p>
-                    <input type="file" id="file" name="file" accept=".gpx" style="display: none;">
-                </div>
-                <div class="file-info" style="display: none;">
-                    <i class="fas fa-file"></i>
-                    <span class="file-name"></span>
-                    <span class="file-size"></span>
-                </div>
-
-                <div class="upload-progress" style="display: none;">
-                    <div class="progress-bar">
-                        <div class="progress-fill"></div>
-                    </div>
-                    <div class="progress-text">Loading POIs...</div>
-                </div>
-
-                <button type="submit" class="upload-button">
-                    <i class="fas fa-eye"></i>
-                    Preview POIs
-                </button>
-            </form>
-
-            <div class="upload-help">
-                <h3><i class="fas fa-info-circle"></i> How it works</h3>
-                <div class="help-steps">
-                    <div class="help-step">
-                        <div class="step-number">1</div>
-                        <div class="step-content">
-                            <strong>Upload</strong> your GPX file containing POIs (waypoints)
-                        </div>
-                    </div>
-                    <div class="help-step">
-                        <div class="step-number">2</div>
-                        <div class="step-content">
-                            <strong>Preview</strong> all POIs and test pattern filters
-                        </div>
-                    </div>
-                    <div class="help-step">
-                        <div class="step-number">3</div>
-                        <div class="step-content">
-                            <strong>Filter</strong> and download matching POIs as new GPX
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="file-requirements">
-                <h4><i class="fas fa-check-circle"></i> Requirements &amp; Info</h4>
-                <ul class="requirements-list">
-                    <li><i class="fas fa-check"></i> GPX files up to 500MB</li>
-                    <li><i class="fas fa-check"></i> Supports waypoints (POIs)</li>
-                    <li><i class="fas fa-check"></i> Wildcard and regex patterns</li>
-                    <li><i class="fas fa-check"></i> Files auto-deleted after 24h</li>
-                </ul>
-            </div>
+<div class="poi-start">
+    <!-- Upload -->
+    <div class="upload-card">
+        <div class="upload-header">
+            <h2><i class="fas fa-map-pin"></i> Upload GPX File</h2>
+            <p>Select your GPX file to filter Points of Interest by pattern</p>
         </div>
+
+        <form action="{{ url_for('preview_pois') }}" method="post" enctype="multipart/form-data" class="upload-form">
+            <div class="file-drop-zone" id="dropZone">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <p class="drop-hint">Drag & drop your GPX file here</p>
+                <p class="or-text">or</p>
+                <button type="button" class="btn btn-secondary" id="selectFileBtn">
+                    <i class="fas fa-folder-open"></i> Select File
+                </button>
+                <p class="drop-formats">.gpx</p>
+                <input type="file" id="file" name="file" accept=".gpx" style="display: none;">
+            </div>
+            <div class="file-info" style="display: none;">
+                <i class="fas fa-file"></i>
+                <span class="file-name"></span>
+                <span class="file-size"></span>
+            </div>
+
+            <div class="upload-progress" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+                <div class="progress-text">Loading POIs...</div>
+            </div>
+
+            <button type="submit" class="upload-button">
+                <i class="fas fa-eye"></i>
+                Preview POIs
+            </button>
+        </form>
     </div>
 
-    <!-- Right Column: Pattern Guide -->
-    <div class="info-section">
-        <div class="info-card">
-            <h3><i class="fas fa-lightbulb"></i> Pattern Examples</h3>
-            <div class="pattern-examples">
+    <!-- Pattern examples -->
+    <div class="info-card start-section">
+        <h3><i class="fas fa-lightbulb"></i> Pattern Examples</h3>
+        <div class="pattern-examples example-columns">
+            <div>
                 <h4>Wildcard Patterns</h4>
                 <div class="example-group">
                     <div class="example">
@@ -171,7 +185,8 @@
                         <span>POIs containing "Bridge"</span>
                     </div>
                 </div>
-                
+            </div>
+            <div>
                 <h4>Regular Expression Patterns</h4>
                 <div class="example-group">
                     <div class="example">
@@ -189,6 +204,42 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- How it works -->
+    <div class="upload-help start-section">
+        <h3><i class="fas fa-info-circle"></i> How it works</h3>
+        <div class="help-steps">
+            <div class="help-step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <strong>Upload</strong> your GPX file containing POIs (waypoints)
+                </div>
+            </div>
+            <div class="help-step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <strong>Preview</strong> all POIs and test pattern filters
+                </div>
+            </div>
+            <div class="help-step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <strong>Filter</strong> and download matching POIs as new GPX
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Requirements -->
+    <div class="file-requirements start-section">
+        <h4><i class="fas fa-check-circle"></i> Requirements &amp; Info</h4>
+        <ul class="requirements-list">
+            <li><i class="fas fa-check"></i> GPX files up to 500MB</li>
+            <li><i class="fas fa-check"></i> Supports waypoints (POIs)</li>
+            <li><i class="fas fa-check"></i> Wildcard and regex patterns</li>
+            <li><i class="fas fa-check"></i> Files auto-deleted after 24h</li>
+        </ul>
     </div>
 </div>
 
