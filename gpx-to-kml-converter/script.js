@@ -43,11 +43,17 @@ class GPXToKMLConverter {
 
     attachEventListeners() {
         // File upload events
-        this.selectFileBtn.addEventListener('click', () => this.fileInput.click());
+        this.selectFileBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.fileInput.click();
+        });
+        // The whole drop zone opens the file dialog, not only the button
+        this.dropZone.addEventListener('click', () => this.fileInput.click());
         this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
         this.clearFileBtn.addEventListener('click', () => this.clearFile());
         
         // Drag and drop events
+        this.dropZone.addEventListener('dragenter', (e) => this.handleDragOver(e));
         this.dropZone.addEventListener('dragover', (e) => this.handleDragOver(e));
         this.dropZone.addEventListener('dragleave', (e) => this.handleDragLeave(e));
         this.dropZone.addEventListener('drop', (e) => this.handleDrop(e));
@@ -69,6 +75,8 @@ class GPXToKMLConverter {
 
     handleDragLeave(e) {
         e.preventDefault();
+        // dragleave also fires when moving onto a child element; keep the highlight then
+        if (e.relatedTarget && this.dropZone.contains(e.relatedTarget)) return;
         this.dropZone.classList.remove('drag-over');
     }
 
