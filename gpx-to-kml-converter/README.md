@@ -27,7 +27,7 @@ A web-based tool that converts GPX (GPS Exchange Format) files to KML (Keyhole M
 
 ## How to Use
 
-1. **Open the Tool**: Open `index.html` in your web browser
+1. **Open the Tool**: Open the converter in your web browser (served by the container, see `Dockerfile`)
 2. **Upload GPX File**: 
    - Drag & drop a GPX file onto the upload zone, or
    - Click "Select File" to browse for a GPX file
@@ -48,15 +48,15 @@ A web-based tool that converts GPX (GPS Exchange Format) files to KML (Keyhole M
 
 ### Tracks (`<trk>`)
 - Converted to KML LineString paths
-- Supports multiple track segments
+- Multiple track segments become separate lines in one `MultiGeometry`, so gaps are not bridged
 - Preserves track name and description
-- Maintains elevation and time data
+- Maintains elevation data (timestamps are not exported)
 - Applies configurable styling
 
 ### Routes (`<rte>`)
 - Converted to KML LineString paths
 - Preserves route name and description
-- Includes all route points with names
+- Includes all route points (point names are not exported)
 - Uses same styling as tracks
 
 ## KML Output Format
@@ -100,7 +100,7 @@ The generated KML includes:
 - No server-side processing required
 
 ### Processing Steps
-1. **File Validation**: Checks file extension and format
+1. **File Validation**: Checks file extension and format; points without valid coordinates are skipped and reported
 2. **XML Parsing**: Uses DOM Parser to read GPX structure
 3. **Data Extraction**: Parses waypoints, tracks, and routes
 4. **KML Generation**: Creates properly formatted KML with styling
@@ -124,10 +124,12 @@ The tool provides detailed error messages for:
 
 ```
 gpx-to-kml-converter/
-├── index.html          # Main interface
-├── script.js           # Core conversion logic
-├── styles.css          # Custom styling
-└── README.md           # This documentation
+├── Dockerfile            # nginx:alpine image
+├── nginx.conf            # Server configuration
+├── security-headers.inc  # Security headers, included by nginx.conf
+├── index.html            # Main interface
+├── script.js             # Core conversion logic
+└── README.md             # This documentation
 ```
 
 ## Development

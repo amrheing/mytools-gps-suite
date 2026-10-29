@@ -121,7 +121,7 @@ class GPXToKMLConverter {
     formatFileSize(bytes) {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB'];
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
@@ -133,25 +133,28 @@ class GPXToKMLConverter {
         }
 
         try {
-            this.showProgress('Reading GPX file...');
+            this.showProgress('Reading GPX file...', 10);
             this.hideResults();
             this.hideErrors();
 
             // Read file content
             const fileContent = await this.readFileContent(this.selectedFile);
             
-            this.showProgress('Parsing GPX data...');
+            this.showProgress('Parsing GPX data...', 40);
             
             // Parse GPX content
             this.parsedData = await this.parseGPX(fileContent);
             
-            this.showProgress('Generating KML...');
+            this.showProgress('Generating KML...', 75);
             
             // Generate KML
             this.kmlContent = this.generateKML(this.parsedData);
             
             this.hideProgress();
             this.showResults();
+            if (this.parsedData.skippedPoints > 0) {
+                this.showStatus(`${this.parsedData.skippedPoints} point(s) without valid coordinates were skipped.`, 'info');
+            }
             
         } catch (error) {
             this.hideProgress();
@@ -182,21 +185,27 @@ class GPXToKMLConverter {
             const data = {
                 waypoints: [],
                 tracks: [],
-                routes: []
+                routes: [],
+                skippedPoints: 0
             };
+            let skippedPoints = 0;
 
             // Parse waypoints
             const waypoints = doc.querySelectorAll('wpt');
             waypoints.forEach(wpt => {
                 const lat = parseFloat(wpt.getAttribute('lat'));
                 const lon = parseFloat(wpt.getAttribute('lon'));
+                if (!this.isValidCoordinate(lat, lon)) {
+                    skippedPoints++;
+                    return;
+                }
                 const name = this.getElementText(wpt, 'name') || 'Waypoint';
                 const desc = this.getElementText(wpt, 'desc') || '';
                 const ele = this.getElementText(wpt, 'ele');
                 
                 data.waypoints.push({
                     lat, lon, name, desc,
-                    elevation: ele ? parseFloat(ele) : null
+                    elevation: this.parseElevation(ele)
                 });
             });
 
@@ -215,12 +224,16 @@ class GPXToKMLConverter {
                     trkpts.forEach(trkpt => {
                         const lat = parseFloat(trkpt.getAttribute('lat'));
                         const lon = parseFloat(trkpt.getAttribute('lon'));
+                        if (!this.isValidCoordinate(lat, lon)) {
+                            skippedPoints++;
+                            return;
+                        }
                         const ele = this.getElementText(trkpt, 'ele');
                         const time = this.getElementText(trkpt, 'time');
                         
                         points.push({
                             lat, lon,
-                            elevation: ele ? parseFloat(ele) : null,
+                            elevation: this.parseElevation(ele),
                             time: time || null
                         });
                     });
@@ -250,12 +263,16 @@ class GPXToKMLConverter {
                 rtepts.forEach(rtept => {
                     const lat = parseFloat(rtept.getAttribute('lat'));
                     const lon = parseFloat(rtept.getAttribute('lon'));
+                    if (!this.isValidCoordinate(lat, lon)) {
+                        skippedPoints++;
+                        return;
+                    }
                     const name = this.getElementText(rtept, 'name') || '';
                     const ele = this.getElementText(rtept, 'ele');
                     
                     points.push({
                         lat, lon, name,
-                        elevation: ele ? parseFloat(ele) : null
+                        elevation: this.parseElevation(ele)
                     });
                 });
                 
@@ -268,6 +285,7 @@ class GPXToKMLConverter {
                 }
             });
 
+            data.skippedPoints = skippedPoints;
             return data;
             
         } catch (error) {
@@ -276,8 +294,25 @@ class GPXToKMLConverter {
     }
 
     getElementText(element, tagName) {
-        const child = element.querySelector(tagName);
+        // Only direct children: a <rte> without <name> must not pick up the name of its first <rtept>
+        const child = Array.from(element.children).find(el => el.localName === tagName);
         return child ? child.textContent.trim() : null;
+    }
+
+    parseElevation(text) {
+        if (text === null || text === '') return null;
+        const value = parseFloat(text);
+        return Number.isFinite(value) ? value : null;
+    }
+
+    isValidCoordinate(lat, lon) {
+        return Number.isFinite(lat) && Number.isFinite(lon) &&
+            lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+    }
+
+    formatCoordinate(point) {
+        // Elevation 0 is a valid value and must be kept
+        return `${point.lon},${point.lat}${point.elevation !== null ? ',' + point.elevation : ''}`;
     }
 
     generateKML(data) {
@@ -321,7 +356,7 @@ class GPXToKMLConverter {
         <description>${this.escapeXML(waypoint.desc)}</description>
         <styleUrl>#waypointStyle</styleUrl>
         <Point>
-          <coordinates>${waypoint.lon},${waypoint.lat}${waypoint.elevation ? ',' + waypoint.elevation : ''}</coordinates>
+          <coordinates>${this.formatCoordinate(waypoint)}</coordinates>
         </Point>
       </Placemark>
 `;
@@ -343,20 +378,20 @@ class GPXToKMLConverter {
         <name>${this.escapeXML(track.name)}</name>
         <description>${this.escapeXML(track.description)}</description>
         <styleUrl>#trackStyle</styleUrl>
-        <LineString>
-          <tessellate>1</tessellate>
-          <coordinates>
 `;
-                
-                track.segments.forEach(segment => {
-                    segment.forEach(point => {
-                        kml += `            ${point.lon},${point.lat}${point.elevation ? ',' + point.elevation : ''}\n`;
+                // One LineString per segment so that gaps between segments are not drawn as straight lines
+                if (track.segments.length > 1) {
+                    kml += `        <MultiGeometry>
+`;
+                    track.segments.forEach(segment => {
+                        kml += this.lineStringKML(segment, '          ');
                     });
-                });
-                
-                kml += `          </coordinates>
-        </LineString>
-      </Placemark>
+                    kml += `        </MultiGeometry>
+`;
+                } else {
+                    kml += this.lineStringKML(track.segments[0], '        ');
+                }
+                kml += `      </Placemark>
 `;
             });
             
@@ -376,18 +411,9 @@ class GPXToKMLConverter {
         <name>${this.escapeXML(route.name)}</name>
         <description>${this.escapeXML(route.description)}</description>
         <styleUrl>#trackStyle</styleUrl>
-        <LineString>
-          <tessellate>1</tessellate>
-          <coordinates>
 `;
-                
-                route.points.forEach(point => {
-                    kml += `            ${point.lon},${point.lat}${point.elevation ? ',' + point.elevation : ''}\n`;
-                });
-                
-                kml += `          </coordinates>
-        </LineString>
-      </Placemark>
+                kml += this.lineStringKML(route.points, '        ');
+                kml += `      </Placemark>
 `;
             });
             
@@ -398,6 +424,20 @@ class GPXToKMLConverter {
         kml += `  </Document>
 </kml>`;
 
+        return kml;
+    }
+
+    lineStringKML(points, indent) {
+        let kml = `${indent}<LineString>
+${indent}  <tessellate>1</tessellate>
+${indent}  <coordinates>
+`;
+        points.forEach(point => {
+            kml += `${indent}    ${this.formatCoordinate(point)}\n`;
+        });
+        kml += `${indent}  </coordinates>
+${indent}</LineString>
+`;
         return kml;
     }
 
@@ -433,10 +473,10 @@ class GPXToKMLConverter {
         this.showStatus('KML file downloaded successfully!', 'success');
     }
 
-    showProgress(message) {
+    showProgress(message, percent) {
         this.progressContainer.style.display = 'block';
         this.progressText.textContent = message;
-        this.progressFill.style.width = '50%';
+        this.progressFill.style.width = `${percent}%`;
     }
 
     hideProgress() {
