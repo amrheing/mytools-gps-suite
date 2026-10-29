@@ -13,14 +13,16 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
 PROGRAM_NAME = "ISP Connection Check"
-PROGRAM_VERSION = "1.0.0"
+PROGRAM_VERSION = "1.1.0"
 PROGRAM_LICENSE = "MIT"
 PROGRAM_URL = "https://github.com/amrheing/ISP-Connection-Check"
 
@@ -30,7 +32,8 @@ class TargetState:
     name: str
     target: str
     failure_start: float | None = None
-    first_failure_at: float | None = None
+    first_failure_at: float | None = None  # wall clock, for log/CSV timestamps
+    first_failure_mono: float | None = None  # monotonic, for durations (immune to clock jumps/sleep)
     outages: int = 0
     downtime: int = 0
     consecutive_failures: int = 0
@@ -96,7 +99,7 @@ def get_isp_info(timeout: int = 3, retries: int = 2) -> dict | None:
             continue
         isp = data.get("isp") or data.get("org")
         if isp:
-            return {"name": isp, "public_ip": data.get("query")}
+            return {"name": isp, "public_ip": data.get("query"), "asn": data.get("as") or ""}
     return None
 
 
@@ -156,8 +159,10 @@ def run_speed_test(payload_bytes: int = SPEED_TEST_BYTES, timeout: int = 15) -> 
         request = urllib.request.Request(
             f"https://speed.cloudflare.com/__down?bytes={payload_bytes}", headers=SPEED_TEST_HEADERS
         )
-        start = time.monotonic()
         with urllib.request.urlopen(request, timeout=timeout) as response:
+            # Start timing once the headers are in, so DNS/TCP/TLS setup doesn't drag the result down
+            # (noticeable on high-latency links like Starlink with only 5 MB of payload).
+            start = time.monotonic()
             downloaded = len(response.read())
         elapsed = time.monotonic() - start
         if elapsed > 0 and downloaded > 0:
@@ -183,13 +188,14 @@ def run_speed_test(payload_bytes: int = SPEED_TEST_BYTES, timeout: int = 15) -> 
 
 DEFAULT_CONNECTION_PROFILES = {
     "starlink": {
-        "match": ["starlink", "spacex", "space exploration technologies"],
+        "match": ["starlink", "spacex", "space exploration technologies", "as14593"],
         "interval": 2,
         "ping_timeout": 1,
         "failure_threshold": 3,
     },
+    # No plain "telekom": Deutsche Telekom's DSL/fibre lines report the same name and would land here.
     "cellular": {
-        "match": ["telekom", "vodafone", "t-mobile", "o2 ", "mobilfunk", "cellular", " lte", "wireless", "mobile"],
+        "match": ["t-mobile", "vodafone", "telefonica", "o2 ", "mobilfunk", "cellular", " lte", "wireless", "mobile"],
         "interval": 2,
         "ping_timeout": 1,
         "failure_threshold": 1,
@@ -203,9 +209,11 @@ DEFAULT_CONNECTION_PROFILES = {
 }
 
 
-def select_connection_profile(isp_name: str | None, profiles: dict) -> str:
+def select_connection_profile(isp_name: str | None, profiles: dict, asn: str | None = None) -> str:
+    # Keywords are matched against the ISP name plus the AS string (e.g. "AS14593 Space Exploration ..."),
+    # so a profile can also pin an uplink by its AS number.
     if isp_name:
-        lower = isp_name.lower()
+        lower = f"{isp_name} {asn or ''}".lower()
         for name, profile in profiles.items():
             if name != "default" and any(keyword in lower for keyword in profile.get("match", [])):
                 return name
@@ -242,9 +250,19 @@ def load_config(path: Path) -> tuple[list[TargetState], dict]:
     except json.JSONDecodeError as error:
         raise ValueError(f"Invalid JSON in {path}: {error}") from error
 
-    targets_config = dict(config.get("targets", {}))
+    if not isinstance(config, dict):
+        raise ValueError("The config must be a JSON object")
+    targets_config = config.get("targets", {})
     if not isinstance(targets_config, dict):
         raise ValueError("The config must contain a 'targets' object")
+    targets_config = dict(targets_config)
+    for name, target in targets_config.items():
+        if not isinstance(target, str):
+            raise ValueError(f"Target '{name}' must be a host name or IP address (string)")
+        if target.strip().startswith("-"):
+            # Would be passed to ping as an option instead of a host.
+            raise ValueError(f"Target '{name}' is not a valid host: {target}")
+        targets_config[name] = target.strip()
     if not targets_config.get("gateway"):
         default_gateway = get_default_gateway()
         if default_gateway:
@@ -259,16 +277,30 @@ def load_config(path: Path) -> tuple[list[TargetState], dict]:
         raise ValueError("The config must contain a non-empty 'targets' object")
     targets = [TargetState(name, target) for name, target in targets_config.items()]
 
-    interval = config.get("interval", 2)
-    ping_timeout = config.get("ping_timeout", 1)
-    failure_threshold = config.get("failure_threshold", 1)
-    if not isinstance(interval, int) or interval < 1:
-        raise ValueError("interval must be a positive integer")
-    if not isinstance(ping_timeout, int) or ping_timeout < 1:
-        raise ValueError("ping_timeout must be a positive integer")
-    if not isinstance(failure_threshold, int) or failure_threshold < 1:
-        raise ValueError("failure_threshold must be a positive integer")
+    for key in ("interval", "ping_timeout", "failure_threshold"):
+        _check_positive_int(config.get(key, 1), key)
+    profiles = config.get("connection_profiles") or {}
+    if not isinstance(profiles, dict):
+        raise ValueError("connection_profiles must be an object")
+    for profile_name, profile in profiles.items():
+        if not isinstance(profile, dict):
+            raise ValueError(f"Connection profile '{profile_name}' must be an object")
+        match = profile.get("match", [])
+        if not isinstance(match, list) or not all(isinstance(keyword, str) for keyword in match):
+            raise ValueError(f"Connection profile '{profile_name}': match must be a list of strings")
+        for key in ("interval", "ping_timeout", "failure_threshold"):
+            if key in profile:
+                _check_positive_int(profile[key], f"{profile_name}.{key}")
+    _check_positive_int(config.get("isp_check_interval", 15), "isp_check_interval")
+    _check_positive_int(config.get("speed_test_interval_minutes", 60), "speed_test_interval_minutes", minimum=0)
+    _check_positive_int(config.get("logfiles_to_keep", 10), "logfiles_to_keep")
     return targets, config
+
+
+def _check_positive_int(value: object, label: str, minimum: int = 1) -> None:
+    # bool is an int subclass - "interval": true must not count as 1.
+    if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
+        raise ValueError(f"{label} must be a whole number >= {minimum}")
 
 
 def timestamp(value: float | None = None) -> str:
@@ -330,7 +362,8 @@ def ping(target: str, timeout: int) -> bool:
 
 
 def prune_old_logs(log_dir: Path, log_prefix: str, keep: int) -> None:
-    if keep < 1:
+    # keep=0 is valid (logfiles_to_keep=1: only this run's new pair survives).
+    if keep < 0:
         return
     for suffix in (".log", ".csv"):
         files = sorted(log_dir.glob(f"{log_prefix}_*{suffix}"), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -383,6 +416,26 @@ def format_speed_stat_entry(entry: dict | None) -> str:
     return f"{down}, {up}"
 
 
+class BackgroundTask:
+    # Runs a slow network call (ISP lookup, speed test) off the ping loop, so pings keep their rhythm -
+    # most importantly during an outage, when every lookup runs into its timeouts.
+    # A daemon thread (not a ThreadPoolExecutor) so a running speed test never delays shutdown.
+    def __init__(self, function, *args) -> None:
+        self.result = None
+        self._done = threading.Event()
+
+        def run() -> None:
+            try:
+                self.result = function(*args)
+            finally:
+                self._done.set()
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def done(self) -> bool:
+        return self._done.is_set()
+
+
 def main() -> int:
     print("=" * 50)
     print(f" {PROGRAM_NAME} v{PROGRAM_VERSION}")
@@ -428,7 +481,9 @@ def main() -> int:
     save_speed_stats(speed_stats_path, speed_stats)
 
     profiles = {**DEFAULT_CONNECTION_PROFILES, **(config.get("connection_profiles") or {})}
-    profile_name = select_connection_profile(isp_info["name"] if isp_info else None, profiles)
+    profile_name = select_connection_profile(
+        isp_info["name"] if isp_info else None, profiles, isp_info["asn"] if isp_info else None
+    )
     profile = profiles.get(profile_name, DEFAULT_CONNECTION_PROFILES["default"])
 
     # Explicit top-level settings always win over the auto-selected connection profile.
@@ -556,30 +611,40 @@ def main() -> int:
         )
         print("-" * 50)
 
-        def refresh_connection() -> None:
+        def format_speed_result(result: dict) -> str:
+            down = result["download_mbps"] if result["download_mbps"] is not None else "unavailable"
+            up = result["upload_mbps"] if result["upload_mbps"] is not None else "unavailable"
+            return f"Speed test: down={down} Mbps, up={up} Mbps"
+
+        def apply_isp_info(new_isp_info: dict | None) -> bool:
             # Behind a multi-WAN failover router, the active uplink can change without any ping ever failing.
-            nonlocal isp_info, profile_name, profile, interval, ping_timeout, failure_threshold, speed_result
-            new_isp_info = get_isp_info()
+            # Returns True if the provider really changed (so a speed test is worth running).
+            nonlocal isp_info, profile_name, profile, interval, ping_timeout, failure_threshold
             if new_isp_info is None:
                 # A failed lookup (e.g. during a real outage, no internet yet) is not a confirmed provider
                 # change - keep the current profile instead of flip-flopping to "unknown"/default.
-                return
+                return False
             new_provider = new_isp_info["name"]
             old_provider = isp_info["name"] if isp_info else None
             if new_provider == old_provider:
-                return
-            new_profile_name = select_connection_profile(new_provider, profiles)
+                isp_info = new_isp_info  # public IP may have changed within the same provider
+                return False
+            new_profile_name = select_connection_profile(new_provider, profiles, new_isp_info.get("asn"))
             new_profile = profiles.get(new_profile_name, DEFAULT_CONNECTION_PROFILES["default"])
-            report(
-                "INFO",
-                f"Connection changed: {old_provider or 'unknown'} -> {new_provider or 'unknown'} "
-                f"(profile: {profile_name} -> {new_profile_name})",
-            )
-            report(
-                "INFO",
-                f"Previous provider ({old_provider or 'unknown'}) speed: "
-                f"{format_speed_stat_entry(speed_stats.get(old_provider or 'unknown'))}",
-            )
+            if old_provider is None:
+                # The startup lookup failed - this is the first successful one, not a failover.
+                report("INFO", f"Provider detected: {new_provider} (profile: {new_profile_name})")
+            else:
+                report(
+                    "INFO",
+                    f"Connection changed: {old_provider} -> {new_provider} "
+                    f"(profile: {profile_name} -> {new_profile_name})",
+                )
+                report(
+                    "INFO",
+                    f"Previous provider ({old_provider}) speed: "
+                    f"{format_speed_stat_entry(speed_stats.get(old_provider))}",
+                )
             isp_info = new_isp_info
             profile_name = new_profile_name
             profile = new_profile
@@ -589,68 +654,78 @@ def main() -> int:
                 ping_timeout = profile.get("ping_timeout", 1)
             if "failure_threshold" not in config:
                 failure_threshold = profile.get("failure_threshold", 1)
-            if speed_test_on_connection_change:
-                speed_result = run_speed_test()
-                record_speed_result(speed_stats, new_provider, speed_result)
-                save_speed_stats(speed_stats_path, speed_stats)
-                report(
-                    "INFO",
-                    f"Speed test: down="
-                    f"{speed_result['download_mbps'] if speed_result['download_mbps'] is not None else 'unavailable'} Mbps, "
-                    f"up={speed_result['upload_mbps'] if speed_result['upload_mbps'] is not None else 'unavailable'} Mbps",
-                )
+            return old_provider is not None
 
-        def run_periodic_speed_test() -> None:
+        def apply_speed_result(result: dict) -> None:
             nonlocal speed_result
-            speed_result = run_speed_test()
-            record_speed_result(speed_stats, isp_info["name"] if isp_info else "unknown", speed_result)
+            speed_result = result
+            record_speed_result(speed_stats, isp_info["name"] if isp_info else "unknown", result)
             save_speed_stats(speed_stats_path, speed_stats)
-            report(
-                "INFO",
-                f"Speed test: down="
-                f"{speed_result['download_mbps'] if speed_result['download_mbps'] is not None else 'unavailable'} Mbps, "
-                f"up={speed_result['upload_mbps'] if speed_result['upload_mbps'] is not None else 'unavailable'} Mbps",
-            )
+            report("INFO", format_speed_result(result))
 
         total_outages = 0
         down_targets: set[str] = set()
-        last_isp_check = time.time()
-        last_speed_test = time.time()
+        isp_task: BackgroundTask | None = None
+        speed_task: BackgroundTask | None = None
+        last_isp_check = time.monotonic()
+        last_speed_test = time.monotonic()
+        isp_check_now = False
+        ping_pool = ThreadPoolExecutor(max_workers=len(targets), thread_name_prefix="ping")
+        next_tick = time.monotonic()
 
         while not stopping:
-            if time.time() - last_isp_check >= isp_check_interval:
-                refresh_connection()
-                last_isp_check = time.time()
+            # Collect results of background work started in earlier rounds.
+            if isp_task and isp_task.done():
+                if apply_isp_info(isp_task.result) and speed_test_on_connection_change and not speed_task:
+                    speed_task = BackgroundTask(run_speed_test)
+                    last_speed_test = time.monotonic()
+                isp_task = None
+            if speed_task and speed_task.done():
+                apply_speed_result(speed_task.result)
+                speed_task = None
 
-            if speed_test_interval_minutes and time.time() - last_speed_test >= speed_test_interval_minutes * 60:
-                run_periodic_speed_test()
-                last_speed_test = time.time()
+            now = time.monotonic()
+            if not isp_task and (isp_check_now or now - last_isp_check >= isp_check_interval):
+                isp_task = BackgroundTask(get_isp_info)
+                last_isp_check = now
+                isp_check_now = False
+            if (
+                speed_test_interval_minutes
+                and not speed_task
+                and now - last_speed_test >= speed_test_interval_minutes * 60
+            ):
+                speed_task = BackgroundTask(run_speed_test)
+                last_speed_test = now
 
-            for state in targets:
-                if ping(state.target, ping_timeout):
+            # Ping all targets at once - one round takes at most ping_timeout, however many targets are down.
+            results = list(ping_pool.map(lambda state: ping(state.target, ping_timeout), targets))
+
+            for state, ok in zip(targets, results):
+                if ok:
                     state.consecutive_failures = 0
                     if state.failure_start is not None:
                         ended = time.time()
-                        seconds = int(ended - state.first_failure_at)
+                        seconds = int(time.monotonic() - state.first_failure_mono)
                         state.outages += 1
                         state.downtime += seconds
                         report("INFO", f"{state.name} ({state.target}) recovered after {format_duration(seconds)}")
                         writer.writerow([state.name, state.target, timestamp(state.first_failure_at), timestamp(ended), seconds, "COMPLETE"])
                         csv_file.flush()
-                        state.failure_start = None
-                        state.first_failure_at = None
                         down_targets.discard(state.name)
                         # Overlapping outages across targets count as a single combined outage.
                         if not down_targets:
                             print(f"--- outages since start ({timestamp(started)}): {total_outages} ---")
-                            refresh_connection()
-                            last_isp_check = time.time()
+                            isp_check_now = True
                             print()
+                    state.failure_start = None
+                    state.first_failure_at = None
+                    state.first_failure_mono = None
                     continue
 
                 state.consecutive_failures += 1
                 if state.consecutive_failures == 1:
                     state.first_failure_at = time.time()
+                    state.first_failure_mono = time.monotonic()
                 if state.consecutive_failures < failure_threshold:
                     if verbose:
                         report(
@@ -665,19 +740,26 @@ def main() -> int:
                         total_outages += 1
                         # Check right as the outage starts - a brief auto-failover may already have
                         # switched (and switched back) before we'd otherwise notice at recovery.
-                        refresh_connection()
-                        last_isp_check = time.time()
+                        isp_check_now = True
                     down_targets.add(state.name)
                     report("ERROR", f"{state.name} ({state.target}) FAILURE")
                 elif verbose:
-                    seconds = int(time.time() - state.first_failure_at)
+                    seconds = int(time.monotonic() - state.first_failure_mono)
                     report("WARN", f"{state.name} ({state.target}) still down for {format_duration(seconds)}")
-            time.sleep(interval)
 
+            # Fixed rhythm: sleep until the next tick instead of a full interval after the work.
+            next_tick += interval
+            delay = next_tick - time.monotonic()
+            if delay > 0:
+                time.sleep(delay)
+            else:
+                next_tick = time.monotonic()  # fell behind (e.g. machine slept) - don't try to catch up
+
+        ping_pool.shutdown(wait=False, cancel_futures=True)
         ended = time.time()
         for state in targets:
             if state.failure_start is not None:
-                seconds = int(ended - state.first_failure_at)
+                seconds = int(time.monotonic() - state.first_failure_mono)
                 state.outages += 1
                 state.downtime += seconds
                 writer.writerow([state.name, state.target, timestamp(state.first_failure_at), timestamp(ended), seconds, "INCOMPLETE"])

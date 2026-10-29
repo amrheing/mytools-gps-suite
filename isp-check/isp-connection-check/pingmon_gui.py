@@ -31,11 +31,13 @@ SECTION_HEADERS = {"Parameter legend", "General", "Targets", "Connection", "Info
 EVENT_RE = re.compile(r"^\[[^\]]+\] \[(INFO|WARN|ERROR)\] (.*)$")
 KV_RE = re.compile(r"^ {3}(\S[^:]*?)\s*:\s*(.*)$")
 DATA_KV_RE = re.compile(r"^ {5}(\S[^:]*?)\s*:\s*(.*)$")
-TARGET_RE = re.compile(r"^ {3}(\S+)\s*->\s*(.*)$")
-FAILURE_RE = re.compile(r"^(\S+) \((.*)\) FAILURE$")
-RECOVERED_RE = re.compile(r"^(\S+) \((.*)\) recovered after (\d+)h (\d+)m (\d+)s$")
-FLAKY_RE = re.compile(r"^(\S+) \((.*)\) ping failed")
+# Target names may contain spaces ("my nas"), so names are matched up to the " -> " / " (" separator.
+TARGET_RE = re.compile(r"^ {3}(\S.*?)\s+-> (.*)$")
+FAILURE_RE = re.compile(r"^(.+?) \((.*)\) FAILURE$")
+RECOVERED_RE = re.compile(r"^(.+?) \((.*)\) recovered after (\d+)h (\d+)m (\d+)s$")
+FLAKY_RE = re.compile(r"^(.+?) \((.*)\) ping failed")
 CHANGED_RE = re.compile(r"^Connection changed: (.*) -> (.*) \(profile: \S+ -> (\S+)\)$")
+DETECTED_RE = re.compile(r"^Provider detected: (.*) \(profile: (\S+)\)$")
 SPEED_RE = re.compile(r"Speed test\s*:\s*down=(\S+) Mbps, up=(\S+) Mbps")
 
 STATUS_COLORS = {
@@ -277,6 +279,9 @@ class PingmonGui(tk.Tk):
             self.set_info("Provider", match.group(2))
             self.set_info("Profile", match.group(3))
             tag = "WARN"
+        elif match := DETECTED_RE.match(message):
+            self.set_info("Provider", match.group(1))
+            self.set_info("Profile", match.group(2))
         elif match := SPEED_RE.search(message):
             self.set_info("Speed test", f"down={match.group(1)} Mbps, up={match.group(2)} Mbps ({now})")
         self.refresh_overall_status()
@@ -590,10 +595,18 @@ class PingmonGui(tk.Tk):
 
     def upsert_target(self) -> None:
         name = self.var_target_name.get().strip()
+        host = self.var_target_host.get().strip()
         if not name:
             messagebox.showerror("Target", "Name is required.")
             return
-        self.targets[name] = self.var_target_host.get().strip()
+        if "(" in name or ")" in name:
+            # The monitor's output wraps the host in parentheses after the name.
+            messagebox.showerror("Target", "The name must not contain parentheses.")
+            return
+        if host.startswith("-") or " " in host:
+            messagebox.showerror("Target", "Host / IP must be a host name or IP address.")
+            return
+        self.targets[name] = host
         self.refresh_targets_tree()
 
     def remove_target(self) -> None:
