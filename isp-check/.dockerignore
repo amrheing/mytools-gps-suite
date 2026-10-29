@@ -1,0 +1,6 @@
+# Only the three .py files, index.html and nginx.conf are needed for the image
+**/__pycache__
+**/*.pyc
+isp-connection-check/pingmon.json
+isp-connection-check/pingmon_speed_stats.json
+isp-connection-check/logs
