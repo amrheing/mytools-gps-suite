@@ -6,6 +6,65 @@
     <title>GPX to KML Converter</title>
     <link rel="stylesheet" href="shared/shared-styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <style>
+        /* Drop zone: clearly visible target with spacing around its content */
+        .file-drop-zone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            min-height: 200px;
+            padding: 2rem 1.5rem;
+            border: 2px dashed #94a3b8;
+            border-radius: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.15s, background-color 0.15s;
+        }
+        .file-drop-zone p {
+            margin: 0;
+        }
+        .file-drop-zone > i {
+            font-size: 2.75rem;
+            color: var(--accent, #2563eb);
+            margin-bottom: 0.25rem;
+        }
+        .file-drop-zone .drop-hint {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        .file-drop-zone .or-text {
+            opacity: 0.7;
+            font-size: 0.9rem;
+        }
+        .file-drop-zone .btn {
+            margin-top: 0.5rem;
+        }
+        .file-drop-zone .drop-formats {
+            margin-top: 0.25rem;
+            font-size: 0.85rem;
+            opacity: 0.7;
+        }
+        /* ID + class so these win over the site theme's #dropZone rule (loaded later) */
+        #dropZone.file-drop-zone {
+            border-color: var(--muted, #94a3b8) !important;
+        }
+        #dropZone.file-drop-zone:hover,
+        #dropZone.file-drop-zone.drag-over {
+            border-color: var(--accent, #2563eb) !important;
+        }
+        #dropZone.file-drop-zone.drag-over {
+            border-style: solid !important;
+            background: var(--accent-soft, #e8f0fe) !important;
+        }
+        .file-upload-container {
+            margin-bottom: 1.5rem;
+        }
+        .file-info {
+            margin-top: 1rem;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -30,11 +89,12 @@
                     <div class="file-upload-container">
                         <div class="file-drop-zone" id="dropZone">
                             <i class="fas fa-cloud-upload-alt"></i>
-                            <p>Drag & drop your GPX file here</p>
+                            <p class="drop-hint">Drag & drop your GPX file here</p>
                             <p class="or-text">or</p>
                             <button type="button" class="btn btn-secondary" id="selectFileBtn">
                                 <i class="fas fa-folder-open"></i> Select File
                             </button>
+                            <p class="drop-formats">.gpx / .xml</p>
                             <input type="file" id="fileInput" accept=".gpx,.xml" style="display: none;">
                         </div>
                         
