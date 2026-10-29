@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISP Connection Check</title>
+    <link rel="stylesheet" href="shared/shared-styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <meta name="description" content="Desktop connection monitor with GUI: outage detection, multi-WAN failover detection and periodic speed tests.">
+    <style>
+        pre.cmd { background: #1e2530; color: #d8e0ea; border-radius: var(--border-radius); padding: 0.75rem 1rem; overflow-x: auto; font-size: 0.85rem; margin: 0.5rem 0 1rem; }
+        .os-block h4 { margin-top: 1rem; }
+        .download-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: center; margin-top: 1rem; }
+        .muted-note { color: var(--text-light); font-size: 0.85rem; }
+        table.data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        table.data-table th, table.data-table td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border-color); vertical-align: top; }
+        table.data-table th { color: var(--text-light); font-size: 0.78rem; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <div class="breadcrumb">
+                    <a href="../"><i class="fas fa-arrow-left"></i> Back to Tools</a>
+                </div>
+                <h1><i class="fas fa-network-wired"></i> ISP Connection Check</h1>
+                <p class="subtitle">Local connection monitor with GUI - keeps running and logging while your internet is down</p>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="card text-center mb-4">
+                <h2><i class="fas fa-download"></i> Download</h2>
+                <p class="text-light">A small Python app that runs on your own computer. It pings your targets, detects outages and silent multi-WAN failovers (e.g. Starlink &harr; cellular), runs periodic speed tests and writes log/CSV files. No third-party packages required.</p>
+                <div class="download-actions">
+                    <a href="download/isp-connection-check.pyz" class="btn-primary" download><i class="fas fa-download"></i> Download app (isp-connection-check.pyz)</a>
+                </div>
+                <p class="muted-note mt-3">One file containing the GUI and the monitor. Nothing to unpack or install besides Python.</p>
+            </div>
+
+            <div class="grid-2 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-list-check"></i> Requirements</h2>
+                    </div>
+                    <ul class="info-list">
+                        <li><i class="fas fa-check"></i> macOS or Linux</li>
+                        <li><i class="fas fa-check"></i> Python 3.10 or newer, with Tkinter (for the GUI)</li>
+                        <li><i class="fas fa-check"></i> <code>ping</code> and <code>route</code> (macOS) or <code>ip</code> (Linux) - normally preinstalled</li>
+                    </ul>
+                    <p class="muted-note">Windows isn't supported yet (different <code>ping</code> options).</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-desktop"></i> What the GUI shows</h2>
+                    </div>
+                    <ul class="info-list">
+                        <li><i class="fas fa-signal"></i> Overall status: online / degraded / outage</li>
+                        <li><i class="fas fa-tower-broadcast"></i> Provider, profile, public IPv4/IPv6, NAT/CGNAT, DNS chain</li>
+                        <li><i class="fas fa-bullseye"></i> Per-target status, outages and downtime</li>
+                        <li><i class="fas fa-gauge-high"></i> Speed test results and estimated data volume</li>
+                        <li><i class="fas fa-terminal"></i> The full output you'd otherwise see in the terminal</li>
+                        <li><i class="fas fa-sliders"></i> Settings tab - no JSON editing needed</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2><i class="fas fa-rocket"></i> Installation &amp; start</h2>
+                </div>
+
+                <div class="os-block">
+                    <h4><i class="fab fa-apple"></i> macOS</h4>
+                    <p><strong>Don't use Apple's built-in <code>/usr/bin/python3</code></strong> - its old Tk 8.5 shows only an empty black window. Install Python from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a> (includes Tk 8.6) or use Homebrew:</p>
+                    <pre class="cmd">brew install python python-tk</pre>
+                    <p class="muted-note">Check which Python/Tk you get: <code>python3 -c "import sys, tkinter; print(sys.executable, tkinter.TkVersion)"</code> - it must show 8.6 or higher. If Apple's Python comes first in your PATH, the app restarts itself with the Homebrew/python.org Python, or start it explicitly: <code>/opt/homebrew/bin/python3 isp-connection-check.pyz</code></p>
+
+                    <h4><i class="fab fa-linux"></i> Linux (Debian / Ubuntu)</h4>
+                    <pre class="cmd">sudo apt install python3 python3-tk</pre>
+                    <p class="muted-note">Fedora: <code>sudo dnf install python3-tkinter</code> &middot; Arch: <code>sudo pacman -S tk</code></p>
+
+                    <h4><i class="fas fa-play"></i> Start</h4>
+                    <p>Move the downloaded file to a folder of your choice (config and logs are stored next to it), then in a terminal:</p>
+                    <pre class="cmd">cd ~/Downloads        # or wherever you put the file
+python3 isp-connection-check.pyz</pre>
+                    <p>Click <strong>Start</strong> on the <em>Monitor</em> tab. On first start a default <code>pingmon.json</code> is created next to the app. The first output appears after ~20&nbsp;s (ISP lookup and a baseline speed test run first).</p>
+
+                    <h4><i class="fas fa-terminal"></i> Without GUI (e.g. on a server or Raspberry Pi)</h4>
+                    <pre class="cmd">python3 isp-connection-check.pyz --cli [path/to/pingmon.json]</pre>
+                    <p class="muted-note">Stop with <kbd>Ctrl+C</kbd> - a summary of outages and downtime per target is printed on exit.</p>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2><i class="fas fa-sliders"></i> Settings (Settings tab)</h2>
+                    <p>Saved to <code>pingmon.json</code>; restart monitoring to apply changes</p>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr><th>Setting</th><th>Meaning</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Ping targets</td><td>Named hosts/IPs to ping. <code>gateway</code> with an empty host auto-detects your router; <code>dns</code> is compared with your system resolver.</td></tr>
+                            <tr><td>Connection profiles</td><td>Matched against the detected ISP name (e.g. <em>starlink</em>, <em>cellular</em>) to pick interval, ping timeout and failure threshold automatically.</td></tr>
+                            <tr><td>Ping overrides</td><td>Fixed interval / timeout / threshold for all providers, instead of the profile values.</td></tr>
+                            <tr><td>ISP check interval</td><td>How often the provider is re-checked to catch silent failovers.</td></tr>
+                            <tr><td>Speed test</td><td>Schedule in minutes (0 = off) and whether to run one after a connection change.</td></tr>
+                            <tr><td>Verbose downtime</td><td>Log every failed ping, including ones still within the failure threshold.</td></tr>
+                            <tr><td>Logs</td><td>Log directory, file prefix and how many log/CSV pairs to keep.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <h4><i class="fas fa-shield-halved"></i> Privacy</h4>
+                <p class="text-light">Everything runs on your computer and logs are written locally only. The app contacts <code>ip-api.com</code> / <code>ipify.org</code> (public IP and ISP) and <code>speed.cloudflare.com</code> (speed test), plus the ping targets you configure.</p>
+            </div>
+        </main>
+    </div>
+</body>
+</html>
