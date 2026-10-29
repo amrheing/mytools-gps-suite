@@ -6,6 +6,171 @@
 <span> > Results</span>
 {% endblock %}
 
+{% block head %}
+<style>
+    /* Result page in the site theme's colours. Scoped to .results-section so these win
+       over shared-styles and the site theme (loaded later), which made boxes white. */
+    .results-section .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        margin: 0.5rem 0 1.5rem;
+    }
+    @media (max-width: 520px) {
+        .results-section .summary-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    .results-section .summary-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 0.4rem;
+        background: var(--surface-2, #f1f5f9) !important;
+        border: 1px solid var(--line, #cbd5e1);
+        border-radius: 12px;
+        padding: 1.25rem 0.75rem;
+        min-width: 0;
+    }
+    .results-section .summary-item > i {
+        font-size: 1.75rem;
+        color: var(--accent, #2563eb) !important;
+    }
+    .results-section .summary-content {
+        background: transparent !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        min-height: 0 !important;
+        border: 0 !important;
+        font-family: inherit !important;
+        white-space: normal !important;
+    }
+    .results-section .summary-content h3 {
+        margin: 0;
+        font-family: inherit !important;
+        font-size: 2.25rem;
+        font-weight: 800;
+        line-height: 1.2;
+        color: var(--text, #0f172a) !important;
+    }
+    .results-section .summary-content p {
+        margin: 0;
+        font-family: inherit !important;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--muted, #475569) !important;
+    }
+    .results-section .filter-info,
+    .results-section .matches-preview {
+        margin-bottom: 1.5rem;
+    }
+    .results-section .filter-info h3,
+    .results-section .matches-preview h3,
+    .results-section .usage-tips h3 {
+        margin: 0 0 0.75rem;
+    }
+    .results-section .filter-details {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 2rem;
+    }
+    .results-section .filter-item label {
+        color: var(--muted, #475569);
+        margin-right: 0.35rem;
+    }
+    .results-section .matches-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 0.5rem;
+    }
+    .results-section .match-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        background: var(--surface-2, #f1f5f9);
+        border: 1px solid var(--line, #cbd5e1);
+        border-radius: 10px;
+        padding: 0.6rem 0.8rem;
+    }
+    .results-section .match-item > i {
+        color: var(--accent, #2563eb);
+        margin-top: 0.2rem;
+    }
+    .results-section .match-name {
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+    .results-section .match-coords {
+        font-size: 0.85rem;
+        color: var(--muted, #475569);
+        font-variant-numeric: tabular-nums;
+    }
+    .results-section .results-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 1rem;
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        padding: 0.5rem 0 0 !important;
+    }
+    .results-section .results-actions a {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.2rem;
+        padding: 0.75rem 1.5rem;
+        border-radius: 10px;
+        font-weight: 700;
+        text-decoration: none;
+        opacity: 1 !important;
+    }
+    .results-section .results-actions .btn-primary {
+        background: var(--accent, #2563eb) !important;
+        color: var(--ink, #ffffff) !important;
+        border: 0;
+    }
+    .results-section .results-actions .btn-primary small {
+        font-weight: 500;
+        font-size: 0.8rem;
+        color: inherit !important;
+        opacity: 0.85;
+    }
+    .results-section .results-actions .btn-secondary {
+        justify-content: center;
+        background: transparent !important;
+        color: var(--text, #0f172a) !important;
+        border: 1px solid var(--line, #cbd5e1) !important;
+    }
+    .results-section .tips-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+    .results-section .tip {
+        background: var(--surface-2, #f1f5f9);
+        border: 1px solid var(--line, #cbd5e1);
+        border-radius: 10px;
+        padding: 1rem;
+    }
+    .results-section .tip i {
+        font-size: 1.4rem;
+        color: var(--accent, #2563eb);
+    }
+    .results-section .tip h4 {
+        margin: 0.5rem 0 0.25rem;
+    }
+    .results-section .tip p {
+        margin: 0;
+        font-size: 0.9rem;
+        color: var(--muted, #475569);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="results-section">
     <div class="card results-card">
