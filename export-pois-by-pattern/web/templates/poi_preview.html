@@ -86,6 +86,26 @@
         min-height: 3rem;
         align-self: stretch;
     }
+    /* Process = green (go), upload another file = site accent yellow */
+    .preview-actions #process-btn {
+        background: #1e7b34 !important;
+        border-color: #1e7b34 !important;
+        color: #ffffff !important;
+    }
+    .preview-actions #process-btn:hover:not(:disabled) {
+        background: #23913d !important;
+    }
+    .preview-actions #process-btn:disabled {
+        opacity: 0.55;
+    }
+    .preview-actions .btn-secondary {
+        background: var(--accent, #f2a541) !important;
+        border-color: var(--accent, #f2a541) !important;
+        color: var(--ink, #1d1406) !important;
+    }
+    .preview-actions .btn-secondary:hover {
+        filter: brightness(1.08);
+    }
     @media (max-width: 420px) {
         .form-actions.preview-actions {
             grid-template-columns: 1fr;
