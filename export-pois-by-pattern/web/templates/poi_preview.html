@@ -189,16 +189,17 @@ Total POIs: {{ preview.total_pois }}
             <!-- Pattern Examples -->
             <div class="pattern-examples">
                 <h4>Quick Examples</h4>
-                <div class="example-buttons">
-                    <button type="button" class="btn btn-small" onclick="testPattern('*Hotel*')">
-                        *Hotel*
-                    </button>
-                    <button type="button" class="btn btn-small" onclick="testPattern('*-S*')">
-                        *-S*
-                    </button>
-                    <button type="button" class="btn btn-small" onclick="testPattern('! *')">
-                        ! *
-                    </button>
+                <div class="example-buttons" data-type="wildcard">
+                    <button type="button" class="btn btn-small" data-pattern="*Hotel*">*Hotel*</button>
+                    <button type="button" class="btn btn-small" data-pattern="*-S*">*-S*</button>
+                    <button type="button" class="btn btn-small" data-pattern="! *">! *</button>
+                </div>
+                <div class="example-buttons" data-type="regex" style="display: none;">
+                    <button type="button" class="btn btn-small" data-pattern="-S\d+$">-S\d+$</button>
+                    <button type="button" class="btn btn-small" data-pattern="^!">^!</button>
+                    <button type="button" class="btn btn-small" data-pattern="Hotel|Pension|Gasthof">Hotel|Pension|Gasthof</button>
+                    <button type="button" class="btn btn-small" data-pattern="\b(Pass|Joch)\b">\b(Pass|Joch)\b</button>
+                    <button type="button" class="btn btn-small" data-pattern="^[0-9]+">^[0-9]+</button>
                 </div>
             </div>
             
@@ -284,9 +285,24 @@ function runFilterPreview(pattern, patternType) {
     });
 }
 
+// Quick examples: show the set for the selected pattern type
+function showExamplesFor(patternType) {
+    document.querySelectorAll('.example-buttons').forEach(group => {
+        group.style.display = group.dataset.type === patternType ? '' : 'none';
+    });
+    document.getElementById('pattern-input').placeholder = patternType === 'regex' ? '-S\\d+$' : '*-S28';
+}
+
+showExamplesFor(document.querySelector('input[name="pattern_type_preview"]:checked').value);
+
+document.querySelectorAll('.example-buttons button').forEach(button => {
+    button.addEventListener('click', () => testPattern(button.dataset.pattern));
+});
+
 // Pattern type change
 document.querySelectorAll('input[name="pattern_type_preview"]').forEach(radio => {
     radio.addEventListener('change', function() {
+        showExamplesFor(this.value);
         const input = document.getElementById('pattern-input');
         if (input.value.trim()) {
             input.dispatchEvent(new Event('input'));
