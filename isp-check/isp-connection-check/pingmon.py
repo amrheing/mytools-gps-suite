@@ -24,7 +24,7 @@ from pathlib import Path
 PROGRAM_NAME = "ISP Connection Check"
 PROGRAM_VERSION = "1.1.0"
 PROGRAM_LICENSE = "MIT"
-PROGRAM_URL = "https://github.com/amrheing/ISP-Connection-Check"
+PROGRAM_URL = "https://github.com/amrheing/mytools-gps-suite/tree/main/isp-check"
 
 
 @dataclass
